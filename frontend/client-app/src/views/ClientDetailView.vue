@@ -11,70 +11,130 @@
         </router-link>
         <h1>Карточка клиента: {{ editableClient.first_name }} {{ editableClient.last_name }}</h1>
       </div>
-      <div v-if="editableCase" class="case-status" :class="caseStatusClass">
-        {{ getStatusDisplay(editableCase.status) }}
-      </div>
     </header>
 
-    <form @submit.prevent="saveAllChanges" class="card-content">
+    <form @submit.prevent class="card-content">
       <section class="data-section">
         <h3>Личные данные</h3>
         <div class="data-grid">
-          <div class="data-item"><label>Имя</label><input type="text" v-model="editableClient.first_name" /></div>
-          <div class="data-item"><label>Фамилия</label><input type="text" v-model="editableClient.last_name" /></div>
-          <div class="data-item"><label>Телефон</label><vue-tel-input v-model="editableClient.phone_number" mode="international"></vue-tel-input></div>
-          <div class="data-item"><label>Email</label><input type="email" v-model="editableClient.email" /></div>
-          <div class="data-item full-width"><label>Адрес</label><textarea v-model="editableClient.address"></textarea></div>
+          <div class="data-item"><label>Имя</label><input type="text" v-model="editableClient.first_name" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>Фамилия</label><input type="text" v-model="editableClient.last_name" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>Телефон</label><vue-tel-input v-model="editableClient.phone_number" mode="international" @blur="saveAllChanges"></vue-tel-input></div>
+          <div class="data-item"><label>Email</label><input type="email" v-model="editableClient.email" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>Адрес</label><textarea v-model="editableClient.address" @change="saveAllChanges"></textarea></div>
+
+          <div class="data-item"><label>Номер паспорта</label><input type="text" v-model="editableClient.passport_number" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>Паспорт действителен до</label><input type="date" v-model="editableClient.passport_expiry_date" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>Тип текущей визы</label><input type="text" v-model="editableClient.current_visa_type" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>Виза действительна до</label><input type="date" v-model="editableClient.current_visa_expiry_date" @change="saveAllChanges" /></div>
         </div>
       </section>
 
-      <div v-if="!editableCase" class="empty-state">
+      <div v-if="!editableClient.legal_cases || editableClient.legal_cases.length === 0" class="empty-state">
         <p>У этого клиента еще нет дел.</p>
-        <button type="button" @click="startNewCase" class="button primary">Создать новое дело</button>
       </div>
 
-      <template v-else>
-        <section class="data-section">
-          <h3>Данные по делу о легализации</h3>
-          <div class="data-grid">
-            <div class="data-item"><label>Дата подачи</label><input type="date" v-model="editableCase.submission_date" /></div>
-            <div class="data-item"><label>Дата решения</label><input type="date" v-model="editableCase.decision_date" /></div>
-            <div class="data-item full-width" :class="caseStatusClass">
-              <label>Статус дела</label>
-              <select v-model="editableCase.status">
-                <option value="PREPARATION">Подготовка документов</option>
-                <option value="SUBMITTED">Подано</option>
-                <option value="IN_PROGRESS">На рассмотрении</option>
-                <option value="DECISION_POSITIVE">Решение положительное</option>
-                <option value="DECISION_NEGATIVE">Решение отрицательное</option>
-                <option value="CLOSED">Дело закрыто</option>
-              </select>
+      <div v-else class="cases-container">
+        <div v-for="(legalCase, caseIndex) in editableClient.legal_cases" :key="caseIndex" class="case-wrapper">
+          <div class="case-header" @click="toggleCase(caseIndex)">
+            <div class="case-header-title">
+              <svg class="toggle-icon" :class="{ 'is-expanded': legalCase._isExpanded }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" />
+              </svg>
+              <h4>Дело №{{ caseIndex + 1 }}: {{ getCaseTypeDisplay(legalCase.case_type) }}</h4>
+            </div>
+            <div class="case-status" :class="getCaseStatusClass(legalCase)">
+              {{ getStatusDisplay(legalCase.status) }}
             </div>
           </div>
-        </section>
 
-        <section class="data-section">
-          <h3>Чек-лист поданных документов</h3>
-          <ul class="document-checklist">
-            <li v-for="(doc, index) in editableCase.documents" :key="index" class="document-item">
-              <div class="doc-info">
-                <input type="checkbox" v-model="doc.status" true-value="SUBMITTED" false-value="NOT_SUBMITTED">
-                <span class="doc-name">{{ getDocumentTypeDisplay(doc.document_type) }}</span>
+          <div v-if="legalCase._isExpanded" class="case-details">
+            <section class="data-section">
+              <h3>Данные по делу о легализации</h3>
+              <div class="data-grid">
+                <div class="data-item full-width">
+                  <label>Вид дела</label>
+                  <select v-model="legalCase.case_type" @change="saveAllChanges">
+                    <option value="CZASOWY_POBYT">ВНЖ (Czasowy pobyt)</option>
+                    <option value="STALY_POBYT">ПМЖ (Staly pobyt)</option>
+                    <option value="REZydent_UE">Карта резидента ЕС (Karta rezydenta UE)</option>
+                    <option value="OBYWATELSTWO">Гражданство (Obywatelstwo)</option>
+                  </select>
+                </div>
+                <div class="data-item"><label>Дата подачи</label><input type="date" v-model="legalCase.submission_date" @change="saveAllChanges" /></div>
+                <div class="data-item"><label>Дата решения</label><input type="date" v-model="legalCase.decision_date" @change="saveAllChanges" /></div>
+                <div class="data-item full-width">
+                  <label>Статус дела</label>
+                  <select v-model="legalCase.status" @change="saveAllChanges">
+                    <option value="PREPARATION">Подготовка документов</option>
+                    <option value="SUBMITTED">Подано</option>
+                    <option value="IN_PROGRESS">На рассмотрении</option>
+                    <option value="DECISION_POSITIVE">Решение положительное</option>
+                    <option value="DECISION_NEGATIVE">Решение отрицательное</option>
+                    <option value="CLOSED">Дело закрыто</option>
+                  </select>
+                </div>
               </div>
-              <div class="doc-actions">
-                <button type="button" v-if="doc.file" class="button-icon view-doc">Посмотреть</button>
-                <button type="button" class="button-icon upload-doc">Загрузить</button>
-              </div>
-            </li>
-          </ul>
-        </section>
-      </template>
+            </section>
 
-      <footer class="card-footer" v-if="editableCase">
-        <button type="submit" class="button primary save-button">Сохранить все изменения</button>
+            <section class="data-section">
+              <h3>Чек-лист поданных документов</h3>
+              <ul class="document-checklist">
+                <li v-for="(doc, docIndex) in legalCase.documents" :key="docIndex" class="document-item">
+                  <div class="doc-info">
+                    <input type="checkbox" v-model="doc.status" true-value="SUBMITTED" false-value="NOT_SUBMITTED" @change="saveAllChanges">
+                    <input v-if="doc.isNew" type="text" v-model="doc.document_type" placeholder="Название документа" class="other-doc-input" @change="saveAllChanges">
+                    <span v-else class="doc-name">{{ getDocumentTypeDisplay(doc.document_type) }}</span>
+                  </div>
+                  <div class="doc-actions">
+                    <div v-if="doc.files && doc.files.length > 0" class="uploaded-files">
+                      <div v-for="(file, fileIndex) in doc.files" :key="fileIndex" class="file-chip">
+                        <span @click="viewFile(file)" class="file-name">{{ file.name }}</span>
+                        <button type="button" @click="removeUploadedFile(legalCase, docIndex, fileIndex)" class="delete-file-btn">&times;</button>
+                      </div>
+                    </div>
+                    <button type="button" @click="triggerUpload(caseIndex, docIndex)" class="button-icon upload-doc">Загрузить</button>
+                    <button type="button" @click="removeDocument(caseIndex, docIndex)" class="button-icon delete-doc" title="Удалить строку">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+                        <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                      </svg>
+                    </button>
+                  </div>
+                </li>
+              </ul>
+              <button type="button" @click="addDocument(caseIndex)" class="button secondary add-other-btn">Добавить документ</button>
+              <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none;" multiple />
+            </section>
+            <footer class="case-footer">
+                <button type="button" @click="removeCase(caseIndex)" class="button-icon delete-doc">Удалить дело</button>
+            </footer>
+          </div>
+        </div>
+      </div>
+
+      <footer class="card-footer">
+        <button type="button" @click="startNewCase" class="button secondary">Добавить новое дело</button>
       </footer>
     </form>
+
+    <!-- Custom Confirm Dialog -->
+    <div v-if="showConfirmDialog" class="confirm-dialog-overlay">
+      <div class="confirm-dialog">
+        <p>{{ confirmDialogMessage }}</p>
+        <div class="confirm-dialog-actions">
+          <button @click="confirmAction" class="button primary">Да, удалить</button>
+          <button @click="cancelAction" class="button secondary">Отмена</button>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <!-- Notification Toast -->
+  <transition name="toast-fade">
+    <div v-if="showNotification" :class="['toast-notification', notificationType]">
+      {{ notificationMessage }}
+    </div>
+  </transition>
 </template>
 
 <script>
@@ -89,20 +149,38 @@ export default {
       loading: true,
       client: null,
       editableClient: null,
-      editableCase: null,
       statusMap: { 'PREPARATION': 'Подготовка документов', 'SUBMITTED': 'Подано', 'IN_PROGRESS': 'На рассмотрении', 'DECISION_POSITIVE': 'Решение положительное', 'DECISION_NEGATIVE': 'Решение отрицательное', 'CLOSED': 'Дело закрыто' },
-      docTypeMap: { 'ZALACZNIK_1': 'Załącznik nr 1', 'UMOWA_PRACA': 'Umowa o pracę / zlecenia', 'UMOWA_NAJMU': 'Umowa najmu', 'ZUS_ZUA_ZZA': 'ZUS ZUA / ZZA', 'ZUS_RCA_DRA': 'ZUS RCA/DRA', 'POLISA': 'Polisa ubezpieczeniowa', 'ZASWIADCZENIE_US': 'Zaświadczenie z Urzędu Skarbowego', 'ZASWIADCZENIA_ZUS': 'Zaświadczenia ZUS pracodawcy', 'PIT_37': 'PIT 37', 'BADANIE_LEKARSKIE': 'Badanie lekarskie', 'SWIADECTWO_KIEROWCY': 'Świadectwo kierowcy', 'PRAWO_JAZDY': 'Prawo jazdy', 'INNE': 'Другое' }
+      caseTypeMap: { 'CZASOWY_POBYT': 'ВНЖ (Czasowy pobyt)', 'STALY_POBYT': 'ПМЖ (Staly pobyt)', 'REZydent_UE': 'Карта резидента ЕС', 'OBYWATELSTWO': 'Гражданство' },
+      docTypeMap: { 'ZALACZNIK_1': 'Załącznik nr 1', 'UMOWA_PRACA': 'Umowa o pracę / zlecenia', 'UMOWA_NAJMU': 'Umowa najmu', 'ZUS_ZUA_ZZA': 'ZUS ZUA / ZZA', 'ZUS_RCA_DRA': 'ZUS RCA/DRA', 'POLISA': 'Polisa ubezpieczeniowa', 'ZASWIADCZENIE_US': 'Zaświadczenie z Urzędu Skarbowego', 'ZASWIADCZENIA_ZUS': 'Zaświadczenia ZUS pracodawcy', 'PIT_37': 'PIT 37', 'BADANIE_LEKARSKIE': 'Badanie lekarskie', 'BADANIE_MEDYCZNE': 'Badanie medyczne', 'SWIADECTWO_KIEROWCY': 'Świadectwo kierowcy' },
+      uploadingDocContext: null, // { caseIndex, docIndex }
+      showConfirmDialog: false,
+      confirmDialogMessage: '',
+      confirmCallback: null,
+      showNotification: false,
+      notificationMessage: '',
+      notificationType: 'success', // 'success' or 'error'
+      isSaving: false,
     };
   },
-  computed: {
-    caseStatusClass() {
-      return this.editableCase ? `status-${this.editableCase.status.toLowerCase()}` : '';
-    }
-  },
-  async created() {
+  created() {
     this.fetchClientData();
   },
   methods: {
+    toggleCase(index) {
+      const legalCase = this.editableClient.legal_cases[index];
+      legalCase._isExpanded = !legalCase._isExpanded;
+    },
+    getCaseStatusClass(legalCase) {
+      return legalCase ? `status-${legalCase.status.toLowerCase()}` : '';
+    },
+    showToast(message, type = 'success', duration = 3000) {
+      this.notificationMessage = message;
+      this.notificationType = type;
+      this.showNotification = true;
+      setTimeout(() => {
+        this.showNotification = false;
+      }, duration);
+    },
     async fetchClientData() {
       const token = localStorage.getItem('user-token');
       if (!token) { this.$router.push('/login'); return; }
@@ -116,49 +194,208 @@ export default {
         this.resetEditableData();
       } catch (error) {
         console.error("Ошибка при загрузке данных клиента:", error);
+        this.showToast('Ошибка при загрузке данных клиента', 'error');
       } finally {
         this.loading = false;
       }
     },
     resetEditableData() {
-      this.editableClient = cloneDeep(this.client);
-      if (this.client.legal_cases && this.client.legal_cases.length > 0) {
-        this.editableCase = cloneDeep(this.client.legal_cases[0]);
-      } else {
-        this.editableCase = null;
-      }
+        this.editableClient = cloneDeep(this.client);
+        if (!this.editableClient.legal_cases) {
+            this.editableClient.legal_cases = [];
+        }
+
+        const hasMultipleCases = this.editableClient.legal_cases.length > 1;
+
+        this.editableClient.legal_cases.forEach((legalCase, index) => {
+            legalCase._isExpanded = hasMultipleCases ? index === 0 : false;
+
+            const allDocTypes = Object.keys(this.docTypeMap);
+            const docMap = new Map(legalCase.documents.map(doc => [doc.document_type, doc]));
+
+            const finalDocs = allDocTypes.map(docType => {
+                if (docMap.has(docType)) {
+                    const existingDoc = docMap.get(docType);
+                    if (!existingDoc.files) existingDoc.files = [];
+                    return existingDoc;
+                } else {
+                    return { document_type: docType, status: 'NOT_SUBMITTED', files: [] };
+                }
+            });
+
+            legalCase.documents.forEach(doc => {
+                if (!allDocTypes.includes(doc.document_type)) {
+                    if (!doc.files) doc.files = [];
+                    finalDocs.push(doc);
+                }
+            });
+            legalCase.documents = finalDocs;
+        });
     },
     startNewCase() {
-      this.editableCase = {
+      const newCase = {
+        case_type: 'CZASOWY_POBYT',
         submission_date: new Date().toISOString().slice(0, 10),
         decision_date: null,
         status: 'PREPARATION',
         documents: Object.keys(this.docTypeMap).map(key => ({
           document_type: key,
-          status: 'NOT_SUBMITTED'
-        }))
+          status: 'NOT_SUBMITTED',
+          files: [],
+          isNew: false
+        })),
+        _isExpanded: true,
+        isNew: true // Флаг для нового дела
       };
+      this.editableClient.legal_cases.forEach(c => c._isExpanded = false);
+      this.editableClient.legal_cases.push(newCase);
+      this.saveAllChanges();
+    },
+    addDocument(caseIndex) {
+      this.editableClient.legal_cases[caseIndex].documents.push({
+        document_type: '',
+        status: 'NOT_SUBMITTED',
+        files: [],
+        isNew: true
+      });
+      // Сохранение произойдет при вводе названия и уходе с поля
+    },
+    removeDocument(caseIndex, docIndex) {
+      this.confirmDialogMessage = 'Вы уверены, что хотите удалить эту строку?';
+      this.confirmCallback = () => {
+        this.editableClient.legal_cases[caseIndex].documents.splice(docIndex, 1);
+        this.saveAllChanges();
+      };
+      this.showConfirmDialog = true;
+    },
+    removeCase(caseIndex) {
+        this.confirmDialogMessage = 'Вы уверены, что хотите удалить это дело?';
+        this.confirmCallback = () => {
+            this.editableClient.legal_cases.splice(caseIndex, 1);
+            this.saveAllChanges();
+        };
+        this.showConfirmDialog = true;
+    },
+    confirmAction() {
+      if (this.confirmCallback) {
+        this.confirmCallback();
+      }
+      this.cancelAction();
+    },
+    cancelAction() {
+      this.showConfirmDialog = false;
+      this.confirmDialogMessage = '';
+      this.confirmCallback = null;
+    },
+    removeUploadedFile(legalCase, docIndex, fileIndex) {
+      const doc = legalCase.documents[docIndex];
+      doc.files.splice(fileIndex, 1);
+      if (doc.files.length === 0) {
+        doc.status = 'NOT_SUBMITTED';
+      }
+      this.saveAllChanges();
+    },
+    triggerUpload(caseIndex, docIndex) {
+      this.uploadingDocContext = { caseIndex, docIndex };
+      this.$refs.fileInput.click();
+    },
+    handleFileUpload(event) {
+      const files = event.target.files;
+      if (!files.length || !this.uploadingDocContext) return;
+
+      const { caseIndex, docIndex } = this.uploadingDocContext;
+      const doc = this.editableClient.legal_cases[caseIndex].documents[docIndex];
+      if (!doc.files) {
+        doc.files = [];
+      }
+      
+      for (const file of files) {
+        doc.files.push({
+          url: URL.createObjectURL(file),
+          name: file.name,
+        });
+      }
+      
+      if (files.length > 0) {
+        doc.status = 'SUBMITTED';
+      }
+
+      this.uploadingDocContext = null;
+      event.target.value = '';
+      this.saveAllChanges();
+    },
+    viewFile(file) {
+      if (file.url) {
+        window.open(file.url, '_blank');
+      }
     },
     async saveAllChanges() {
+        if (this.isSaving) return;
+        this.isSaving = true;
         const token = localStorage.getItem('user-token');
-        const payload = {
-            ...this.editableClient,
-            legal_cases: [this.editableCase]
-        };
+
+        const payload = cloneDeep(this.editableClient);
+        
+        // Обрабатываем дела: новые добавляем, существующие обновляем
+        payload.legal_cases.forEach(legalCase => {
+            // Удаляем временные frontend-свойства
+            delete legalCase._isExpanded;
+            
+            // Если дело новое, удаляем флаг isNew перед отправкой
+            if (legalCase.isNew) {
+                delete legalCase.isNew;
+            }
+
+            // Очищаем документы
+            legalCase.documents = legalCase.documents
+                .filter(doc => !(doc.isNew && !doc.document_type)) // Удаляем пустые новые документы
+                .map(doc => {
+                    const newDoc = { ...doc };
+                    delete newDoc.isNew;
+                    delete newDoc.files; 
+                    return newDoc;
+                });
+        });
+
         try {
+            // Отправляем PUT запрос с полным объектом клиента
             const response = await axios.put(`http://127.0.0.1:8000/api/clients/${this.id}/`, payload, {
                 headers: { Authorization: `Token ${token}` }
             });
+            
+            // Сохраняем состояние раскрытых дел
+            const expandedStates = new Map(
+                this.editableClient.legal_cases.map((c, i) => [c.id || `new_${i}`, c._isExpanded])
+            );
+
+            // Обновляем данные и сбрасываем редактируемую копию
             this.client = response.data;
             this.resetEditableData();
-            alert('Данные успешно сохранены!');
+
+            // Восстанавливаем состояние раскрытых дел
+            this.editableClient.legal_cases.forEach((c, i) => {
+                const key = c.id || `new_${i}`;
+                if (expandedStates.has(key)) {
+                    c._isExpanded = expandedStates.get(key);
+                }
+            });
+
+            this.showToast('Сохранено!', 'success', 1500);
+
         } catch (error) {
             console.error("Ошибка сохранения:", error.response?.data || error);
-            alert("Не удалось сохранить данные.");
+            this.showToast('Не удалось сохранить данные.', 'error');
+            // В случае ошибки, перезагружаем данные с сервера, чтобы откатить изменения
+            await this.fetchClientData();
+        } finally {
+            this.isSaving = false;
         }
     },
     getStatusDisplay(statusKey) {
         return this.statusMap[statusKey] || statusKey;
+    },
+    getCaseTypeDisplay(caseTypeKey) {
+        return this.caseTypeMap[caseTypeKey] || caseTypeKey || 'Новое дело';
     },
     getDocumentTypeDisplay(docKey) {
         return this.docTypeMap[docKey] || docKey;
@@ -168,19 +405,23 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 :root {
   --primary-color: #4A9E80;
+  --primary-hover-color: #428f74;
   --dark-blue: #2c3e50;
   --text-color: #5a6a7b;
   --background-color: #f7f9fc;
   --white-color: #ffffff;
-  /* Еле заметный, но выделяющийся стиль для рамок */
   --input-border-color: #e0e6ed;
   --input-shadow: inset 0 1px 2px rgba(0,0,0,0.07);
-  --border-color-light: #e0e6ed; /* Для разделителей */
+  --border-color-light: #e0e6ed;
+  --danger-color: #dc2626;
 }
 
 .client-card-wrapper {
+  font-family: 'Inter', sans-serif;
   background-color: var(--white-color);
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.07);
@@ -207,20 +448,34 @@ export default {
 .back-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 6px 12px;
+  padding: 10px 20px;
   border-radius: 6px;
-  background-color: #eef2f7;
+  background-color: #ccd2da;
   color: var(--text-color);
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
   transition: background-color 0.2s ease;
+  border: none;
+  cursor: pointer;
 }
 
-.back-button:hover { background-color: #e0e6ed; }
-.back-button svg { width: 20px; height: 20px; }
-.card-header h1 { font-size: 22px; color: var(--dark-blue); margin: 0; }
+.back-button:hover {
+  background-color: #e0e6ed;
+}
+
+.back-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.card-header h1 {
+  font-size: 22px;
+  color: var(--dark-blue);
+  margin: 0;
+}
 
 .case-status {
   padding: 6px 12px;
@@ -259,13 +514,14 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 25px;
+  align-items: end; /* Выравниваем элементы по нижнему краю */
 }
 
-.data-item .label {
+.data-item label {
   display: block;
   margin-bottom: 8px;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 15px;
   color: var(--dark-blue);
 }
 
@@ -274,7 +530,7 @@ export default {
   padding: 12px 15px;
   background-color: var(--background-color);
   border-radius: 8px;
-  min-height: 48px;
+  height: 48px; /* Единая высота */
   display: flex;
   align-items: center;
   box-sizing: border-box;
@@ -287,39 +543,40 @@ export default {
 .data-item select,
 .data-item :deep(.vue-tel-input) {
   width: 100%;
-  min-height: 48px;
-  padding: 12px 15px;
-  border: 1px solid var(--input-border-color);
-  box-shadow: var(--input-shadow);
+  height: 48px; /* ЕДИНАЯ ВЫСОТА ДЛЯ ВСЕХ */
+  padding: 0 15px;
+  border: 1px solid #ccd2da;
   border-radius: 8px;
   box-sizing: border-box;
-  transition: border-color 0.2s, box-shadow 0.2s;
   font-family: 'Inter', sans-serif;
   font-size: 15px;
   background-color: var(--white-color);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
 }
+
 .data-item textarea {
-  height: auto;
-  min-height: 80px;
+  padding: 12px 15px;
+  resize: none;
 }
+
 .data-item :deep(.vti__input) {
-  min-height: 46px;
+  height: 100%;
   border: none;
   box-shadow: none;
   background-color: transparent;
-}
-.data-item :deep(.vti__dropdown) {
-  padding: 11px;
-}
-.data-item :deep(.vue-tel-input) {
-  border: 1px solid var(--input-border-color);
-  box-shadow: var(--input-shadow);
-}
-.data-item :deep(.vue-tel-input.focus) {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(74, 158, 128, 0.2);
+  width: 100%;
+  padding: 0;
 }
 
+.data-item :deep(.vti__dropdown) {
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.data-item :deep(.vue-tel-input.focus),
 .data-item input:focus,
 .data-item textarea:focus,
 .data-item select:focus {
@@ -327,27 +584,69 @@ export default {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgba(74, 158, 128, 0.2);
 }
+
 .data-item.full-width {
   grid-column: 1 / -1;
 }
 
-.data-item.status-preparation select, .data-item.status-preparation .value {
-  border-color: #c084fc; background-color: #faf5ff;
+.cases-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
-.data-item.status-submitted select, .data-item.status-submitted .value {
-  border-color: #7dd3fc; background-color: #f0f9ff;
+
+.case-wrapper {
+  border: 1px solid var(--border-color-light);
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
 }
-.data-item.status-in_progress select, .data-item.status-in_progress .value {
-  border-color: #fcd34d; background-color: #fffbeb;
+.case-wrapper:hover {
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
 }
-.data-item.status-decision_positive select, .data-item.status-decision_positive .value {
-  border-color: #86efac; background-color: #f0fdf4;
+
+.case-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background-color: var(--background-color);
+  cursor: pointer;
 }
-.data-item.status-decision_negative select, .data-item.status-decision_negative .value {
-  border-color: #fca5a5; background-color: #fef2f2;
+
+.case-header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dark-blue);
 }
-.data-item.status-closed select, .data-item.status-closed .value {
-  border-color: #d1d5db; background-color: #f9fafb;
+.case-header-title h4 {
+  margin: 0;
+}
+
+.toggle-icon {
+  width: 20px;
+  height: 20px;
+  color: #90a4ae;
+  transition: transform 0.3s ease;
+}
+.toggle-icon.is-expanded {
+  transform: rotate(90deg);
+}
+
+.case-details {
+  padding: 20px;
+  border-top: 1px solid var(--border-color-light);
+}
+
+.case-footer {
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--border-color-light);
+  display: flex;
+  justify-content: flex-end;
 }
 
 .document-checklist {
@@ -362,6 +661,7 @@ export default {
   padding: 15px 10px;
   border-bottom: 1px solid #eef2f7;
   transition: background-color 0.2s ease;
+  flex-wrap: wrap;
 }
 .document-item:last-child {
   border-bottom: none;
@@ -373,33 +673,53 @@ export default {
   display: flex;
   align-items: center;
   gap: 15px;
+  flex-grow: 1;
+  margin-right: 15px;
 }
 .doc-info input[type="checkbox"] {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 .doc-name {
   font-size: 15px;
 }
 .other-doc-input {
   border: 1px solid var(--input-border-color);
-  padding: 5px;
+  padding: 8px 12px;
   border-radius: 6px;
+  font-size: 15px;
+  width: 100%;
 }
 
 .doc-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-grow: 1;
+  justify-content: flex-end;
 }
 .button-icon {
-  padding: 8px 16px;
+  padding: 8px;
   border-radius: 6px;
   border: 1px solid var(--input-border-color);
   background-color: #fff;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.2s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.button-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.button-icon.upload-doc {
+  padding: 8px 16px;
 }
 .button-icon.upload-doc:hover {
   background-color: #eef2f7;
@@ -408,7 +728,63 @@ export default {
 }
 .button-icon.view-doc {
   color: #1e8e3e;
+  border-color: #a8d8b6;
+  padding: 8px 16px;
 }
+.button-icon.view-doc:hover {
+  background-color: #e8f5e9;
+}
+.button-icon.delete-doc {
+  color: var(--danger-color);
+  border-color: #fecaca;
+  padding: 8px 16px;
+}
+.button-icon.delete-doc:hover {
+  background-color: #fee2e2;
+}
+
+.uploaded-files {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.file-chip {
+  display: flex;
+  align-items: center;
+  background-color: #e8f5e9;
+  color: #1e8e3e;
+  border-radius: 16px;
+  padding: 4px 6px 4px 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.file-name {
+  cursor: pointer;
+  text-decoration: underline;
+  margin-right: 6px;
+}
+
+.delete-file-btn {
+  background: #b8ddc3;
+  color: #1e8e3e;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.delete-file-btn:hover {
+  background: #a8d8b6;
+}
+
 
 .empty-state, .loader {
   text-align: center;
@@ -419,10 +795,11 @@ export default {
 .empty-state p {
   margin-bottom: 20px;
 }
+
 .button {
   padding: 12px 24px;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-weight: 600;
   border: none;
   cursor: pointer;
@@ -431,24 +808,100 @@ export default {
 .button.primary {
   background-color: var(--primary-color);
   color: var(--white-color);
+  box-shadow: 0 6px 10px rgba(62, 63, 63, 0.25);
+}
+.button.primary:hover {
+  background-color: var(--primary-hover-color);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(62, 63, 63, 0.3);
 }
 .button.secondary {
   background-color: #f0f2f5;
   color: var(--dark-blue);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.05);
 }
 .button.secondary:hover {
   background-color: #e4e6e9;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.08);
 }
+
 .add-other-btn {
   margin-top: 15px;
+  padding: 10px 20px;
+  border-radius: 8px;
 }
+
 .card-footer {
   padding: 20px 30px;
   text-align: right;
   border-top: 1px solid var(--border-color-light);
   background-color: var(--background-color);
 }
-.save-button {
-  font-size: 16px;
+
+.confirm-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.confirm-dialog {
+  background: white;
+  padding: 30px 40px;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  text-align: center;
+}
+
+.confirm-dialog p {
+  margin-bottom: 25px;
+  font-size: 18px;
+  color: var(--dark-blue);
+  font-weight: 500;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 15px 25px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toast-notification.success {
+  background-color: var(--primary-color);
+}
+
+.toast-notification.error {
+  background-color: var(--danger-color);
+}
+
+.toast-fade-enter-active, .toast-fade-leave-active {
+  transition: opacity 0.5s, transform 0.5s;
+}
+.toast-fade-enter-from, .toast-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 </style>
