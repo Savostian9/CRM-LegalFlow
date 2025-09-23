@@ -41,6 +41,7 @@ class Client(models.Model):
 # --- Модель LegalCase ---
 class LegalCase(models.Model):
     STATUS_CHOICES = [
+        ('-', '-'),
         ('PREPARATION', 'Подготовка документов'),
         ('SUBMITTED', 'Подано'),
         ('IN_PROGRESS', 'На рассмотрении'),
@@ -49,6 +50,7 @@ class LegalCase(models.Model):
         ('CLOSED', 'Дело закрыто'),
     ]
     CASE_TYPE_CHOICES = [
+        ('-', ' -'),
         ('CZASOWY_POBYT', 'ВНЖ (Карта временного побыту)'),
         ('STALY_POBYT', 'ПМЖ (Карта сталего побыту)'),
         ('REZydent_UE', 'Карта резидента ЕС'),

@@ -85,25 +85,56 @@ class ClientSerializer(serializers.ModelSerializer):
         instance.visa_expiry_date = validated_data.get('visa_expiry_date', instance.visa_expiry_date)
         instance.save()
 
+        # Обрабатываем все дела, а не только первое
         if cases_data:
-            case_data = cases_data[0]
-            documents_data = case_data.pop('documents', [])
+            # Получаем ID всех переданных дел
+            sent_case_ids = {case_data.get('id') for case_data in cases_data if case_data.get('id')}
             
-            legal_case, created = LegalCase.objects.update_or_create(
-                client=instance, defaults=case_data
-            )
-
-            sent_doc_ids = {item.get('id') for item in documents_data if item.get('id')}
-            for doc in legal_case.documents.all():
-                if doc.id not in sent_doc_ids:
-                    doc.delete()
-
-            for document_data in documents_data:
-                doc_id = document_data.get('id', None)
-                if doc_id:
-                    Document.objects.filter(id=doc_id, legal_case=legal_case).update(**document_data)
+            # Удаляем дела, которых нет в переданных данных
+            for existing_case in instance.legal_cases.all():
+                if existing_case.id not in sent_case_ids:
+                    existing_case.delete()
+            
+            # Обновляем или создаем дела
+            for case_data in cases_data:
+                case_id = case_data.get('id')
+                documents_data = case_data.pop('documents', [])
+                
+                if case_id:
+                    # Обновляем существующее дело
+                    try:
+                        legal_case = LegalCase.objects.get(id=case_id, client=instance)
+                        for attr, value in case_data.items():
+                            setattr(legal_case, attr, value)
+                        legal_case.save()
+                    except LegalCase.DoesNotExist:
+                        continue
                 else:
-                    Document.objects.create(legal_case=legal_case, **document_data)
+                    # Создаем новое дело
+                    legal_case = LegalCase.objects.create(client=instance, **case_data)
+                
+                # Обрабатываем документы для этого дела
+                if documents_data:
+                    sent_doc_ids = {doc_data.get('id') for doc_data in documents_data if doc_data.get('id')}
+                    
+                    # Удаляем документы, которых нет в переданных данных
+                    for doc in legal_case.documents.all():
+                        if doc.id not in sent_doc_ids:
+                            doc.delete()
+                    
+                    # Обновляем или создаем документы
+                    for document_data in documents_data:
+                        doc_id = document_data.get('id')
+                        if doc_id:
+                            try:
+                                doc = Document.objects.get(id=doc_id, legal_case=legal_case)
+                                for attr, value in document_data.items():
+                                    setattr(doc, attr, value)
+                                doc.save()
+                            except Document.DoesNotExist:
+                                continue
+                        else:
+                            Document.objects.create(legal_case=legal_case, **document_data)
 
         return instance
 

@@ -23,10 +23,7 @@
             <label for="phone_number">Телефон</label>
             <vue-tel-input v-model="clientData.phone_number" mode="international"></vue-tel-input>
           </div>
-          <div class="form-group full-width">
-            <label for="address">Адрес</label>
-            <textarea id="address" v-model="clientData.address"></textarea>
-          </div>
+          
         </div>
         <footer class="modal-footer">
           <button type="button" @click="$emit('close')" class="button secondary">Отмена</button>
@@ -47,7 +44,6 @@ export default {
         last_name: '',
         email: '',
         phone_number: '',
-        address: ''
       }
     };
   },

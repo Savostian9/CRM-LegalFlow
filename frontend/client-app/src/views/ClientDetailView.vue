@@ -14,6 +14,14 @@
     </header>
 
     <form @submit.prevent class="card-content">
+      <!-- Скрытое поле для загрузки файлов -->
+      <input 
+        type="file" 
+        style="display: none" 
+        ref="fileInput" 
+        @change="handleFileUpload"
+      >
+
       <section class="data-section">
         <h3>Личные данные</h3>
         <div class="data-grid">
@@ -103,7 +111,6 @@
                 </li>
               </ul>
               <button type="button" @click="addDocument(caseIndex)" class="button secondary add-other-btn">Добавить документ</button>
-              <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none;" multiple />
             </section>
             <footer class="case-footer">
                 <button type="button" @click="removeCase(caseIndex)" class="button-icon delete-doc">Удалить дело</button>
@@ -151,7 +158,7 @@ export default {
       editableClient: null,
       statusMap: { 'PREPARATION': 'Подготовка документов', 'SUBMITTED': 'Подано', 'IN_PROGRESS': 'На рассмотрении', 'DECISION_POSITIVE': 'Решение положительное', 'DECISION_NEGATIVE': 'Решение отрицательное', 'CLOSED': 'Дело закрыто' },
       caseTypeMap: { 'CZASOWY_POBYT': 'ВНЖ (Czasowy pobyt)', 'STALY_POBYT': 'ПМЖ (Staly pobyt)', 'REZydent_UE': 'Карта резидента ЕС', 'OBYWATELSTWO': 'Гражданство' },
-      docTypeMap: { 'ZALACZNIK_1': 'Załącznik nr 1', 'UMOWA_PRACA': 'Umowa o pracę / zlecenia', 'UMOWA_NAJMU': 'Umowa najmu', 'ZUS_ZUA_ZZA': 'ZUS ZUA / ZZA', 'ZUS_RCA_DRA': 'ZUS RCA/DRA', 'POLISA': 'Polisa ubezpieczeniowa', 'ZASWIADCZENIE_US': 'Zaświadczenie z Urzędu Skarbowego', 'ZASWIADCZENIA_ZUS': 'Zaświadczenia ZUS pracodawcy', 'PIT_37': 'PIT 37', 'BADANIE_LEKARSKIE': 'Badanie lekarskie', 'BADANIE_MEDYCZNE': 'Badanie medyczne', 'SWIADECTWO_KIEROWCY': 'Świadectwo kierowcy' },
+      docTypeMap: { 'ZALACZNIK_1': 'Załącznik nr 1', 'UMOWA_PRACA': 'Umowa o pracę / zlecenia', 'UMOWA_NAJMU': 'Umowa najmu', 'ZUS_ZUA_ZZA': 'ZUS ZUA / ZZA', 'ZUS_RCA_DRA': 'ZUS RCA/DRA', 'POLISA': 'Polisa ubezpieczeniowa', 'ZASWIADCZENIE_US': 'Zaświadczenie z Urzędu Skarbowego', 'ZASWIADCZENIA_ZUS': 'Zaświadczenia ZUS работадателя', 'PIT_37': 'PIT 37', 'BADANIE_LEKARSKIE': 'Badание лекарское', 'BADANIE_MEDYCZNE': 'Badanie medyczne', 'SWIADECTWO_KIEROWCY': 'Świadectwo kierowcy' },
       uploadingDocContext: null, // { caseIndex, docIndex }
       showConfirmDialog: false,
       confirmDialogMessage: '',
@@ -160,12 +167,19 @@ export default {
       notificationMessage: '',
       notificationType: 'success', // 'success' or 'error'
       isSaving: false,
+      fileInputs: [], // Для хранения ссылок на инпуты файлов
+      currentUploadInfo: null, // { caseIndex, docIndex }
     };
   },
   created() {
     this.fetchClientData();
   },
   methods: {
+    setFileInputRef(el) {
+      if (el) {
+        this.fileInputs.push(el);
+      }
+    },
     toggleCase(index) {
       const legalCase = this.editableClient.legal_cases[index];
       legalCase._isExpanded = !legalCase._isExpanded;
@@ -288,46 +302,65 @@ export default {
       this.confirmCallback = null;
     },
     removeUploadedFile(legalCase, docIndex, fileIndex) {
-      const doc = legalCase.documents[docIndex];
-      doc.files.splice(fileIndex, 1);
-      if (doc.files.length === 0) {
-        doc.status = 'NOT_SUBMITTED';
-      }
+      const file = this.editableClient.legal_cases[legalCase.id].documents[docIndex].files[fileIndex];
+      // TODO: Добавить логику удаления файла с бэкенда, если нужно
+      this.editableClient.legal_cases[legalCase.id].documents[docIndex].files.splice(fileIndex, 1);
       this.saveAllChanges();
     },
     triggerUpload(caseIndex, docIndex) {
-      this.uploadingDocContext = { caseIndex, docIndex };
-      this.$refs.fileInput.click();
+      this.currentUploadInfo = { caseIndex, docIndex };
+      // Используем уникальный ref
+      const refName = `fileInput_${caseIndex}_${docIndex}`;
+      const input = this.$refs[refName];
+      if (input && input[0]) {
+        input[0].click();
+      } else {
+        console.error('File input not found for', refName);
+      }
     },
-    handleFileUpload(event) {
-      const files = event.target.files;
-      if (!files.length || !this.uploadingDocContext) return;
+    async handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file || !this.currentUploadInfo) return;
 
-      const { caseIndex, docIndex } = this.uploadingDocContext;
-      const doc = this.editableClient.legal_cases[caseIndex].documents[docIndex];
-      if (!doc.files) {
-        doc.files = [];
-      }
-      
-      for (const file of files) {
-        doc.files.push({
-          url: URL.createObjectURL(file),
-          name: file.name,
-        });
-      }
-      
-      if (files.length > 0) {
-        doc.status = 'SUBMITTED';
-      }
+      const { caseIndex, docIndex } = this.currentUploadInfo;
+      const legalCase = this.editableClient.legal_cases[caseIndex];
+      const document = legalCase.documents[docIndex];
 
-      this.uploadingDocContext = null;
-      event.target.value = '';
-      this.saveAllChanges();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('description', file.name); // или другое описание
+
+      try {
+        const token = localStorage.getItem('user-token');
+        const response = await axios.post(
+          `http://127.0.0.1:8000/api/documents/${document.id}/upload/`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'Authorization': `Token ${token}`
+            }
+          }
+        );
+        
+        // Добавляем новый файл в список
+        if (!document.files) {
+          document.files = [];
+        }
+        document.files.push(response.data);
+
+        this.showToast('Файл успешно загружен!', 'success');
+      } catch (error) {
+        console.error('Ошибка при загрузке файла:', error);
+        this.showToast('Ошибка при загрузке файла.', 'error');
+      } finally {
+        // Сбрасываем значение инпута, чтобы можно было загрузить тот же файл снова
+        event.target.value = '';
+        this.currentUploadInfo = null;
+      }
     },
     viewFile(file) {
-      if (file.url) {
-        window.open(file.url, '_blank');
-      }
+      window.open(file.file, '_blank');
     },
     async saveAllChanges() {
         if (this.isSaving) return;

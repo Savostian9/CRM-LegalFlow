@@ -225,11 +225,14 @@ class ClientDetailView(APIView):
         except Client.DoesNotExist:
             return Response({'error': 'Клиент не найден'}, status=status.HTTP_404_NOT_FOUND)
         
-        serializer = ClientSerializer(client, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            serializer = ClientSerializer(client, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class CaseCreateView(APIView):
     permission_classes = [IsAuthenticated]
