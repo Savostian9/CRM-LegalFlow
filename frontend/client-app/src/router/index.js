@@ -9,12 +9,21 @@ import RegisterView from '../views/RegisterView.vue'
 import VerifyEmailView from '../views/VerifyEmailView.vue'
 import PasswordResetView from '../views/PasswordResetView.vue'
 import PasswordResetConfirmView from '../views/PasswordResetConfirmView.vue'
+import PrivacyPolicy from '../views/PrivacyPolicy.vue'
+import CookiesPolicy from '../views/CookiesPolicy.vue'
+import TermsView from '../views/TermsView.vue'
 
 // --- Главный макет и страницы личного кабинета ---
 import DashboardLayout from '../layouts/DashboardLayout.vue'
 import DashboardHomeView from '../views/DashboardHomeView.vue'
 import ClientListView from '../views/ClientListView.vue'
 import ClientDetailView from '../views/ClientDetailView.vue'
+import FinanceView from '../views/FinanceView.vue'
+import CalendarView from '../views/CalendarView.vue'
+import SettingsView from '../views/SettingsView.vue'
+import TasksView from '../views/TasksView.vue'
+import NotificationsView from '../views/NotificationsView.vue'
+import MyPlanView from '../views/MyPlanView.vue'
 
 const routes = [
   // --- Маршруты без бокового меню ---
@@ -48,6 +57,21 @@ const routes = [
     name: 'password-reset-confirm',
     component: PasswordResetConfirmView
   },
+  {
+    path: '/privacy-policy',
+    name: 'privacy-policy',
+    component: PrivacyPolicy
+  },
+  {
+    path: '/cookies-policy',
+    name: 'cookies-policy',
+    component: CookiesPolicy
+  },
+  {
+    path: '/terms',
+    name: 'terms',
+    component: TermsView
+  },
 
   // --- Маршруты ВНУТРИ личного кабинета (с постоянным боковым меню) ---
   {
@@ -61,6 +85,11 @@ const routes = [
         component: DashboardHomeView
       },
       {
+        path: 'notifications',
+        name: 'notifications',
+        component: NotificationsView
+      },
+      {
         path: 'clients', // Теперь это /dashboard/clients
         name: 'client-list',
         component: ClientListView
@@ -70,6 +99,31 @@ const routes = [
         name: 'client-detail',
         component: ClientDetailView,
         props: true
+      },
+      {
+        path: 'finance', // /dashboard/finance
+        name: 'finance',
+        component: FinanceView
+      },
+      {
+        path: 'tasks',
+        name: 'tasks',
+        component: TasksView
+      },
+      {
+        path: 'calendar',
+        name: 'calendar',
+        component: CalendarView
+      },
+      {
+        path: 'settings',
+        name: 'settings',
+        component: SettingsView
+      },
+      {
+        path: 'plan',
+        name: 'my-plan',
+        component: MyPlanView
       },
       // Сюда вы будете добавлять новые маршруты: 'cases', 'tasks' и т.д.
     ]
@@ -81,14 +135,22 @@ const router = createRouter({
   routes
 })
 
-// Навигационный гвард для проверки авторизации
+// Навигационный гвард для проверки авторизации и ролей
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('user-token')
+  const role = localStorage.getItem('user-role')
 
   // Проверяем, требует ли маршрут (или его родитель) авторизации
   if (to.matched.some(record => record.meta.requiresAuth) && !token) {
     // Если да, и токена нет - перенаправляем на страницу входа
     next('/login')
+    return
+  }
+
+  // Ассистентам запрещаем прямой доступ к разделу финансов
+  if (to.path.startsWith('/dashboard/finance') && role === 'ASSISTANT') {
+    next('/dashboard')
+    return
   } else {
     // Иначе - разрешаем переход
     next()

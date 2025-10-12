@@ -1,25 +1,25 @@
 <template>
   <div class="auth-wrapper">
     <div class="auth-card">
-      <h2 class="auth-title">Подтверждение Email</h2>
+  <h2 class="auth-title">{{ $t('auth.verify.title') }}</h2>
       <p class="info-text">
-        Мы отправили 6-значный код на <strong>{{ email }}</strong>
+  {{ $t('auth.verify.sent') }} <strong>{{ email }}</strong>
       </p>
       
       <form @submit.prevent="handleVerification" class="auth-form">
         <div class="form-group">
-          <label for="token">Код подтверждения</label>
+          <label for="token">{{ $t('auth.verify.codeLabel') }}</label>
           <input type="text" id="token" v-model="token" required maxlength="6" pattern="\d{6}" placeholder="------" />
         </div>
         
-        <button type="submit" class="auth-button">Подтвердить</button>
+  <button type="submit" class="auth-button">{{ $t('auth.verify.confirm') }}</button>
 
         <div v-if="message" :class="isError ? 'error-message' : 'success-message'">{{ message }}</div>
       </form>
       
       <div class="resend-container">
-        <span v-if="timer > 0">Отправить код повторно можно через: {{ timer }} сек.</span>
-        <button v-else @click="resendCode" class="resend-button">Отправить код еще раз</button>
+  <span v-if="timer > 0">{{ $t('auth.verify.resendIn') }} {{ timer }} {{ $t('auth.verify.sec') }}</span>
+  <button v-else @click="resendCode" class="resend-button">{{ $t('auth.verify.resend') }}</button>
       </div>
     </div>
   </div>
@@ -40,8 +40,8 @@ export default {
     };
   },
   created() {
-    // Получаем email из параметров URL при загрузке страницы
-    this.email = this.$route.query.email || 'вашу почту';
+  // Get email from URL query on load
+  this.email = this.$route.query.email || '';
   },
   mounted() {
     this.startTimer();
@@ -62,21 +62,21 @@ export default {
       this.isError = false;
 
       try {
-        // ИСПРАВЛЕННЫЙ URL
+  // Verified endpoint
         const response = await axios.post('http://127.0.0.1:8000/api/verify-email/', {
           email: this.email,
           token: this.token
         });
 
         this.message = response.data.message;
-        // Через 2 секунды перенаправляем на страницу входа
+  // After 2 seconds redirect to login
         setTimeout(() => {
           this.$router.push('/login');
         }, 2000);
 
       } catch (err) {
         this.isError = true;
-        this.message = err.response?.data?.error || 'Произошла ошибка.';
+  this.message = err.response?.data?.error || this.$t('auth.common.error');
       }
     },
     async resendCode() {
@@ -92,7 +92,7 @@ export default {
             this.startTimer(); // Перезапускаем таймер
         } catch (err) {
             this.isError = true;
-            this.message = err.response?.data?.error || 'Ошибка при повторной отправке.';
+            this.message = err.response?.data?.error || this.$t('auth.verify.resendError');
         }
     }
   }

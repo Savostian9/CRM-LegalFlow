@@ -4,17 +4,17 @@
       <div class="logo">
         <router-link to="/">LegalFlow</router-link>
       </div>
-      <h2 class="auth-title">Установите новый пароль</h2>
-      <p class="auth-subtitle">Придумайте надежный пароль, который вы еще не использовали.</p>
+  <h2 class="auth-title">{{ $t('auth.resetConfirm.title') }}</h2>
+  <p class="auth-subtitle">{{ $t('auth.resetConfirm.subtitle') }}</p>
       
       <form @submit.prevent="handlePasswordConfirm" class="auth-form">
         <div class="form-group">
-          <label for="password">Новый пароль</label>
+          <label for="password">{{ $t('auth.fields.newPassword') }}</label>
           <input type="password" id="password" v-model="password" required placeholder="••••••••" />
         </div>
         
         <div class="form-group">
-          <label for="password-confirm">Подтвердите пароль</label>
+          <label for="password-confirm">{{ $t('auth.fields.confirmPassword') }}</label>
           <input type="password" id="password-confirm" v-model="passwordConfirm" required placeholder="••••••••" />
         </div>
         
@@ -26,7 +26,7 @@
         </transition>
         
         <button type="submit" class="auth-button" :disabled="isLoading">
-          {{ isLoading ? 'Сохранение...' : 'Сохранить пароль' }}
+          {{ isLoading ? $t('auth.common.saving') : $t('auth.resetConfirm.savePassword') }}
         </button>
       </form>
     </div>

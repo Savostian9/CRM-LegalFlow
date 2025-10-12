@@ -1,55 +1,130 @@
 <template>
-  <div v-if="loading" class="loader">Загрузка...</div>
-  <div v-if="!loading && editableClient" class="client-card-wrapper">
+  <div v-if="loading" class="loader">{{ $t('common.loading') }}</div>
+  <div v-else-if="editableClient" class="client-card-wrapper">
     <header class="card-header">
       <div class="header-left">
-        <router-link to="/dashboard/clients" class="back-button">
+  <button type="button" class="btn back-button" @click="goBack">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
             <path fill-rule="evenodd" d="M7.72 12.53a.75.75 0 0 1 0-1.06l7.5-7.5a.75.75 0 1 1 1.06 1.06L9.31 12l6.97 6.97a.75.75 0 1 1-1.06 1.06l-7.5-7.5Z" clip-rule="evenodd" />
           </svg>
-          <span>Назад к списку</span>
-        </router-link>
-        <h1>Карточка клиента: {{ editableClient.first_name }} {{ editableClient.last_name }}</h1>
+          <span>{{ $t('clientDetail.back') }}</span>
+		</button>
+        <h1>{{ $t('clientDetail.title') }}: {{ editableClient.first_name }} {{ editableClient.last_name }}</h1>
+      </div>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn danger delete-client-btn"
+          :disabled="pendingDelete"
+          @click="promptDeleteClient"
+          aria-label="Delete client"
+        >
+          <span class="btn-inner" v-if="!pendingDelete">
+            <svg class="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14"/></svg>
+            {{ deleteClientLabel }}
+          </span>
+          <span v-else>{{ processingLabel }}</span>
+        </button>
       </div>
     </header>
 
     <form @submit.prevent class="card-content">
-      <!-- Скрытое поле для загрузки файлов -->
-      <input 
-        type="file" 
-        style="display: none" 
-        ref="fileInput" 
-        @change="handleFileUpload"
-      >
+      <section class="data-section">
+        <h3>{{ $t('clientDetail.sections.personal') }}</h3>
+        <div class="data-grid">
+          <div class="data-item"><label>{{ $t('clientDetail.fields.firstName') }}</label><input type="text" v-model="editableClient.first_name" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.lastName') }}</label><input type="text" v-model="editableClient.last_name" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.phone') }}</label><vue-tel-input v-model="editableClient.phone_number" mode="international" @blur="saveAllChanges"></vue-tel-input></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.email') }}</label><input type="email" v-model="editableClient.email" @change="saveAllChanges" /></div>
+          <div class="data-item full-width"><label>{{ $t('clientDetail.fields.address') }}</label><textarea v-model="editableClient.address" @change="saveAllChanges" class="address-textarea"></textarea></div>
+
+          <div class="data-item"><label>{{ $t('clientDetail.fields.passportNumber') }}</label><input type="text" v-model="editableClient.passport_number" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.passportExpiry') }}</label><input type="date" v-model="editableClient.passport_expiry_date" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.visaType') }}</label><input type="text" v-model="editableClient.visa_type" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.visaExpiry') }}</label><input type="date" v-model="editableClient.visa_expiry_date" @change="saveAllChanges" /></div>
+        </div>
+      </section>
 
       <section class="data-section">
-        <h3>Личные данные</h3>
+  <h3>{{ $t('clientDetail.sections.reminders') }}</h3>
         <div class="data-grid">
-          <div class="data-item"><label>Имя</label><input type="text" v-model="editableClient.first_name" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>Фамилия</label><input type="text" v-model="editableClient.last_name" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>Телефон</label><vue-tel-input v-model="editableClient.phone_number" mode="international" @blur="saveAllChanges"></vue-tel-input></div>
-          <div class="data-item"><label>Email</label><input type="email" v-model="editableClient.email" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>Адрес</label><textarea v-model="editableClient.address" @change="saveAllChanges"></textarea></div>
+          <div class="data-item">
+            <label>{{ $t('clientDetail.reminders.UMOWA_PRACA_ZLECENIA') }}</label>
+            <input type="datetime-local" v-model="remindersAtMap.UMOWA_PRACA_ZLECENIA" @change="onReminderAtChange('UMOWA_PRACA_ZLECENIA')" />
+          </div>
+          <div class="data-item">
+            <label>{{ $t('clientDetail.reminders.UMOWA_NAJMU') }}</label>
+            <input type="datetime-local" v-model="remindersAtMap.UMOWA_NAJMU" @change="onReminderAtChange('UMOWA_NAJMU')" />
+          </div>
+          <div class="data-item">
+            <label>{{ $t('clientDetail.reminders.ZUS_ZUA_ZZA') }}</label>
+            <input type="datetime-local" v-model="remindersAtMap.ZUS_ZUA_ZZA" @change="onReminderAtChange('ZUS_ZUA_ZZA')" />
+          </div>
+          <div class="data-item">
+            <label>{{ $t('clientDetail.reminders.ZUS_RCA_DRA') }}</label>
+            <input type="datetime-local" v-model="remindersAtMap.ZUS_RCA_DRA" @change="onReminderAtChange('ZUS_RCA_DRA')" />
+          </div>
+        </div>
+      </section>
 
-          <div class="data-item"><label>Номер паспорта</label><input type="text" v-model="editableClient.passport_number" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>Паспорт действителен до</label><input type="date" v-model="editableClient.passport_expiry_date" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>Тип текущей визы</label><input type="text" v-model="editableClient.current_visa_type" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>Виза действительна до</label><input type="date" v-model="editableClient.current_visa_expiry_date" @change="saveAllChanges" /></div>
+      <section class="data-section">
+        <h3>{{ $t('clientDetail.sections.notes') }}</h3>
+        <div class="notes-wrapper">
+          <textarea
+            v-model="editableClient.notes"
+            class="notes-area"
+            :placeholder="$t('clientDetail.notesPlaceholder')"
+            @change="saveAllChanges"
+          ></textarea>
+        </div>
+      </section>
+
+      <section class="data-section">
+  <h3>{{ $t('clientDetail.sections.finance') }}</h3>
+        <div class="data-grid">
+          <div class="data-item">
+            <label>{{ $t('clientDetail.fields.serviceCost') }}</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              v-model.number="editableClient.service_cost"
+              placeholder="0,00"
+              @focus="clearIfZero('service_cost')"
+              @blur="normalizeMoney('service_cost')"
+            />
+          </div>
+          <div class="data-item">
+            <label>{{ $t('clientDetail.fields.amountPaid') }}</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              v-model.number="editableClient.amount_paid"
+              placeholder="0,00"
+              @focus="clearIfZero('amount_paid')"
+              @blur="normalizeMoney('amount_paid')"
+            />
+          </div>
+          <div class="data-item">
+            <label>{{ $t('clientDetail.fields.balance') }}</label>
+            <input type="text" :value="formatCurrency(balanceComputed)" disabled />
+          </div>
         </div>
       </section>
 
       <div v-if="!editableClient.legal_cases || editableClient.legal_cases.length === 0" class="empty-state">
-        <p>У этого клиента еще нет дел.</p>
+        <p>{{ $t('clientDetail.cases.none') }}</p>
       </div>
 
       <div v-else class="cases-container">
-        <div v-for="(legalCase, caseIndex) in editableClient.legal_cases" :key="caseIndex" class="case-wrapper">
+        <div v-for="(legalCase, caseIndex) in editableClient.legal_cases" :key="legalCase.id || caseIndex" class="case-wrapper">
           <div class="case-header" @click="toggleCase(caseIndex)">
             <div class="case-header-title">
               <svg class="toggle-icon" :class="{ 'is-expanded': legalCase._isExpanded }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd" />
               </svg>
-              <h4>Дело №{{ caseIndex + 1 }}: {{ getCaseTypeDisplay(legalCase.case_type) }}</h4>
+              <h4>{{ $t('clientDetail.cases.caseN', { n: caseIndex + 1, type: getCaseTypeDisplay(legalCase.case_type) }) }}</h4>
             </div>
             <div class="case-status" :class="getCaseStatusClass(legalCase)">
               {{ getStatusDisplay(legalCase.status) }}
@@ -58,40 +133,42 @@
 
           <div v-if="legalCase._isExpanded" class="case-details">
             <section class="data-section">
-              <h3>Данные по делу о легализации</h3>
+              <h3>{{ $t('clientDetail.sections.caseData') }}</h3>
               <div class="data-grid">
                 <div class="data-item full-width">
-                  <label>Вид дела</label>
+                  <label>{{ $t('clientDetail.cases.type') }}</label>
                   <select v-model="legalCase.case_type" @change="saveAllChanges">
-                    <option value="CZASOWY_POBYT">ВНЖ (Czasowy pobyt)</option>
-                    <option value="STALY_POBYT">ПМЖ (Staly pobyt)</option>
-                    <option value="REZydent_UE">Карта резидента ЕС (Karta rezydenta UE)</option>
-                    <option value="OBYWATELSTWO">Гражданство (Obywatelstwo)</option>
+                    <option value="-">-</option>
+                    <option value="CZASOWY_POBYT">{{ $t('clientDetail.caseTypes.CZASOWY_POBYT') }}</option>
+                    <option value="STALY_POBYT">{{ $t('clientDetail.caseTypes.STALY_POBYT') }}</option>
+                    <option value="REZydent_UE">{{ $t('clientDetail.caseTypes.REZydent_UE') }}</option>
+                    <option value="OBYWATELSTWO">{{ $t('clientDetail.caseTypes.OBYWATELSTWO') }}</option>
                   </select>
                 </div>
-                <div class="data-item"><label>Дата подачи</label><input type="date" v-model="legalCase.submission_date" @change="saveAllChanges" /></div>
-                <div class="data-item"><label>Дата решения</label><input type="date" v-model="legalCase.decision_date" @change="saveAllChanges" /></div>
+                <div class="data-item"><label>{{ $t('clientDetail.cases.submissionDate') }}</label><input type="date" v-model="legalCase.submission_date" @change="saveAllChanges" /></div>
+                <div class="data-item"><label>{{ $t('clientDetail.cases.decisionDate') }}</label><input type="date" v-model="legalCase.decision_date" @change="saveAllChanges" /></div>
                 <div class="data-item full-width">
-                  <label>Статус дела</label>
+                  <label>{{ $t('clientDetail.cases.status') }}</label>
                   <select v-model="legalCase.status" @change="saveAllChanges">
-                    <option value="PREPARATION">Подготовка документов</option>
-                    <option value="SUBMITTED">Подано</option>
-                    <option value="IN_PROGRESS">На рассмотрении</option>
-                    <option value="DECISION_POSITIVE">Решение положительное</option>
-                    <option value="DECISION_NEGATIVE">Решение отрицательное</option>
-                    <option value="CLOSED">Дело закрыто</option>
+                    <option value="-">-</option>
+                    <option value="PREPARATION">{{ $t('clientDetail.caseStatus.PREPARATION') }}</option>
+                    <option value="SUBMITTED">{{ $t('clientDetail.caseStatus.SUBMITTED') }}</option>
+                    <option value="IN_PROGRESS">{{ $t('clientDetail.caseStatus.IN_PROGRESS') }}</option>
+                    <option value="DECISION_POSITIVE">{{ $t('clientDetail.caseStatus.DECISION_POSITIVE') }}</option>
+                    <option value="DECISION_NEGATIVE">{{ $t('clientDetail.caseStatus.DECISION_NEGATIVE') }}</option>
+                    <option value="CLOSED">{{ $t('clientDetail.caseStatus.CLOSED') }}</option>
                   </select>
                 </div>
               </div>
             </section>
 
             <section class="data-section">
-              <h3>Чек-лист поданных документов</h3>
+              <h3>{{ $t('clientDetail.sections.checklist') }}</h3>
               <ul class="document-checklist">
-                <li v-for="(doc, docIndex) in legalCase.documents" :key="docIndex" class="document-item">
+                <li v-for="(doc, docIndex) in legalCase.documents" :key="doc.id || docIndex" class="document-item">
                   <div class="doc-info">
                     <input type="checkbox" v-model="doc.status" true-value="SUBMITTED" false-value="NOT_SUBMITTED" @change="saveAllChanges">
-                    <input v-if="doc.isNew" type="text" v-model="doc.document_type" placeholder="Название документа" class="other-doc-input" @change="saveAllChanges">
+                    <input v-if="doc.isNew" type="text" v-model="doc.document_type" :placeholder="$t('clientDetail.cases.addDoc')" class="other-doc-input" @change="saveAllChanges">
                     <span v-else class="doc-name">{{ getDocumentTypeDisplay(doc.document_type) }}</span>
                   </div>
                   <div class="doc-actions">
@@ -101,26 +178,49 @@
                         <button type="button" @click="removeUploadedFile(legalCase, docIndex, fileIndex)" class="delete-file-btn">&times;</button>
                       </div>
                     </div>
-                    <button type="button" @click="triggerUpload(caseIndex, docIndex)" class="button-icon upload-doc">Загрузить</button>
-                    <button type="button" @click="removeDocument(caseIndex, docIndex)" class="button-icon delete-doc" title="Удалить строку">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
-                        <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                      </svg>
+                    <button type="button" @click="triggerUpload(caseIndex, docIndex)" class="btn small upload-doc">{{ $t('clientDetail.cases.upload') }}</button>
+                    <button
+                      type="button"
+                      @click="removeDocument(caseIndex, docIndex)"
+                      class="btn danger small delete-doc icon-only"
+                      :title="$t('clientDetail.cases.deleteRow')"
+                      :aria-label="$t('clientDetail.cases.deleteRow')"
+                    >
+                      ×
                     </button>
                   </div>
                 </li>
               </ul>
-              <button type="button" @click="addDocument(caseIndex)" class="button secondary add-other-btn">Добавить документ</button>
+              <button type="button" @click="addDocument(caseIndex)" class="btn add-other-btn">{{ $t('clientDetail.cases.addDoc') }}</button>
+              <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none;" multiple />
             </section>
+
             <footer class="case-footer">
-                <button type="button" @click="removeCase(caseIndex)" class="button-icon delete-doc">Удалить дело</button>
+              <button type="button" @click="removeCase(caseIndex)" class="btn danger small">{{ $t('clientDetail.cases.deleteCase') }}</button>
             </footer>
           </div>
         </div>
       </div>
 
       <footer class="card-footer">
-        <button type="button" @click="startNewCase" class="button secondary">Добавить новое дело</button>
+        <div class="card-footer-left">
+          <button
+            type="button"
+            class="btn danger delete-client-btn"
+            :disabled="pendingDelete"
+            @click="promptDeleteClient"
+            aria-label="Delete client"
+          >
+            <span class="btn-inner" v-if="!pendingDelete">
+              <svg class="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14"/></svg>
+              {{ deleteClientLabel }}
+            </span>
+            <span v-else>{{ processingLabel }}</span>
+          </button>
+        </div>
+        <div class="card-footer-right">
+          <button type="button" @click="startNewCase" class="btn">{{ $t('clientDetail.cases.addNew') }}</button>
+        </div>
       </footer>
     </form>
 
@@ -129,19 +229,19 @@
       <div class="confirm-dialog">
         <p>{{ confirmDialogMessage }}</p>
         <div class="confirm-dialog-actions">
-          <button @click="confirmAction" class="button primary">Да, удалить</button>
-          <button @click="cancelAction" class="button secondary">Отмена</button>
+          <button @click="confirmAction" class="btn danger">{{ $t('clientDetail.confirm.yesDelete') }}</button>
+          <button @click="cancelAction" class="btn">{{ $t('clientDetail.confirm.cancel') }}</button>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Notification Toast -->
-  <transition name="toast-fade">
-    <div v-if="showNotification" :class="['toast-notification', notificationType]">
-      {{ notificationMessage }}
-    </div>
-  </transition>
+    <!-- Notification Toast -->
+    <transition name="toast-fade">
+      <div v-if="showNotification" :class="['toast-notification', notificationType]">
+        {{ notificationMessage }}
+      </div>
+    </transition>
+  </div>
 </template>
 
 <script>
@@ -156,29 +256,59 @@ export default {
       loading: true,
       client: null,
       editableClient: null,
-      statusMap: { 'PREPARATION': 'Подготовка документов', 'SUBMITTED': 'Подано', 'IN_PROGRESS': 'На рассмотрении', 'DECISION_POSITIVE': 'Решение положительное', 'DECISION_NEGATIVE': 'Решение отрицательное', 'CLOSED': 'Дело закрыто' },
-      caseTypeMap: { 'CZASOWY_POBYT': 'ВНЖ (Czasowy pobyt)', 'STALY_POBYT': 'ПМЖ (Staly pobyt)', 'REZydent_UE': 'Карта резидента ЕС', 'OBYWATELSTWO': 'Гражданство' },
-      docTypeMap: { 'ZALACZNIK_1': 'Załącznik nr 1', 'UMOWA_PRACA': 'Umowa o pracę / zlecenia', 'UMOWA_NAJMU': 'Umowa najmu', 'ZUS_ZUA_ZZA': 'ZUS ZUA / ZZA', 'ZUS_RCA_DRA': 'ZUS RCA/DRA', 'POLISA': 'Polisa ubezpieczeniowa', 'ZASWIADCZENIE_US': 'Zaświadczenie z Urzędu Skarbowego', 'ZASWIADCZENIA_ZUS': 'Zaświadczenia ZUS работадателя', 'PIT_37': 'PIT 37', 'BADANIE_LEKARSKIE': 'Badание лекарское', 'BADANIE_MEDYCZNE': 'Badanie medyczne', 'SWIADECTWO_KIEROWCY': 'Świadectwo kierowcy' },
-      uploadingDocContext: null, // { caseIndex, docIndex }
+  remindersAtMap: { UMOWA_PRACA_ZLECENIA: null, UMOWA_NAJMU: null, ZUS_ZUA_ZZA: null, ZUS_RCA_DRA: null },
+  statusMap: { '-' : '-', 'PREPARATION': this.$t('clientDetail.caseStatus.PREPARATION'), 'SUBMITTED': this.$t('clientDetail.caseStatus.SUBMITTED'), 'IN_PROGRESS': this.$t('clientDetail.caseStatus.IN_PROGRESS'), 'DECISION_POSITIVE': this.$t('clientDetail.caseStatus.DECISION_POSITIVE'), 'DECISION_NEGATIVE': this.$t('clientDetail.caseStatus.DECISION_NEGATIVE'), 'CLOSED': this.$t('clientDetail.caseStatus.CLOSED') },
+  caseTypeMap: { '-' : '-', 'CZASOWY_POBYT': this.$t('clientDetail.caseTypes.CZASOWY_POBYT'), 'STALY_POBYT': this.$t('clientDetail.caseTypes.STALY_POBYT'), 'REZydent_UE': this.$t('clientDetail.caseTypes.REZydent_UE'), 'OBYWATELSTWO': this.$t('clientDetail.caseTypes.OBYWATELSTWO') },
+  docTypeMap: { 'ZALACZNIK_1': this.$t('clientDetail.docTypes.ZALACZNIK_1'), 'UMOWA_PRACA': this.$t('clientDetail.docTypes.UMOWA_PRACA'), 'UMOWA_NAJMU': this.$t('clientDetail.docTypes.UMOWA_NAJMU'), 'ZUS_ZUA_ZZA': this.$t('clientDetail.docTypes.ZUS_ZUA_ZZA'), 'ZUS_RCA_DRA': this.$t('clientDetail.docTypes.ZUS_RCA_DRA'), 'POLISA': this.$t('clientDetail.docTypes.POLISA'), 'ZASWIADCZENIE_US': this.$t('clientDetail.docTypes.ZASWIADCZENIE_US'), 'ZASWIADCZENIA_ZUS': this.$t('clientDetail.docTypes.ZASWIADCZENIA_ZUS'), 'PIT_37': this.$t('clientDetail.docTypes.PIT_37'), 'BADANIE_LEKARSKIE': this.$t('clientDetail.docTypes.BADANIE_LEKARSKIE'), 'BADANIE_MEDYCZNE': this.$t('clientDetail.docTypes.BADANIE_MEDYCZNE'), 'SWIADECTWO_KIEROWCY': this.$t('clientDetail.docTypes.SWIADECTWO_KIEROWCY') },
+      uploadingDocContext: null,
       showConfirmDialog: false,
       confirmDialogMessage: '',
       confirmCallback: null,
       showNotification: false,
       notificationMessage: '',
-      notificationType: 'success', // 'success' or 'error'
+      notificationType: 'success',
       isSaving: false,
-      fileInputs: [], // Для хранения ссылок на инпуты файлов
-      currentUploadInfo: null, // { caseIndex, docIndex }
+      pendingDelete: false,
     };
+  },
+  computed: {
+    balanceComputed() {
+      const cost = Number(this.editableClient?.service_cost || 0);
+      const paid = Number(this.editableClient?.amount_paid || 0);
+      return cost - paid;
+    },
+    deleteClientLabel() {
+      const key = 'clientDetail.actions.deleteClient'
+      const tr = this.$t(key)
+        return tr === key ? 'Delete client' : tr
+    },
+    processingLabel() {
+      const key = 'common.processing'
+      const tr = this.$t(key)
+        return tr === key ? 'Processing…' : tr
+    }
   },
   created() {
     this.fetchClientData();
   },
   methods: {
-    setFileInputRef(el) {
-      if (el) {
-        this.fileInputs.push(el);
+    clearIfZero(field) {
+      const val = Number(this.editableClient?.[field]);
+      if (!val) {
+        this.editableClient[field] = null; // очищаем поле при 0
       }
+    },
+    normalizeMoney(field) {
+      let raw = this.editableClient?.[field];
+      if (raw === '' || raw === null || raw === undefined || isNaN(Number(raw))) {
+        raw = 0;
+      }
+      const num = Number(raw);
+      // ограничим минимально 0 и округлим до 2 знаков
+      const normalized = Math.max(0, Number(num.toFixed(2)));
+      this.editableClient[field] = normalized;
+      // сохраняем изменения после выхода из поля
+      this.saveAllChanges();
     },
     toggleCase(index) {
       const legalCase = this.editableClient.legal_cases[index];
@@ -206,9 +336,10 @@ export default {
         });
         this.client = response.data;
         this.resetEditableData();
+  this.hydrateRemindersMap();
       } catch (error) {
         console.error("Ошибка при загрузке данных клиента:", error);
-        this.showToast('Ошибка при загрузке данных клиента', 'error');
+        this.showToast(this.$t('clientDetail.toasts.loadError'), 'error');
       } finally {
         this.loading = false;
       }
@@ -218,50 +349,111 @@ export default {
         if (!this.editableClient.legal_cases) {
             this.editableClient.legal_cases = [];
         }
+    if (!this.editableClient.reminders) {
+      this.editableClient.reminders = [];
+    }
 
-        const hasMultipleCases = this.editableClient.legal_cases.length > 1;
+        this.editableClient.legal_cases.forEach((legalCase) => {
+            if (legalCase._isExpanded === undefined) {
+                legalCase._isExpanded = false;
+            }
 
-        this.editableClient.legal_cases.forEach((legalCase, index) => {
-            legalCase._isExpanded = hasMultipleCases ? index === 0 : false;
+            if (!legalCase.documents) {
+                legalCase.documents = [];
+            }
 
             const allDocTypes = Object.keys(this.docTypeMap);
-            const docMap = new Map(legalCase.documents.map(doc => [doc.document_type, doc]));
+            const existingDocsMap = new Map();
+            
+            legalCase.documents.forEach(doc => {
+                existingDocsMap.set(doc.document_type, doc);
+                if (!doc.files) doc.files = [];
+            });
 
-            const finalDocs = allDocTypes.map(docType => {
-                if (docMap.has(docType)) {
-                    const existingDoc = docMap.get(docType);
-                    if (!existingDoc.files) existingDoc.files = [];
-                    return existingDoc;
+            const finalDocs = [];
+            allDocTypes.forEach(docType => {
+                if (existingDocsMap.has(docType)) {
+                    finalDocs.push(existingDocsMap.get(docType));
                 } else {
-                    return { document_type: docType, status: 'NOT_SUBMITTED', files: [] };
+                    finalDocs.push({
+                        document_type: docType,
+                        status: 'NOT_SUBMITTED',
+                        files: []
+                    });
                 }
             });
 
             legalCase.documents.forEach(doc => {
-                if (!allDocTypes.includes(doc.document_type)) {
-                    if (!doc.files) doc.files = [];
+                if (!allDocTypes.includes(doc.document_type) && !finalDocs.find(d => d.document_type === doc.document_type)) {
                     finalDocs.push(doc);
                 }
             });
+
             legalCase.documents = finalDocs;
         });
     },
+    hydrateRemindersMap() {
+      this.remindersAtMap = { UMOWA_PRACA_ZLECENIA: null, UMOWA_NAJMU: null, ZUS_ZUA_ZZA: null, ZUS_RCA_DRA: null };
+      if (this.editableClient && Array.isArray(this.editableClient.reminders)) {
+        for (const r of this.editableClient.reminders) {
+          if (r.reminder_type === 'UMOWA_PRACA_ZLECENIA') {
+            this.remindersAtMap.UMOWA_PRACA_ZLECENIA = this.combineDateTime(r.reminder_date, r.reminder_time);
+          }
+          if (r.reminder_type === 'UMOWA_NAJMU') {
+            this.remindersAtMap.UMOWA_NAJMU = this.combineDateTime(r.reminder_date, r.reminder_time);
+          }
+          if (r.reminder_type === 'ZUS_ZUA_ZZA') {
+            this.remindersAtMap.ZUS_ZUA_ZZA = this.combineDateTime(r.reminder_date, r.reminder_time);
+          }
+          if (r.reminder_type === 'ZUS_RCA_DRA') {
+            this.remindersAtMap.ZUS_RCA_DRA = this.combineDateTime(r.reminder_date, r.reminder_time);
+          }
+        }
+      }
+    },
+    onReminderAtChange(type) {
+      if (!this.editableClient.reminders) this.editableClient.reminders = [];
+      const idx = this.editableClient.reminders.findIndex(r => r.reminder_type === type);
+      const parsed = this.splitDateTime(this.remindersAtMap[type]);
+      const dateVal = parsed?.date || null;
+      const timeVal = parsed?.time || null;
+      if (idx >= 0) {
+        this.editableClient.reminders[idx].reminder_date = dateVal;
+        this.editableClient.reminders[idx].reminder_time = timeVal;
+      } else {
+        this.editableClient.reminders.push({ reminder_type: type, reminder_date: dateVal, reminder_time: timeVal });
+      }
+      this.saveAllChanges();
+    },
+    combineDateTime(dateStr, timeStr) {
+      if (!dateStr) return null;
+      const t = timeStr ? String(timeStr).slice(0,5) : '00:00';
+      return `${dateStr}T${t}`;
+    },
+    splitDateTime(dtLocal) {
+      if (!dtLocal) return null;
+      try {
+        const [datePart, timePart] = dtLocal.split('T');
+        if (!datePart) return null;
+        const time5 = (timePart || '00:00').slice(0,5);
+        return { date: datePart, time: time5 };
+      } catch { return null; }
+    },
     startNewCase() {
       const newCase = {
-        case_type: 'CZASOWY_POBYT',
+        case_type: '-',
         submission_date: new Date().toISOString().slice(0, 10),
         decision_date: null,
-        status: 'PREPARATION',
+        status: '-',
         documents: Object.keys(this.docTypeMap).map(key => ({
           document_type: key,
           status: 'NOT_SUBMITTED',
-          files: [],
-          isNew: false
+          files: []
         })),
-        _isExpanded: true,
-        isNew: true // Флаг для нового дела
+        _isExpanded: false,
+        isNew: true
       };
-      this.editableClient.legal_cases.forEach(c => c._isExpanded = false);
+      
       this.editableClient.legal_cases.push(newCase);
       this.saveAllChanges();
     },
@@ -272,10 +464,9 @@ export default {
         files: [],
         isNew: true
       });
-      // Сохранение произойдет при вводе названия и уходе с поля
     },
     removeDocument(caseIndex, docIndex) {
-      this.confirmDialogMessage = 'Вы уверены, что хотите удалить эту строку?';
+  this.confirmDialogMessage = this.$t('clientDetail.confirm.deleteRow');
       this.confirmCallback = () => {
         this.editableClient.legal_cases[caseIndex].documents.splice(docIndex, 1);
         this.saveAllChanges();
@@ -283,7 +474,7 @@ export default {
       this.showConfirmDialog = true;
     },
     removeCase(caseIndex) {
-        this.confirmDialogMessage = 'Вы уверены, что хотите удалить это дело?';
+  this.confirmDialogMessage = this.$t('clientDetail.confirm.deleteCase');
         this.confirmCallback = () => {
             this.editableClient.legal_cases.splice(caseIndex, 1);
             this.saveAllChanges();
@@ -302,65 +493,63 @@ export default {
       this.confirmCallback = null;
     },
     removeUploadedFile(legalCase, docIndex, fileIndex) {
-      const file = this.editableClient.legal_cases[legalCase.id].documents[docIndex].files[fileIndex];
-      // TODO: Добавить логику удаления файла с бэкенда, если нужно
-      this.editableClient.legal_cases[legalCase.id].documents[docIndex].files.splice(fileIndex, 1);
+      const doc = legalCase.documents[docIndex];
+      doc.files.splice(fileIndex, 1);
+      if (doc.files.length === 0) {
+        doc.status = 'NOT_SUBMITTED';
+      }
       this.saveAllChanges();
     },
     triggerUpload(caseIndex, docIndex) {
-      this.currentUploadInfo = { caseIndex, docIndex };
-      // Используем уникальный ref
-      const refName = `fileInput_${caseIndex}_${docIndex}`;
-      const input = this.$refs[refName];
-      if (input && input[0]) {
-        input[0].click();
+      this.uploadingDocContext = { caseIndex, docIndex };
+      
+      const fileInput = this.$refs.fileInput;
+      if (Array.isArray(fileInput)) {
+        if (fileInput.length > 0) {
+          fileInput[0].click();
+        }
+      } else if (fileInput && typeof fileInput.click === 'function') {
+        fileInput.click();
       } else {
-        console.error('File input not found for', refName);
+        console.error('File input not found or click method not available');
       }
     },
-    async handleFileUpload(event) {
-      const file = event.target.files[0];
-      if (!file || !this.currentUploadInfo) return;
+    handleFileUpload(event) {
+      const files = event.target.files;
+      if (!files.length || !this.uploadingDocContext) return;
 
-      const { caseIndex, docIndex } = this.currentUploadInfo;
-      const legalCase = this.editableClient.legal_cases[caseIndex];
-      const document = legalCase.documents[docIndex];
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('description', file.name); // или другое описание
-
-      try {
-        const token = localStorage.getItem('user-token');
-        const response = await axios.post(
-          `http://127.0.0.1:8000/api/documents/${document.id}/upload/`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'Authorization': `Token ${token}`
-            }
-          }
-        );
-        
-        // Добавляем новый файл в список
-        if (!document.files) {
-          document.files = [];
-        }
-        document.files.push(response.data);
-
-        this.showToast('Файл успешно загружен!', 'success');
-      } catch (error) {
-        console.error('Ошибка при загрузке файла:', error);
-        this.showToast('Ошибка при загрузке файла.', 'error');
-      } finally {
-        // Сбрасываем значение инпута, чтобы можно было загрузить тот же файл снова
-        event.target.value = '';
-        this.currentUploadInfo = null;
+      const { caseIndex, docIndex } = this.uploadingDocContext;
+      
+      if (!this.editableClient.legal_cases[caseIndex] || 
+          !this.editableClient.legal_cases[caseIndex].documents[docIndex]) {
+        console.error('Document not found for upload');
+        return;
       }
+      
+      const doc = this.editableClient.legal_cases[caseIndex].documents[docIndex];
+      if (!doc.files) {
+        doc.files = [];
+      }
+      
+      for (const file of files) {
+        doc.files.push({
+          url: URL.createObjectURL(file),
+          name: file.name,
+        });
+      }
+      
+      if (files.length > 0) {
+        doc.status = 'SUBMITTED';
+      }
+
+      this.uploadingDocContext = null;
+      event.target.value = '';
+      this.saveAllChanges();
     },
     viewFile(file) {
-      window.open(file.file, '_blank');
+      if (file.url) {
+        window.open(file.url, '_blank');
+      }
     },
     async saveAllChanges() {
         if (this.isSaving) return;
@@ -369,61 +558,75 @@ export default {
 
         const payload = cloneDeep(this.editableClient);
         
-        // Обрабатываем дела: новые добавляем, существующие обновляем
-        payload.legal_cases.forEach(legalCase => {
-            // Удаляем временные frontend-свойства
-            delete legalCase._isExpanded;
-            
-            // Если дело новое, удаляем флаг isNew перед отправкой
-            if (legalCase.isNew) {
-                delete legalCase.isNew;
-            }
-
-            // Очищаем документы
-            legalCase.documents = legalCase.documents
-                .filter(doc => !(doc.isNew && !doc.document_type)) // Удаляем пустые новые документы
-                .map(doc => {
-                    const newDoc = { ...doc };
-                    delete newDoc.isNew;
-                    delete newDoc.files; 
-                    return newDoc;
-                });
+        const expandedStates = new Map();
+        payload.legal_cases.forEach((legalCase, index) => {
+            expandedStates.set(legalCase.id || `new_${index}`, legalCase._isExpanded);
         });
 
+        payload.legal_cases = payload.legal_cases.map(legalCase => {
+            const caseData = { ...legalCase };
+            
+            delete caseData._isExpanded;
+            delete caseData.isNew;
+            
+            caseData.documents = caseData.documents
+                .filter(doc => !(doc.isNew && !doc.document_type))
+                .map(doc => {
+                    const docData = { ...doc };
+                    delete docData.isNew;
+                    delete docData.files;
+                    return docData;
+                });
+            
+            return caseData;
+        });
+
+        // Ensure reminders array contains only necessary fields
+        if (Array.isArray(payload.reminders)) {
+          payload.reminders = payload.reminders.map(r => ({
+            id: r.id,
+            reminder_type: r.reminder_type,
+            reminder_date: r.reminder_date,
+            reminder_time: r.reminder_time,
+            note: r.note
+          }));
+        }
+
         try {
-            // Отправляем PUT запрос с полным объектом клиента
             const response = await axios.put(`http://127.0.0.1:8000/api/clients/${this.id}/`, payload, {
                 headers: { Authorization: `Token ${token}` }
             });
             
-            // Сохраняем состояние раскрытых дел
-            const expandedStates = new Map(
-                this.editableClient.legal_cases.map((c, i) => [c.id || `new_${i}`, c._isExpanded])
-            );
-
-            // Обновляем данные и сбрасываем редактируемую копию
             this.client = response.data;
-            this.resetEditableData();
-
-            // Восстанавливаем состояние раскрытых дел
-            this.editableClient.legal_cases.forEach((c, i) => {
-                const key = c.id || `new_${i}`;
-                if (expandedStates.has(key)) {
-                    c._isExpanded = expandedStates.get(key);
-                }
-            });
-
-            this.showToast('Сохранено!', 'success', 1500);
+            
+            if (this.editableClient.legal_cases) {
+                this.editableClient.legal_cases.forEach((legalCase, index) => {
+                    const key = legalCase.id || `new_${index}`;
+                    if (expandedStates.has(key)) {
+                        legalCase._isExpanded = expandedStates.get(key);
+                    }
+                });
+            }
+            
+      this.showToast(this.$t('clientDetail.toasts.saved'), 'success', 1500);
 
         } catch (error) {
             console.error("Ошибка сохранения:", error.response?.data || error);
-            this.showToast('Не удалось сохранить данные.', 'error');
-            // В случае ошибки, перезагружаем данные с сервера, чтобы откатить изменения
-            await this.fetchClientData();
+      this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
         } finally {
             this.isSaving = false;
         }
     },
+          formatCurrency(val) {
+            const num = Number(val || 0);
+            try {
+              const loc = (this.$i18n && this.$i18n.locale) || 'ru';
+              const map = { ru: 'ru-RU', pl: 'pl-PL' };
+              return num.toLocaleString(map[loc] || 'ru-RU', { style: 'currency', currency: 'PLN', minimumFractionDigits: 2 });
+            } catch (e) {
+              return `${num.toFixed(2)} PLN`;
+            }
+          },
     getStatusDisplay(statusKey) {
         return this.statusMap[statusKey] || statusKey;
     },
@@ -432,6 +635,46 @@ export default {
     },
     getDocumentTypeDisplay(docKey) {
         return this.docTypeMap[docKey] || docKey;
+    },
+    promptDeleteClient() {
+      const key = 'clientDetail.confirm.deleteClient'
+      const tr = this.$t(key)
+      this.confirmDialogMessage = (tr === key ? 'Delete this client? All related data will be removed.' : tr);
+      this.confirmCallback = () => this.deleteClient();
+      this.showConfirmDialog = true;
+    },
+    goBack(){
+      // If there is a previous entry in history (length>1) just go back.
+      // Some browsers keep initial length=1 for first page; fallback to clients list.
+      try {
+        if(window.history.length > 1){
+          this.$router.back();
+        } else {
+          // Fallback to list
+          this.$router.push('/dashboard/clients');
+        }
+      } catch(e){
+        this.$router.push('/dashboard/clients');
+      }
+    },
+    async deleteClient() {
+      if (this.pendingDelete) return;
+      this.pendingDelete = true;
+      const token = localStorage.getItem('user-token');
+      try {
+        await axios.delete(`http://127.0.0.1:8000/api/clients/${this.id}/`, { headers: { Authorization: `Token ${token}` } });
+        const keyOk = 'clientDetail.toasts.deleted'
+        const okTr = this.$t(keyOk)
+        this.showToast(okTr === keyOk ? 'Клиент удалён' : okTr, 'success');
+        this.$router.push('/dashboard/clients');
+      } catch (e) {
+        console.error('Ошибка удаления клиента', e.response?.data || e);
+        const keyErr = 'clientDetail.toasts.deleteError'
+        const errTr = this.$t(keyErr)
+        this.showToast(errTr === keyErr ? 'Ошибка удаления клиента' : errTr, 'error');
+      } finally {
+        this.pendingDelete = false;
+      }
     }
   }
 };
@@ -441,8 +684,8 @@ export default {
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --primary-color: #4A9E80;
-  --primary-hover-color: #428f74;
+  --primary-color: #4A90E2; /* unify with sidebar blue */
+  --primary-hover-color: #3b7fc9;
   --dark-blue: #2c3e50;
   --text-color: #5a6a7b;
   --background-color: #f7f9fc;
@@ -471,33 +714,34 @@ export default {
   gap: 20px;
 }
 
-.header-left {
+.header-actions {
   display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Unified notification-style buttons */
+.btn { background: var(--btn-bg,#fff); border:1px solid var(--btn-border,#d0d7e2); padding:10px 18px; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; line-height:1.2; display:inline-flex; align-items:center; gap:8px; transition:background .25s, color .25s, border-color .25s, box-shadow .25s; color:#1e293b; }
+.btn:hover { background: var(--primary-color,#4A90E2); color:#fff !important; border-color: var(--primary-color,#4A90E2); }
+.btn:disabled { opacity:.55; cursor:not-allowed; }
+.btn.small { padding:6px 12px; font-size:12px; }
+.btn.danger { background:rgba(255,82,82,0.12); border:1px solid rgba(255,82,82,0.45); color:#c53030 !important; }
+.btn.danger:hover { background:rgba(255,82,82,0.20); border-color:rgba(255,82,82,0.6); color:#a61b1b !important; }
+.btn.danger:disabled { background:rgba(255,82,82,0.08); border-color:rgba(255,82,82,0.25); color:rgba(197,48,48,0.55) !important; }
+.delete-client-btn .icon-trash { width:18px; height:18px; }
+/* Icon-only variant */
+.btn.icon-only { padding:6px; width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; font-size:20px; line-height:1; }
+.btn.small.icon-only { padding:4px; width:28px; height:28px; font-size:18px; }
+/* Old per-variant button styles removed; unified style above */
+
+.header-left {
+  display:flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
 }
 
-.back-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: 6px;
-  background-color: #ccd2da;
-  color: var(--text-color);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.2s ease;
-  border: none;
-  cursor: pointer;
-}
-
-.back-button:hover {
-  background-color: #e0e6ed;
-}
+/* Old back-button styles removed (now uses .button palette) */
 
 .back-button svg {
   width: 20px;
@@ -575,24 +819,26 @@ export default {
 .data-item textarea,
 .data-item select,
 .data-item :deep(.vue-tel-input) {
-  width: 100%;
-  height: 48px; /* ЕДИНАЯ ВЫСОТА ДЛЯ ВСЕХ */
-  padding: 0 15px;
-  border: 1px solid #ccd2da;
-  border-radius: 8px;
-  box-sizing: border-box;
-  font-family: 'Inter', sans-serif;
-  font-size: 15px;
-  background-color: var(--white-color);
-  transition: border-color 0.2s, box-shadow 0.2s;
-  display: flex;
-  align-items: center;
+  width:100%;
+  height:48px;
+  padding:0 15px;
+  border:1px solid var(--form-border,#e2e8f0);
+  border-radius:8px;
+  box-sizing:border-box;
+  font-family:'Inter',sans-serif;
+  font-size:15px;
+  background:var(--form-bg,#fff);
+  transition:border-color .18s ease, box-shadow .18s ease;
+  display:flex; align-items:center;
 }
 
 .data-item textarea {
   padding: 12px 15px;
   resize: none;
 }
+.notes-wrapper { display:flex; flex-direction:column; width:100%; }
+.notes-area { width:100%; max-width:100%; box-sizing:border-box; height:160px; padding:14px 16px; border:1px solid var(--form-border,#e2e8f0); border-radius:8px; resize:none; font-family:'Inter',sans-serif; line-height:1.4; font-size:14px; overflow-x:hidden; overflow-y:auto; background:var(--form-bg,#fff); transition:border-color .18s, box-shadow .18s; }
+.notes-area:focus { outline:none; border-color:var(--form-border-focus,#4A9E80); box-shadow:var(--form-focus-ring,0 0 0 2px rgba(74,158,128,.18)); }
 
 .data-item :deep(.vti__input) {
   height: 100%;
@@ -613,9 +859,9 @@ export default {
 .data-item input:focus,
 .data-item textarea:focus,
 .data-item select:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(74, 158, 128, 0.2);
+  outline:none;
+  border-color:var(--form-border-focus,#4A9E80);
+  box-shadow:var(--form-focus-ring,0 0 0 2px rgba(74,158,128,.18));
 }
 
 .data-item.full-width {
@@ -829,35 +1075,7 @@ export default {
   margin-bottom: 20px;
 }
 
-.button {
-  padding: 12px 24px;
-  text-decoration: none;
-  border-radius: 12px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-.button.primary {
-  background-color: var(--primary-color);
-  color: var(--white-color);
-  box-shadow: 0 6px 10px rgba(62, 63, 63, 0.25);
-}
-.button.primary:hover {
-  background-color: var(--primary-hover-color);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(62, 63, 63, 0.3);
-}
-.button.secondary {
-  background-color: #f0f2f5;
-  color: var(--dark-blue);
-  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.05);
-}
-.button.secondary:hover {
-  background-color: #e4e6e9;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.08);
-}
+/* removed old .button base */
 
 .add-other-btn {
   margin-top: 15px;
@@ -867,10 +1085,19 @@ export default {
 
 .card-footer {
   padding: 20px 30px;
-  text-align: right;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-top: 1px solid var(--border-color-light);
   background-color: var(--background-color);
 }
+
+.card-footer-left, .card-footer-right { display: flex; gap: 12px; }
+
+/* Align delete client button (header & footer) */
+.delete-client-btn { display:inline-flex; align-items:center; gap:8px; line-height:1; padding:10px 18px; }
+.delete-client-btn .btn-inner { display:inline-flex; align-items:center; gap:8px; }
+.delete-client-btn .icon-trash { width:18px; height:18px; display:block; }
 
 .confirm-dialog-overlay {
   position: fixed;
@@ -906,29 +1133,26 @@ export default {
   gap: 15px;
 }
 
-/* Toast Notification */
+/* Toast Notification (styled like buttons) */
 .toast-notification {
   position: fixed;
   top: 20px;
   right: 20px;
-  padding: 15px 25px;
-  border-radius: 8px;
-  color: white;
+  padding: 12px 20px;
+  border-radius: 10px;
+  color: #fff;
   font-weight: 600;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
   z-index: 2000;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
+  background: linear-gradient(180deg,#4A90E2,#3b7fc9);
+  border:1px solid #3b7fc9;
 }
-
-.toast-notification.success {
-  background-color: var(--primary-color);
-}
-
-.toast-notification.error {
-  background-color: var(--danger-color);
-}
+.toast-notification.success { /* inherits base blue styles */ --_success: 1; }
+.toast-notification.error { background: linear-gradient(180deg,#dc2626,#b91c1c); border-color:#b91c1c; }
 
 .toast-fade-enter-active, .toast-fade-leave-active {
   transition: opacity 0.5s, transform 0.5s;

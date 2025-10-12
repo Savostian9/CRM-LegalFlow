@@ -5,32 +5,61 @@
         <router-link to="/">LegalFlow</router-link>
       </div>
       <nav class="auth-buttons">
-        <router-link to="/login" class="button secondary">Войти</router-link>
-        <router-link to="/register" class="button primary">Начать работу</router-link>
+        <LangSwitcher />
+        <button class="button secondary" @click="scrollToPricing" type="button">Тарифы</button>
+        <router-link to="/login" class="button secondary">{{ $t('home.login') }}</router-link>
+        <router-link to="/register" class="button primary">{{ $t('home.getStarted') }}</router-link>
       </nav>
     </header>
 
     <main class="hero-section">
       <div class="hero-content">
         <h1 class="hero-headline">
-          Автоматизируйте легализацию.<br> Управляйте бизнесом легко.
+          {{ $t('home.headline') }}
         </h1>
         <p class="hero-subheadline">
-          Наша CRM — это единая платформа для безупречной работы с клиентами по визам, TRC и картам побыту. Увеличьте продуктивность вашей команды уже сегодня.
+          {{ $t('home.subheadline') }}
         </p>
-        <router-link to="/register" class="button primary cta-button">Попробовать бесплатно</router-link>
+        <router-link to="/register" class="button primary cta-button">{{ $t('home.cta') }}</router-link>
       </div>
       <div class="hero-graphic">
         <div class="graphic-element"></div>
         <div class="graphic-element small"></div>
       </div>
     </main>
+    <section id="pricing" class="pricing-section">
+      <h2 class="pricing-heading">Тарифы</h2>
+      <p class="pricing-sub">Выберите удобный план. Начните с бесплатного Trial на 14 дней.</p>
+      <PricingPlans :show-trial="true" @select="onSelectPlan" />
+      <div class="pricing-cta">
+        <router-link to="/register" class="button primary">Начать бесплатно</router-link>
+      </div>
+    </section>
+    <footer class="footer">
+      <router-link to="/privacy-policy">Polityka prywatności</router-link>
+      <router-link to="/cookies-policy">Polityka cookies</router-link>
+      <router-link to="/terms">Regulamin Serwisu</router-link>
+    </footer>
   </div>
 </template>
 
 <script>
+import LangSwitcher from '@/components/LangSwitcher.vue'
+import PricingPlans from '@/components/PricingPlans.vue'
 export default {
-  name: 'HomeView'
+  name: 'HomeView',
+  components: { LangSwitcher, PricingPlans },
+  methods: {
+    onSelectPlan(plan){
+      if (plan === 'STARTER') {
+        this.$router.push('/register');
+      }
+    },
+    scrollToPricing(){
+      const el = document.getElementById('pricing');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
 }
 </script>
 
@@ -130,6 +159,12 @@ export default {
   padding: 80px 60px;
   gap: 40px;
 }
+
+.pricing-section { max-width:1200px; margin:50px auto 40px; padding:0 60px 10px; }
+.pricing-heading { font-size:2.4em; font-weight:700; color:var(--dark-blue); margin:0 0 10px; text-align:center; }
+.pricing-sub { text-align:center; margin:0 0 28px; font-size:1.05em; color:#4b5563; }
+.pricing-cta { text-align:center; margin-top:30px; }
+
 
 .hero-content {
   animation: fadeInUp 0.8s ease-out;
@@ -248,4 +283,15 @@ export default {
   }
 }
 /* --- КОНЕЦ АДАПТИВНОСТИ --- */
+
+/* Footer with policy links */
+.footer {
+  border-top: 1px solid var(--border-color);
+  padding: 20px 60px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
+.footer a { color: var(--dark-blue); text-decoration: none; opacity: 0.8; }
+.footer a:hover { opacity: 1; text-decoration: underline; }
 </style>

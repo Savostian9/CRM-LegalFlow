@@ -146,7 +146,7 @@ export default {
   height: 40px;
   border-radius: 50%;
   background-color: var(--primary-color);
-  color: white;
+  color: var(--btn-primary-text);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -241,7 +241,7 @@ export default {
 }
 
 .welcome-card {
-  background-color: white;
+  background-color: var(--card-bg);
   padding: 40px;
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);

@@ -4,12 +4,12 @@
       <div class="logo">
         <router-link to="/">LegalFlow</router-link>
       </div>
-      <h2 class="auth-title">Сброс пароля</h2>
-      <p class="auth-subtitle">Введите ваш email, и мы вышлем вам ссылку для восстановления доступа.</p>
+  <h2 class="auth-title">{{ $t('auth.reset.title') }}</h2>
+  <p class="auth-subtitle">{{ $t('auth.reset.subtitle') }}</p>
       
       <form @submit.prevent="handlePasswordReset" class="auth-form">
         <div class="form-group">
-          <label for="email">Email</label>
+          <label for="email">{{ $t('auth.fields.email') }}</label>
           <div class="input-wrapper">
             <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67Z" /><path d="M22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908Z" /></svg>
             <input type="email" id="email" v-model="email" required placeholder="your@email.com" />
@@ -24,12 +24,12 @@
         </transition>
         
         <button type="submit" class="auth-button" :disabled="isLoading">
-          {{ isLoading ? 'Отправка...' : 'Отправить ссылку' }}
+          {{ isLoading ? $t('auth.common.sending') : $t('auth.reset.sendLink') }}
         </button>
       </form>
       
       <div class="auth-links">
-        <router-link to="/login">Вернуться ко входу</router-link>
+  <router-link to="/login">{{ $t('auth.common.backToLogin') }}</router-link>
       </div>
     </div>
   </div>

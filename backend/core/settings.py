@@ -12,23 +12,56 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from urllib.parse import urlparse, parse_qs
 
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# --- Simple .env loader (no external dependency) ---
+def _load_dotenv(env_path: Path) -> None:
+    try:
+        if env_path.exists():
+            for line in env_path.read_text(encoding='utf-8').splitlines():
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' not in line:
+                    continue
+                k, v = line.split('=', 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                # Do not override already-set environment variables
+                os.environ.setdefault(k, v)
+    except Exception:
+        # Fail-safe: ignore .env errors
+        pass
+
+# Load project-level .env from repository root (BASE_DIR is backend/, parent is repo root)
+_load_dotenv(BASE_DIR.parent / '.env')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_5hk18dy)(=nm$%v8*swo--ddxznp0db49m$relv1%x2#ir)-w'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-_5hk18dy)(=nm$%v8*swo--ddxznp0db49m$relv1%x2#ir)-w')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def _get_bool(name: str, default: bool) -> bool:
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {'1', 'true', 'yes', 'on'}
 
-ALLOWED_HOSTS = []
+DEBUG = _get_bool('DJANGO_DEBUG', True)
+
+_hosts = os.environ.get('ALLOWED_HOSTS')
+if _hosts:
+    ALLOWED_HOSTS = [h.strip() for h in _hosts.split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 
 
 # Application definition
@@ -42,9 +75,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',  # <--- Добавьте эту строку
     'rest_framework.authtoken',
-    'crm_app',
+    # Use the app config so AppConfig.ready() runs (starts in-process reminder scheduler)
+    'crm_app.apps.CrmAppConfig',
     'corsheaders',
 ]
+
+# In-process reminder scheduler (runs send_reminders periodically). You can override in env/local settings.
+ENABLE_REMINDER_SCHEDULER = True
+REMINDER_SCHEDULER_INTERVAL_SECONDS = 60  # run every 60 seconds
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -57,13 +95,14 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # CORS should be as high as possible
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'core.urls'
@@ -89,12 +128,93 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+def _parse_database_url(url: str) -> dict:
+    """Minimal DATABASE_URL parser supporting Postgres.
+    Examples:
+    postgres://user:pass@host:port/dbname?sslmode=require
+    """
+    parsed = urlparse(url)
+    scheme = parsed.scheme
+    engine = None
+    if scheme in {'postgres', 'postgresql', 'pgsql'}:
+        engine = 'django.db.backends.postgresql'
+    elif scheme == 'sqlite':
+        engine = 'django.db.backends.sqlite3'
+    else:
+        raise ValueError(f"Unsupported DB scheme: {scheme}")
+
+    if engine == 'django.db.backends.sqlite3':
+        # For sqlite, allow empty path = memory or file
+        name = parsed.path[1:] if parsed.path else ':memory:'
+        return {
+            'ENGINE': engine,
+            'NAME': name or (BASE_DIR / 'db.sqlite3'),
+        }
+
+    name = parsed.path[1:] if parsed.path.startswith('/') else parsed.path
+    opts = {}
+    q = parse_qs(parsed.query)
+    # Flatten single-value params
+    for k, v in q.items():
+        if v:
+            opts[k] = v[0]
+
+    db = {
+        'ENGINE': engine,
+        'NAME': name,
+        'USER': parsed.username or '',
+        'PASSWORD': parsed.password or '',
+        'HOST': parsed.hostname or '',
+        'PORT': str(parsed.port) if parsed.port else '',
     }
-}
+    if opts:
+        # Pass sslmode and other libpq options
+        db['OPTIONS'] = opts
+    return db
+
+_database_url = os.environ.get('DATABASE_URL')
+# Ignore obviously placeholder URLs (e.g., contain '<' or '>') to avoid breaking local dev
+if _database_url and ('<' not in _database_url and '>' not in _database_url):
+    try:
+        _db = _parse_database_url(_database_url)
+        # If Postgres is configured but driver is missing locally, fall back to SQLite for convenience
+        if _db.get('ENGINE') == 'django.db.backends.postgresql':
+            try:
+                import importlib  # type: ignore
+                _pg_ok = False
+                for _mod in ('psycopg', 'psycopg2'):
+                    try:
+                        importlib.import_module(_mod)
+                        _pg_ok = True
+                        break
+                    except Exception:
+                        pass
+                if not _pg_ok:
+                    # Driver not available -> use SQLite to allow local dev without installing drivers
+                    print('[settings] psycopg/psycopg2 not found; falling back to SQLite for local development')
+                    _db = {
+                        'ENGINE': 'django.db.backends.sqlite3',
+                        'NAME': BASE_DIR / 'db.sqlite3',
+                    }
+            except Exception:
+                # If any error checking drivers, keep _db as is
+                pass
+        DATABASES = { 'default': _db }
+    except Exception:
+        # Fallback to sqlite if parsing fails
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -121,7 +241,8 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Use local time zone for Poland so reminder_time comparisons match user input
+TIME_ZONE = 'Europe/Warsaw'
 
 USE_I18N = True
 
@@ -132,6 +253,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+# Where collectstatic will put built assets in container
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -141,17 +264,47 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'crm_app.User'
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'headbuttthecrossbar@gmail.com' # <--- Ваш email
-EMAIL_HOST_PASSWORD = 'nvudgsufdfuwknpw' # <--- Ваш 16-значный пароль приложения
-DEFAULT_FROM_EMAIL = 'headbuttthecrossbar@gmail.com' # <--- Ваш email
 
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'serwer2584895.home.pl')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
+EMAIL_USE_SSL = _get_bool('EMAIL_USE_SSL', True)
+EMAIL_USE_TLS = _get_bool('EMAIL_USE_TLS', False)
+
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'info@legalflow.pl')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '7841079Zz!')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'info@legalflow.pl')
+
+# URL фронтенда (используется для генерации ссылок, например, сброс пароля)
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
+
+
+_frontend_urls_env = os.environ.get('FRONTEND_URLS', '')
+if _frontend_urls_env:
+    _frontend_origins = [u.strip() for u in _frontend_urls_env.split(',') if u.strip()]
+else:
+    _frontend_origins = [FRONTEND_URL] if FRONTEND_URL else []
+
+# When developing locally, it's convenient to allow Vue dev server origins
+if DEBUG:
+    for _dev in ('http://localhost:8080', 'http://127.0.0.1:8080'):
+        if _dev not in _frontend_origins:
+            _frontend_origins.append(_dev)
 
 CORS_ALLOWED_ORIGINS = [
-        "http://localhost:8080", # <--- Адрес вашего фронтенда
-    ]
+    "https://crm.legalflow.pl",
+    "http://localhost",
+    "http://127.0.0.1:8080",
+]
+
+# Trust the frontend origins for CSRF as well
+CSRF_TRUSTED_ORIGINS = _frontend_origins
+
+# Allow cookies/token auth over CORS if needed
+CORS_ALLOW_CREDENTIALS = True
+
+# Optional: allow all origins if explicitly requested (use only for local debugging)
+if os.environ.get('CORS_ALLOW_ALL', '').strip().lower() in {'1','true','yes','on'}:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

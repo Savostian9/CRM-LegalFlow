@@ -1,0 +1,36 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    env_file: .env
+    command: gunicorn core.wsgi:application -b 0.0.0.0:8000 --workers 3 --threads 2 --timeout 60
+    volumes:
+      - static:/app/staticfiles
+      - media:/app/media
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend/client-app
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api
+    ports:
+      - "80:80"
+    env_file: .env
+    volumes:
+      - static:/srv/static:ro
+      - media:/srv/media:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  static:
+  media:

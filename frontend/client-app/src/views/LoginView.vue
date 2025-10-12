@@ -4,20 +4,20 @@
       <div class="logo">
         <router-link to="/">LegalFlow</router-link>
       </div>
-      <h2 class="auth-title">С возвращением!</h2>
-      <p class="auth-subtitle">Войдите в свой аккаунт, чтобы продолжить.</p>
+  <h2 class="auth-title">{{ $t('auth.login.welcome') }}</h2>
+  <p class="auth-subtitle">{{ $t('auth.login.subtitle') }}</p>
       
       <form @submit.prevent="loginUser" class="auth-form">
         <div class="form-group">
-          <label for="username">Имя пользователя</label>
+          <label for="email">{{ $t('auth.fields.email') }}</label>
           <div class="input-wrapper">
             <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5a5.5 5.5 0 0 1 3.096 10.047 9.005 9.005 0 0 1 5.9 8.19.75.75 0 0 1-1.496.065 7.505 7.505 0 0 0-15 0 .75.75 0 0 1-1.496-.065 9.005 9.005 0 0 1 5.9-8.19A5.5 5.5 0 0 1 12 2.5ZM8 8a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z" /></svg>
-            <input type="text" id="username" v-model="username" required placeholder="Ваше имя пользователя" />
+            <input type="email" id="email" v-model="email" required placeholder="you@example.com" />
           </div>
         </div>
         
         <div class="form-group">
-          <label for="password">Пароль</label>
+          <label for="password">{{ $t('auth.fields.password') }}</label>
           <div class="input-wrapper">
             <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18 1.5a2.25 2.25 0 0 1 2.25 2.25v5.379a2.25 2.25 0 0 1-.66 1.59l-5.34 5.34a2.25 2.25 0 0 1-1.59.66H7.5a2.25 2.25 0 0 1-2.25-2.25v-5.38a2.25 2.25 0 0 1 .66-1.59l5.34-5.34a2.25 2.25 0 0 1 1.59-.66h5.12ZM15 9.75a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" /><path d="M16.5 22.5a2.25 2.25 0 0 1-2.25-2.25v-5.379a2.25 2.25 0 0 1 .66-1.59l5.34-5.34a2.25 2.25 0 0 1 1.59-.66h.12a2.25 2.25 0 0 1 2.25 2.25v5.38a2.25 2.25 0 0 1-.66 1.59l-5.34 5.34a2.25 2.25 0 0 1-1.59.66h-5.12a2.25 2.25 0 0 1-2.25-2.25V18a.75.75 0 0 1 1.5 0v2.25a.75.75 0 0 0 .75.75h5.12a.75.75 0 0 0 .53-.22l5.34-5.34a.75.75 0 0 0 .22-.53v-5.38a.75.75 0 0 0-.75-.75h-.12a.75.75 0 0 0-.53.22l-5.34 5.34a.75.75 0 0 0-.22.53V20.25a2.25 2.25 0 0 1-2.25 2.25Z" clip-rule="evenodd" /></svg>
             <input :type="passwordFieldType" id="password" v-model="password" required placeholder="••••••••" />
@@ -33,26 +33,29 @@
         </transition>
         
         <button type="submit" class="auth-button" :disabled="isLoading">
-          {{ isLoading ? 'Входим...' : 'Войти' }}
+          {{ isLoading ? $t('auth.login.signingIn') : $t('auth.login.signIn') }}
         </button>
       </form>
       
       <div class="auth-links">
-        <router-link to="/password-reset">Забыли пароль?</router-link>
-        <router-link to="/register">Создать аккаунт</router-link>
+  <router-link to="/password-reset">{{ $t('auth.login.forgot') }}</router-link>
+  <router-link to="/register">{{ $t('auth.login.create') }}</router-link>
       </div>
+
     </div>
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import { loadBillingUsage } from '@/billing/usageStore.js';
 
 export default {
   name: 'LoginView',
+  components: { },
   data() {
     return {
-      username: '',
+      email: '',
       password: '',
       message: '',
       isLoading: false,
@@ -64,20 +67,31 @@ export default {
       this.message = '';
       this.isLoading = true;
       try {
-        const response = await axios.post('http://127.0.0.1:8000/api/login/', {
-          username: this.username,
+  const response = await axios.post('/api/login/', {
+          email: this.email,
           password: this.password
         });
         
         localStorage.setItem('user-token', response.data.token);
         localStorage.setItem('user-id', response.data.user_id);
         
-        this.$router.push('/dashboard');
+  // Загрузим trial/usage данные в фоне (не блокируя редирект)
+  try { loadBillingUsage(true); } catch (e) { /* ignore */ }
+  this.$router.push('/dashboard');
       } catch (error) {
-        if (error.response && error.response.data.non_field_errors) {
-            this.message = error.response.data.non_field_errors[0];
+        const data = error?.response?.data;
+        if (data?.non_field_errors && data.non_field_errors.length) {
+          this.message = data.non_field_errors[0];
+        } else if (typeof data?.detail === 'string') {
+          this.message = data.detail;
+        } else if (data?.email) {
+          this.message = this.$t('auth.errors.emailPrefix', { msg: data.email[0] });
+        } else if (data?.username) {
+          this.message = this.$t('auth.errors.usernamePrefix', { msg: data.username[0] });
+        } else if (data?.password) {
+          this.message = this.$t('auth.errors.passwordPrefix', { msg: data.password[0] });
         } else {
-            this.message = 'Не удалось подключиться к серверу.';
+          this.message = this.$t('auth.errors.cannotConnect');
         }
       } finally {
         this.isLoading = false;
