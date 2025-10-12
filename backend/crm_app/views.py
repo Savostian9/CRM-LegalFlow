@@ -284,22 +284,46 @@ class PasswordResetView(APIView):
         form = PasswordResetForm({'email': user.email})
         if form.is_valid():
             subject = 'Сброс пароля для вашей CRM-системы'
-            # Здесь мы создаем ссылку сброса, которая будет вести на фронтенд
-            context = {
-                'email': user.email,
-                'domain': 'localhost:8080',  # <--- Замените на домен вашего фронтенда
-                'site_name': 'CRM LegalFlow',
-                'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-                'token': default_token_generator.make_token(user),
-                'protocol': 'http',
-            }
-            # Это просто пример текста, который будет в письме
-            message = f"Здравствуйте, {user.username}. Пожалуйста, перейдите по следующей ссылке для сброса пароля: http://{context['domain']}/password-reset/confirm/{context['uid']}/{context['token']}/"
-            
-            send_mail(subject, message, 'noreply@yourdomain.com', [user.email], fail_silently=False)
-            _create_notification(request.user if getattr(request, 'user', None) and request.user.is_authenticated else None,
-                                  f"Сброс пароля отправлен {user.email}", message)
-            return Response({'message': 'Ссылка для сброса пароля отправлена на ваш email.'}, status=status.HTTP_200_OK)
+            # Генерируем ссылку на фронтенд из настроек
+            try:
+                frontend_base = (getattr(settings, 'FRONTEND_URL', 'http://localhost:8080') or 'http://localhost:8080').rstrip('/')
+            except Exception:
+                frontend_base = 'http://localhost:8080'
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            reset_link = f"{frontend_base}/password-reset/confirm/{uid}/{token}/"
+            message = (
+                f"Здравствуйте, {getattr(user, 'username', '') or user.email}.\n\n"
+                f"Для сброса пароля перейдите по ссылке: {reset_link}\n\n"
+                f"Если вы не запрашивали сброс пароля, проигнорируйте это письмо."
+            )
+
+            # Пытаемся отправить письмо; при сбое не падаем 500, а возвращаем 200 с подсказкой
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'info@legalflow.pl')
+            mail_ok = True
+            try:
+                send_mail(subject, message, from_email, [user.email], fail_silently=False)
+            except Exception:
+                mail_ok = False
+                try:
+                    # Последняя попытка — без падения
+                    send_mail(subject, message, from_email, [user.email], fail_silently=True)
+                except Exception:
+                    pass
+
+            try:
+                _create_notification(
+                    request.user if getattr(request, 'user', None) and request.user.is_authenticated else None,
+                    f"Сброс пароля отправлен {user.email}",
+                    message
+                )
+            except Exception:
+                pass
+
+            return Response({
+                'message': 'Если email существует, ссылка для сброса пароля отправлена.',
+                'email_delivery': 'ok' if mail_ok else 'failed'
+            }, status=status.HTTP_200_OK)
         return Response({'error': 'Произошла ошибка при обработке запроса.'}, status=status.HTTP_400_BAD_REQUEST)
     
 class PasswordResetConfirmView(APIView):

@@ -55,7 +55,7 @@ export default {
       this.successMessage = '';
       
       try {
-        const response = await axios.post('http://127.0.0.1:8000/api/password-reset/', {
+  const response = await axios.post('/api/password-reset/', {
           email: this.email
         });
         
