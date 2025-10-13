@@ -22,9 +22,15 @@ class Command(BaseCommand):
             # Проверяем время, если оно задано: отправляем только если наступило
             if rem.reminder_time and now.time() < rem.reminder_time:
                 continue
-            subject = 'Przypomnienie o wygasającym dokumencie'
+            subject = 'Напоминание / Przypomnienie o wygasającym dokumencie'
             doc_name = rem.get_reminder_type_display()
             message = (
+                f"Здравствуйте, {client.first_name} {client.last_name}!\n\n"
+                f"Напоминание: приближается срок действия документа: {doc_name}.\n"
+                f"Дата напоминания: {today}{(' ' + rem.reminder_time.strftime('%H:%M')) if rem.reminder_time else ''}.\n"
+                f"{rem.note or ''}\n\n"
+                f"Поздравляем,\nCRM LegalFlow\n\n"
+                f"------------------------------------------------------------\n\n"
                 f"Dzień dobry, {client.first_name} {client.last_name},\n\n"
                 f"Przypomnienie: zbliża się termin ważności dokumentu: {doc_name}.\n"
                 f"Data przypomnienia: {today}{(' ' + rem.reminder_time.strftime('%H:%M')) if rem.reminder_time else ''}.\n"

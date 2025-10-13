@@ -81,9 +81,25 @@ export default {
       } catch (error) {
         const data = error?.response?.data;
         if (data?.non_field_errors && data.non_field_errors.length) {
-          this.message = data.non_field_errors[0];
+          const msg = String(data.non_field_errors[0] || '').toLowerCase();
+          if (msg.includes('неверн') || msg.includes('invalid')) {
+            this.message = this.$t('auth.login.invalidCredentials');
+          } else if (msg.includes('не актив') || msg.includes('not activ')) {
+            this.message = this.$t('auth.login.notActivated');
+          } else if (msg.includes('укажит') || msg.includes('missing') || msg.includes('email') && msg.includes('парол')) {
+            this.message = this.$t('auth.login.missingCredentials');
+          } else {
+            this.message = this.$t('auth.errors.generic');
+          }
         } else if (typeof data?.detail === 'string') {
-          this.message = data.detail;
+          const msg = data.detail.toLowerCase();
+          if (msg.includes('неверн') || msg.includes('invalid')) {
+            this.message = this.$t('auth.login.invalidCredentials');
+          } else if (msg.includes('не актив') || msg.includes('not activ')) {
+            this.message = this.$t('auth.login.notActivated');
+          } else {
+            this.message = this.$t('auth.errors.generic');
+          }
         } else if (data?.email) {
           this.message = this.$t('auth.errors.emailPrefix', { msg: data.email[0] });
         } else if (data?.username) {

@@ -1,8 +1,25 @@
 services:
+  caddy:
+    image: caddy:latest
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+      - static:/srv/static:ro
+      - media:/srv/media:ro
+    depends_on:
+      - frontend
+      - backend
+    
   backend:
     build:
       context: ./backend
-    env_file: .env
+    env_file: 
+      - .env
     command: gunicorn core.wsgi:application -b 0.0.0.0:8000 --workers 3 --threads 2 --timeout 60
     volumes:
       - static:/app/staticfiles
@@ -34,3 +51,4 @@ services:
 volumes:
   static:
   media:
+  caddy_data: {}

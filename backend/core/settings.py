@@ -264,15 +264,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'crm_app.User'
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-
-EMAIL_HOST = os.environ.get('EMAIL_HOST', 'serwer2584895.home.pl')
+EMAIL_HOST = os.environ.get('EMAIL_HOST')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
-EMAIL_USE_SSL = _get_bool('EMAIL_USE_SSL', True)
-EMAIL_USE_TLS = _get_bool('EMAIL_USE_TLS', False)
-
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'info@legalflow.pl')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '7841079Zz!')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'info@legalflow.pl')
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True') == 'True'
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
 # URL фронтенда (используется для генерации ссылок, например, сброс пароля)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')

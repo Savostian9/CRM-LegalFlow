@@ -32,6 +32,7 @@ from .billing.plans import get_plan_limits, format_usage
 from django.db.models import Sum
 from .serializers import ClientListSerializer, ClientSerializer, LegalCaseSerializer, TaskSerializer, TaskListSerializer, \
     ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer
+from urllib.parse import urlparse
 
 def _create_notification(user, title, message='', client=None, reminder=None, source='SYSTEM'):
     """
@@ -64,6 +65,27 @@ def _create_notification(user, title, message='', client=None, reminder=None, so
                 continue
     except Exception:
         pass
+
+
+def _get_frontend_base(request):
+    """Detect frontend base URL from request headers (Origin/Referer) with env fallback.
+    Returns a string like 'http://localhost:8080' without trailing slash.
+    """
+    base = None
+    try:
+        origin = request.META.get('HTTP_ORIGIN') or request.META.get('HTTP_REFERER')
+        if origin:
+            p = urlparse(origin)
+            if p.scheme and p.netloc:
+                base = f"{p.scheme}://{p.netloc}"
+    except Exception:
+        base = None
+    if not base:
+        try:
+            base = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
+        except Exception:
+            base = 'http://localhost:8080'
+    return (base or 'http://localhost:8080').rstrip('/')
 
 
 def send_welcome_verification_email(user: User, token: str):
@@ -284,18 +306,21 @@ class PasswordResetView(APIView):
         form = PasswordResetForm({'email': user.email})
         if form.is_valid():
             subject = 'Сброс пароля для вашей CRM-системы'
-            # Генерируем ссылку на фронтенд из настроек
-            try:
-                frontend_base = (getattr(settings, 'FRONTEND_URL', 'http://localhost:8080') or 'http://localhost:8080').rstrip('/')
-            except Exception:
-                frontend_base = 'http://localhost:8080'
+            # Генерируем ссылку на фронтенд: берём Origin/Referer, иначе FRONTEND_URL
+            frontend_base = _get_frontend_base(request)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
             token = default_token_generator.make_token(user)
             reset_link = f"{frontend_base}/password-reset/confirm/{uid}/{token}/"
+            display_name = getattr(user, 'first_name', '') or getattr(user, 'username', '') or user.email
             message = (
-                f"Здравствуйте, {getattr(user, 'username', '') or user.email}.\n\n"
+                f"Здравствуйте, {display_name}.\n\n"
                 f"Для сброса пароля перейдите по ссылке: {reset_link}\n\n"
-                f"Если вы не запрашивали сброс пароля, проигнорируйте это письмо."
+                f"Если вы не запрашивали сброс пароля, проигнорируйте это письмо.\n\n"
+                f"------------------------------------------------------------\n\n"
+                f"Dzień dobry, {display_name},\n\n"
+                f"Aby zresetować hasło, przejdź pod link: {reset_link}\n\n"
+                f"Jeśli nie prosiłeś(-aś) o reset hasła, zignoruj tę wiadomość.\n\n"
+                f"Pozdrawiamy,\nCRM LegalFlow"
             )
 
             # Пытаемся отправить письмо; при сбое не падаем 500, а возвращаем 200 с подсказкой
@@ -311,14 +336,7 @@ class PasswordResetView(APIView):
                 except Exception:
                     pass
 
-            try:
-                _create_notification(
-                    request.user if getattr(request, 'user', None) and request.user.is_authenticated else None,
-                    f"Сброс пароля отправлен {user.email}",
-                    message
-                )
-            except Exception:
-                pass
+            # Больше не создаём системное уведомление о сбросе пароля
 
             return Response({
                 'message': 'Если email существует, ссылка для сброса пароля отправлена.',

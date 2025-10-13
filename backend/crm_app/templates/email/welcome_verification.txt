@@ -14,3 +14,22 @@
 С уважением,
 Команда {{ product }}
 Поддержка: {{ support_email }}
+
+------------------------------------------------------------
+
+Cześć, {{ display_name }}!
+
+Dziękujemy za rejestrację w {{ product }}.
+
+Aby dokończyć rejestrację, wpisz kod potwierdzający:
+
+Kod: {{ token }}
+
+Możesz też przejść pod link i wpisać kod na stronie potwierdzenia:
+{{ verify_url }}
+
+Jeśli nie prosiłeś(-aś) o rejestrację, zignoruj tę wiadomość.
+
+Pozdrawiamy,
+Zespół {{ product }}
+Wsparcie: {{ support_email }}

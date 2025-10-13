@@ -98,20 +98,34 @@ const messages = {
         signingIn: 'Входим...',
         signIn: 'Войти',
         forgot: 'Забыли пароль?',
-        create: 'Создать аккаунт'
+        create: 'Создать аккаунт',
+        invalidCredentials: 'Неверные учетные данные.',
+        notActivated: 'Учетная запись не активирована.',
+        missingCredentials: 'Укажите email/имя пользователя и пароль.'
       },
       register: {
         title: 'Создайте аккаунт',
         subtitle: 'Начните работу с нашей CRM уже сегодня.',
         inviteBanner: 'Вы регистрируетесь по приглашению. Аккаунт будет привязан к компании.',
+        companyNameLabel: 'Название компании',
+        companyNamePH: 'Название вашей компании',
+        firstNamePH: 'Ваше имя',
+        lastNamePH: 'Ваша фамилия',
         creating: 'Создание аккаунта...',
         signUp: 'Зарегистрироваться',
-        haveAccount: 'Уже есть аккаунт? Войти'
+        haveAccount: 'Уже есть аккаунт? Войти',
+        userExists: 'Пользователь с таким email уже зарегистрирован. Войдите или воспользуйтесь восстановлением пароля.'
       },
       reset: {
         title: 'Сброс пароля',
         subtitle: 'Введите ваш email, и мы вышлем вам ссылку для восстановления доступа.',
-        sendLink: 'Отправить ссылку'
+        sendLink: 'Отправить ссылку',
+        sentShort: 'Письмо отправлено.'
+        ,errors: {
+          emailNotFound: 'Пользователь с таким email не найден.',
+          requiredEmail: 'Укажите адрес электронной почты.',
+          generic: 'Ошибка при отправке письма.'
+        }
       },
       resetConfirm: {
         title: 'Установите новый пароль',
@@ -516,20 +530,34 @@ const messages = {
         signingIn: 'Logowanie...',
         signIn: 'Zaloguj się',
         forgot: 'Zapomniałeś hasła?',
-        create: 'Utwórz konto'
+        create: 'Utwórz konto',
+        invalidCredentials: 'Nieprawidłowe dane logowania.',
+        notActivated: 'Konto nie zostało aktywowane.',
+        missingCredentials: 'Podaj email/nazwę użytkownika i hasło.'
       },
       register: {
         title: 'Utwórz konto',
         subtitle: 'Zacznij korzystać z naszego CRM już dziś.',
         inviteBanner: 'Rejestrujesz się przez zaproszenie. Konto zostanie przypisane do firmy.',
+        companyNameLabel: 'Nazwa firmy',
+        companyNamePH: 'Nazwa Twojej firmy',
+        firstNamePH: 'Twoje imię',
+        lastNamePH: 'Twoje nazwisko',
         creating: 'Tworzenie konta...',
         signUp: 'Zarejestruj się',
-        haveAccount: 'Masz już konto? Zaloguj się'
+        haveAccount: 'Masz już konto? Zaloguj się',
+        userExists: 'Użytkownik z takim adresem e-mail już istnieje. Zaloguj się lub użyj odzyskiwania hasła.'
       },
       reset: {
         title: 'Resetowanie hasła',
         subtitle: 'Podaj swój adres e-mail, a wyślemy link do odzyskania dostępu.',
-        sendLink: 'Wyślij link'
+        sendLink: 'Wyślij link',
+        sentShort: 'Link został wysłany.'
+        ,errors: {
+          emailNotFound: 'Użytkownik z takim adresem e-mail nie został znaleziony.',
+          requiredEmail: 'Podaj adres e-mail.',
+          generic: 'Wystąpił błąd podczas wysyłania wiadomości.'
+        }
       },
       resetConfirm: {
         title: 'Ustaw nowe hasło',

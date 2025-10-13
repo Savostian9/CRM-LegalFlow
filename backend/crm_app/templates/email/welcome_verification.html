@@ -28,9 +28,19 @@
           <a class="btn" href="{{ verify_url }}" target="_blank" rel="noopener">Перейти к подтверждению</a>
         </p>
         <p class="muted">Если вы не запрашивали регистрацию, просто проигнорируйте это письмо.</p>
+        <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb"/>
+        <h1 class="title">Cześć, {{ display_name }}!</h1>
+        <p class="muted">Dziękujemy za rejestrację w {{ product }}.</p>
+        <p>Aby dokończyć rejestrację, wpisz kod potwierdzający:</p>
+        <div class="code">{{ token }}</div>
+        <p>Możesz też kliknąć poniższy przycisk i potwierdzić adres e‑mail na stronie:</p>
+        <p>
+          <a class="btn" href="{{ verify_url }}" target="_blank" rel="noopener">Przejdź do potwierdzenia</a>
+        </p>
+        <p class="muted">Jeśli nie prosiłeś(-aś) o rejestrację, zignoruj tę wiadomość.</p>
         <div class="footer">
-          С уважением, команда {{ product }}<br/>
-          Поддержка: {{ support_email }}
+          Pozdrawiamy, zespół {{ product }}<br/>
+          Wsparcie: {{ support_email }}
         </div>
       </div>
     </div>

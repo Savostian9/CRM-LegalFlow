@@ -15,7 +15,7 @@
         </div>
   <div v-if="inviteToken" class="invite-banner">{{ $t('auth.register.inviteBanner') }}</div>
         <div v-if="!inviteToken" class="form-group">
-          <label for="username">Имя Компании</label>
+          <label for="username">{{ $t('auth.register.companyNameLabel') }}</label>
           <div class="input-wrapper">
             <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5a5.5 5.5 0 0 1 3.096 10.047 9.005 9.005 0 0 1 5.9 8.19.75.75 0 0 1-1.496.065 7.505 7.505 0 0 0-15 0 .75.75 0 0 1-1.496-.065 9.005 9.005 0 0 1 5.9-8.19A5.5 5.5 0 0 1 12 2.5ZM8 8a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z" /></svg>
             <input
@@ -24,7 +24,7 @@
               name="username"
               v-model.trim="username"
               required
-              placeholder="Название вашей компании"
+              :placeholder="$t('auth.register.companyNamePH')"
               autocomplete="off"
               autocapitalize="off"
               autocorrect="off"
@@ -34,7 +34,7 @@
         </div>
         <template v-else>
           <div class="form-group">
-            <label for="first_name">Имя</label>
+            <label for="first_name">{{ $t('common.firstName') }}</label>
             <div class="input-wrapper">
               <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.33 0-8 2.17-8 5v1.5a.5.5 0 0 0 .5.5h15a.5.5 0 0 0 .5-.5V19c0-2.83-3.67-5-8-5Z"/></svg>
               <input
@@ -43,7 +43,7 @@
                 name="first_name"
                 v-model.trim="first_name"
                 required
-                placeholder="Ваше имя"
+                :placeholder="$t('auth.register.firstNamePH')"
                 autocomplete="given-name"
                 autocapitalize="words"
                 autocorrect="off"
@@ -52,7 +52,7 @@
             </div>
           </div>
           <div class="form-group">
-            <label for="last_name">Фамилия</label>
+            <label for="last_name">{{ $t('common.lastName') }}</label>
             <div class="input-wrapper">
               <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5Zm0 2c-4.33 0-8 2.17-8 5v1.5a.5.5 0 0 0 .5.5h15a.5.5 0 0 0 .5-.5V19c0-2.83-3.67-5-8-5Z"/></svg>
               <input
@@ -61,7 +61,7 @@
                 name="last_name"
                 v-model.trim="last_name"
                 required
-                placeholder="Ваша фамилия"
+                :placeholder="$t('auth.register.lastNamePH')"
                 autocomplete="family-name"
                 autocapitalize="words"
                 autocorrect="off"
@@ -215,7 +215,7 @@ export default {
         } else {
           if (data) {
             if (data.error_code === 'USER_EXISTS') {
-              this.error = data.error;
+              this.error = this.$t('auth.register.userExists') || data.error;
               // можно предложить переход на логин
             } else if (data.status_code === 'VERIFICATION_RESENT') {
               this.$toast && this.$toast.info(this.$t('auth.verify.resent'));

@@ -17,10 +17,10 @@
         </div>
         
         <transition name="fade">
-          <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+          <div v-if="errorMessage" class="error-message message-base">{{ errorMessage }}</div>
         </transition>
         <transition name="fade">
-          <div v-if="successMessage" class="success-message">{{ successMessage }}</div>
+          <div v-if="successMessage" class="success-message message-base">{{ successMessage }}</div>
         </transition>
         
         <button type="submit" class="auth-button" :disabled="isLoading">
@@ -55,15 +55,30 @@ export default {
       this.successMessage = '';
       
       try {
-  const response = await axios.post('/api/password-reset/', {
+  await axios.post('/api/password-reset/', {
           email: this.email
         });
         
-        this.successMessage = response.data.message;
+  // Показать короткое нейтральное сообщение на активном языке
+  this.successMessage = this.$t('auth.reset.sentShort');
         this.email = ''; // Очищаем поле после успешной отправки
 
       } catch (error) {
-        this.errorMessage = error.response?.data?.error || 'Произошла ошибка при отправке.';
+        const res = error?.response;
+        const data = res?.data || {};
+        const status = res?.status;
+        if (status === 404) {
+          this.errorMessage = this.$t('auth.reset.errors.emailNotFound');
+        } else if (status === 400) {
+          const msg = String(data.error || '').toLowerCase();
+          if (msg.includes('email') && (msg.includes('обязател') || msg.includes('required'))) {
+            this.errorMessage = this.$t('auth.reset.errors.requiredEmail');
+          } else {
+            this.errorMessage = this.$t('auth.reset.errors.generic');
+          }
+        } else {
+          this.errorMessage = this.$t('auth.errors.cannotConnect');
+        }
       } finally {
         this.isLoading = false;
       }
