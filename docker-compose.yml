@@ -14,12 +14,14 @@ services:
     depends_on:
       - frontend
       - backend
-    
+
   backend:
     build:
       context: ./backend
-    env_file: 
-      - .env
+    env_file:
+      - .env.production   # ✅ берём продакшен-настройки
+    environment:
+      - MODE=production   # ✅ Django всегда грузит .env.production
     command: gunicorn core.wsgi:application -b 0.0.0.0:8000 --workers 3 --threads 2 --timeout 60
     volumes:
       - static:/app/staticfiles
@@ -38,9 +40,12 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE: /api
-    ports:
-      - "80:80"
-    env_file: .env
+    # ports:
+    #   - "80:80"    # ❌ не нужно, Caddy слушает порт 80
+    env_file:
+      - .env.production   # ✅ можно указывать тот же (если нужны API_URL и т.п.)
+    environment:
+      - MODE=production   # ✅ чтобы сборка шла в правильном режиме
     volumes:
       - static:/srv/static:ro
       - media:/srv/media:ro
@@ -52,3 +57,4 @@ volumes:
   static:
   media:
   caddy_data: {}
+  caddy_config: {}

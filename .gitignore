@@ -1,22 +1,30 @@
-# Файлы Python
+# === Python / Django ===
 *.pyc
 __pycache__/
-
-# Виртуальное окружение
 venv/
 
-# База данных
+# === Databases ===
 db.sqlite3
 *.sqlite3
 
-# Файлы фронтенда
+# === Environment files (очень важно) ===
+.env
+.env.local
+.env.production
+
+# === Frontend ===
 node_modules/
 dist/
 .DS_Store
 
-# Загруженные пользователями файлы
+# === Uploaded user files ===
 media/
 
-# Файлы IDE
+# === IDE / Editor files ===
 .vscode/
 .idea/
+
+# === Docker (если есть временные файлы сборки) ===
+*.log
+*.pid
+__MACOSX

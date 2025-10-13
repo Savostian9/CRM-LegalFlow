@@ -39,7 +39,15 @@ def _load_dotenv(env_path: Path) -> None:
         pass
 
 # Load project-level .env from repository root (BASE_DIR is backend/, parent is repo root)
-_load_dotenv(BASE_DIR.parent / '.env')
+# Determine environment mode
+MODE = os.environ.get("MODE", "local")
+
+# Load the appropriate .env file
+if MODE == "production":
+    _load_dotenv(BASE_DIR.parent / ".env.production")
+else:
+    _load_dotenv(BASE_DIR.parent / ".env.local")
+
 
 
 # Quick-start development settings - unsuitable for production
