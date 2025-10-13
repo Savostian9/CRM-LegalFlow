@@ -33,6 +33,7 @@ from django.db.models import Sum
 from .serializers import ClientListSerializer, ClientSerializer, LegalCaseSerializer, TaskSerializer, TaskListSerializer, \
     ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer
 from urllib.parse import urlparse
+from django.db.utils import OperationalError
 
 def _create_notification(user, title, message='', client=None, reminder=None, source='SYSTEM'):
     """
@@ -284,11 +285,35 @@ class LoginView(ObtainAuthToken):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
-        token, created = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key, 'user_id': user.pk, 'email': user.email})
+        try:
+            serializer = self.serializer_class(data=request.data, context={'request': request})
+            # If credentials invalid, this raises serializers.ValidationError -> return 400 with details
+            serializer.is_valid(raise_exception=True)
+            user = serializer.validated_data['user']
+            try:
+                token, created = Token.objects.get_or_create(user=user)
+            except OperationalError as oe:
+                # Likely missing migrations for rest_framework.authtoken
+                return Response(
+                    {
+                        'detail': 'migrations_missing',
+                        'hint': 'Apply migrations for auth token app (python manage.py migrate).'
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+            return Response({'token': token.key, 'user_id': user.pk, 'email': user.email})
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            if isinstance(e, ValidationError):
+                # Propagate validation details (e.detail typically contains non_field_errors)
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            # Unexpected error: don't crash with 500 in frontend; return generic error (and log server-side)
+            try:
+                import logging
+                logging.getLogger(__name__).exception('LoginView unexpected error')
+            except Exception:
+                pass
+            return Response({'detail': 'internal_error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class PasswordResetView(APIView):
     permission_classes = [AllowAny]
@@ -306,7 +331,6 @@ class PasswordResetView(APIView):
         form = PasswordResetForm({'email': user.email})
         if form.is_valid():
             subject = 'Сброс пароля для вашей CRM-системы'
-<<<<<<< HEAD
             # Генерируем ссылку на фронтенд: берём Origin/Referer, иначе FRONTEND_URL
             frontend_base = _get_frontend_base(request)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -343,23 +367,6 @@ class PasswordResetView(APIView):
                 'message': 'Если email существует, ссылка для сброса пароля отправлена.',
                 'email_delivery': 'ok' if mail_ok else 'failed'
             }, status=status.HTTP_200_OK)
-=======
-            # Здесь мы создаем ссылку сброса, которая будет вести на фронтенд
-            context = {
-                'email': user.email,
-                'domain': 'localhost:8080',  # <--- Замените на домен вашего фронтенда
-                'site_name': 'CRM LegalFlow',
-                'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-                'token': default_token_generator.make_token(user),
-                'protocol': 'http',
-            }
-            # Это просто пример текста, который будет в письме
-            message = f"Здравствуйте, {user.username}. Пожалуйста, перейдите по следующей ссылке для сброса пароля: http://{context['domain']}/password-reset/confirm/{context['uid']}/{context['token']}/"
-            
-            send_mail(subject, message, 'noreply@yourdomain.com', [user.email], fail_silently=False)
-            # Не создаём уведомление о сбросе пароля, чтобы не засорять ленту уведомлений
-            return Response({'message': 'Ссылка для сброса пароля отправлена на ваш email.'}, status=status.HTTP_200_OK)
->>>>>>> 5649faa (Fix docker configuration and port conflicts)
         return Response({'error': 'Произошла ошибка при обработке запроса.'}, status=status.HTTP_400_BAD_REQUEST)
     
 class PasswordResetConfirmView(APIView):
