@@ -306,6 +306,7 @@ class PasswordResetView(APIView):
         form = PasswordResetForm({'email': user.email})
         if form.is_valid():
             subject = 'Сброс пароля для вашей CRM-системы'
+<<<<<<< HEAD
             # Генерируем ссылку на фронтенд: берём Origin/Referer, иначе FRONTEND_URL
             frontend_base = _get_frontend_base(request)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -342,6 +343,23 @@ class PasswordResetView(APIView):
                 'message': 'Если email существует, ссылка для сброса пароля отправлена.',
                 'email_delivery': 'ok' if mail_ok else 'failed'
             }, status=status.HTTP_200_OK)
+=======
+            # Здесь мы создаем ссылку сброса, которая будет вести на фронтенд
+            context = {
+                'email': user.email,
+                'domain': 'localhost:8080',  # <--- Замените на домен вашего фронтенда
+                'site_name': 'CRM LegalFlow',
+                'uid': urlsafe_base64_encode(force_bytes(user.pk)),
+                'token': default_token_generator.make_token(user),
+                'protocol': 'http',
+            }
+            # Это просто пример текста, который будет в письме
+            message = f"Здравствуйте, {user.username}. Пожалуйста, перейдите по следующей ссылке для сброса пароля: http://{context['domain']}/password-reset/confirm/{context['uid']}/{context['token']}/"
+            
+            send_mail(subject, message, 'noreply@yourdomain.com', [user.email], fail_silently=False)
+            # Не создаём уведомление о сбросе пароля, чтобы не засорять ленту уведомлений
+            return Response({'message': 'Ссылка для сброса пароля отправлена на ваш email.'}, status=status.HTTP_200_OK)
+>>>>>>> 5649faa (Fix docker configuration and port conflicts)
         return Response({'error': 'Произошла ошибка при обработке запроса.'}, status=status.HTTP_400_BAD_REQUEST)
     
 class PasswordResetConfirmView(APIView):
