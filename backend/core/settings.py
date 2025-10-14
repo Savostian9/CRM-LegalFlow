@@ -274,11 +274,29 @@ AUTH_USER_MODEL = 'crm_app.User'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
-EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True') == 'True'
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False') == 'True'
+# Auto-normalize SSL/TLS: if port is 587 prefer TLS; if 465 prefer SSL unless explicitly overridden.
+_env_ssl = os.getenv('EMAIL_USE_SSL')
+_env_tls = os.getenv('EMAIL_USE_TLS')
+if _env_ssl is not None:
+    EMAIL_USE_SSL = _env_ssl.strip().lower() in {'1','true','yes','on'}
+else:
+    EMAIL_USE_SSL = EMAIL_PORT == 465
+if _env_tls is not None:
+    EMAIL_USE_TLS = _env_tls.strip().lower() in {'1','true','yes','on'}
+else:
+    EMAIL_USE_TLS = EMAIL_PORT in (587, 25) and not EMAIL_USE_SSL
+# Avoid enabling both simultaneously
+if EMAIL_USE_SSL and EMAIL_USE_TLS:
+    # Prefer TLS for port 587, otherwise keep SSL
+    if EMAIL_PORT == 587:
+        EMAIL_USE_SSL = False
+    else:
+        EMAIL_USE_TLS = False
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+if DEBUG:
+    print('[email] host=', EMAIL_HOST, 'port=', EMAIL_PORT, 'ssl=', EMAIL_USE_SSL, 'tls=', EMAIL_USE_TLS, 'user=', EMAIL_HOST_USER, 'from=', DEFAULT_FROM_EMAIL)
 
 # URL фронтенда (используется для генерации ссылок, например, сброс пароля)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
