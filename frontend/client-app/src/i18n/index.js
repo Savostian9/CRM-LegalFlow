@@ -175,7 +175,7 @@ const messages = {
       profile: {
         title: 'Профиль пользователя',
         username: 'Имя пользователя',
-        usernameTitle: 'Допустимы буквы, цифры и символы . @ + - _',
+  usernameTitle: 'Допустимы буквы, цифры и символы . ＠ + - _',
         firstName: 'Имя',
         lastName: 'Фамилия',
         phone: 'Телефон'
@@ -607,7 +607,7 @@ const messages = {
       profile: {
         title: 'Profil użytkownika',
         username: 'Nazwa użytkownika',
-        usernameTitle: 'Dozwolone litery, cyfry oraz znaki . @ + - _',
+  usernameTitle: 'Dozwolone litery, cyfry oraz znaki . ＠ + - _',
         firstName: 'Imię',
         lastName: 'Nazwisko',
         phone: 'Telefon'

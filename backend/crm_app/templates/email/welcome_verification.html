@@ -12,7 +12,7 @@
       .title{font-size:20px;font-weight:700;margin:0 0 8px}
       .muted{color:#475569;margin:0 0 16px}
       .code{display:inline-block;font-weight:800;font-size:24px;letter-spacing:4px;background:#0ea5e9;color:#fff;padding:10px 14px;border-radius:10px}
-      .btn{display:inline-block;margin-top:16px;background:#2563eb;color:#fff;text-decoration:none;padding:10px 14px;border-radius:10px}
+  .btn{display:inline-block;margin-top:16px;background:#2563eb;color:#ffffff !important;text-decoration:none;padding:10px 14px;border-radius:10px}
       .footer{margin-top:24px;color:#64748b;font-size:13px}
     </style>
   </head>
@@ -25,7 +25,7 @@
         <div class="code">{{ token }}</div>
         <p>Или перейдите по кнопке и подтвердите email на странице:</p>
         <p>
-          <a class="btn" href="{{ verify_url }}" target="_blank" rel="noopener">Перейти к подтверждению</a>
+          <a class="btn" href="{{ verify_url }}" target="_blank" rel="noopener" style="background:#2563eb;color:#ffffff !important;text-decoration:none;padding:10px 14px;border-radius:10px;display:inline-block">Перейти к подтверждению</a>
         </p>
         <p class="muted">Если вы не запрашивали регистрацию, просто проигнорируйте это письмо.</p>
         <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb"/>
@@ -35,7 +35,7 @@
         <div class="code">{{ token }}</div>
         <p>Możesz też kliknąć poniższy przycisk i potwierdzić adres e‑mail na stronie:</p>
         <p>
-          <a class="btn" href="{{ verify_url }}" target="_blank" rel="noopener">Przejdź do potwierdzenia</a>
+          <a class="btn" href="{{ verify_url }}" target="_blank" rel="noopener" style="background:#2563eb;color:#ffffff !important;text-decoration:none;padding:10px 14px;border-radius:10px;display:inline-block">Przejdź do potwierdzenia</a>
         </p>
         <p class="muted">Jeśli nie prosiłeś(-aś) o rejestrację, zignoruj tę wiadomość.</p>
         <div class="footer">
