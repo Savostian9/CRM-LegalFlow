@@ -26,7 +26,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import axios from '@/axios-setup.js';
 
 export default {
   name: 'VerifyEmailView',
@@ -41,10 +41,18 @@ export default {
   },
   created() {
   // Get email from URL query on load
-  this.email = this.$route.query.email || '';
+  this.email = (this.$route.query.email || '').toLowerCase();
+  // Pre-fill token from query if present
+  if (this.$route.query.token) {
+    this.token = String(this.$route.query.token).trim();
+  }
   },
   mounted() {
     this.startTimer();
+    // If token is present in URL, auto-verify
+    if (this.email && this.token) {
+      this.handleVerification();
+    }
   },
   methods: {
     startTimer() {
@@ -63,7 +71,7 @@ export default {
 
       try {
   // Verified endpoint
-        const response = await axios.post('http://127.0.0.1:8000/api/verify-email/', {
+        const response = await axios.post('/api/verify-email/', {
           email: this.email,
           token: this.token
         });
@@ -85,7 +93,7 @@ export default {
         this.message = '';
         this.isError = false;
         try {
-            const response = await axios.post('http://127.0.0.1:8000/api/resend-verify-email/', {
+      const response = await axios.post('/api/resend-verify-email/', {
                 email: this.email
             });
             this.message = response.data.message;

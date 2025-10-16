@@ -124,7 +124,8 @@ def send_welcome_verification_email(user: User, token: str):
         first_name = (getattr(user, 'first_name', '') or '').strip()
         display_name = first_name or (getattr(user, 'username', '') or '').strip() or 'друг'
         frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
-        verify_url = f"{frontend}/verify-email?email={user.email}"
+        # Include token so the page can auto-verify on open
+        verify_url = f"{frontend}/verify-email?email={user.email}&token={token}"
         subject = 'Добро пожаловать в CRM LegalFlow — подтвердите email'
         context = {
             'display_name': display_name,
@@ -370,6 +371,7 @@ class PasswordResetView(APIView):
                 f"Здравствуйте, {display_name}.\n\n"
                 f"Для сброса пароля перейдите по ссылке: {reset_link}\n\n"
                 f"Если вы не запрашивали сброс пароля, проигнорируйте это письмо.\n\n"
+                f"С уважением,\nCRM LegalFlow\n\n"
                 f"------------------------------------------------------------\n\n"
                 f"Dzień dobry, {display_name},\n\n"
                 f"Aby zresetować hasło, przejdź pod link: {reset_link}\n\n"
@@ -378,17 +380,7 @@ class PasswordResetView(APIView):
             )
 
             # Пытаемся отправить письмо; при сбое не падаем 500, а возвращаем 200 с подсказкой
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'info@legalflow.pl')
-            mail_ok = True
-            try:
-                send_mail(subject, message, from_email, [user.email], fail_silently=False)
-            except Exception:
-                mail_ok = False
-                try:
-                    # Последняя попытка — без падения
-                    send_mail(subject, message, from_email, [user.email], fail_silently=True)
-                except Exception:
-                    pass
+            mail_ok = _safe_send_mail(subject, message, [user.email])
 
             # Больше не создаём системное уведомление о сбросе пароля
 

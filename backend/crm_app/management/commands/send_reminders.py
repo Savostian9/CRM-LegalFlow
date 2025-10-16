@@ -29,7 +29,7 @@ class Command(BaseCommand):
                 f"Напоминание: приближается срок действия документа: {doc_name}.\n"
                 f"Дата напоминания: {today}{(' ' + rem.reminder_time.strftime('%H:%M')) if rem.reminder_time else ''}.\n"
                 f"{rem.note or ''}\n\n"
-                f"Поздравляем,\nCRM LegalFlow\n\n"
+                f"С уважением,\nCRM LegalFlow\n\n"
                 f"------------------------------------------------------------\n\n"
                 f"Dzień dobry, {client.first_name} {client.last_name},\n\n"
                 f"Przypomnienie: zbliża się termin ważności dokumentu: {doc_name}.\n"
