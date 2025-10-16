@@ -25,23 +25,6 @@
       <section v-if="activeTab==='profile'" class="data-section">
   <h3>{{ $t('settings.profile.title') }}</h3>
         <form class="data-grid profile-form" autocomplete="off" @submit.prevent>
-          <div class="data-item" v-if="isOwner">
-            <label>{{ $t('settings.profile.username') }}</label>
-            <input
-              v-model="profile.username"
-              @blur="saveProfileField('username')"
-              type="text"
-              name="username"
-              autocomplete="username"
-              autocapitalize="off"
-              autocorrect="off"
-              spellcheck="false"
-              pattern="[\w.@+-]+"
-              :title="$t('settings.profile.usernameTitle')"
-              readonly
-              @focus="e => e.target.removeAttribute('readonly')"
-            />
-          </div>
           <div class="data-item">
             <label>{{ $t('settings.profile.firstName') }}</label>
             <input
@@ -139,18 +122,15 @@
         <div class="data-grid">
           <div class="data-item">
             <label>{{ $t('settings.company.name') }}</label>
-            <input v-model="company.name" type="text" />
+            <input v-model="company.name" type="text" @blur="saveCompany" />
           </div>
           <div class="data-item full-width">
             <label>{{ $t('settings.company.address') }}</label>
-            <textarea v-model="company.address" rows="2"></textarea>
+            <textarea v-model="company.address" rows="2" @blur="saveCompany"></textarea>
           </div>
           <div class="data-item full-width">
             <label>{{ $t('settings.company.legal') }}</label>
-            <textarea v-model="company.legal_details" rows="4"></textarea>
-          </div>
-          <div class="data-item full-width" style="display:flex; justify-content:flex-end;">
-            <button class="button primary" @click.prevent="saveCompany">{{ $t('common.save') }}</button>
+            <textarea v-model="company.legal_details" rows="4" @blur="saveCompany"></textarea>
           </div>
         </div>
       </section>
@@ -344,8 +324,8 @@ export default {
     async saveProfile(){
       const token = localStorage.getItem('user-token');
       const cfg = { headers: { Authorization: `Token ${token}` } };
-      const { username, first_name, last_name } = this.profile;
-      await axios.put('/api/profile/', { username, first_name, last_name }, cfg);
+      const { first_name, last_name } = this.profile;
+      await axios.put('/api/profile/', { first_name, last_name }, cfg);
       this.notify(`${this.$t('settings.toasts.savedProfile')}!`, 'success', 1500);
       this.emitUserProfileUpdated();
     },
@@ -356,7 +336,7 @@ export default {
         const payload = { [field]: this.profile[field] };
         await axios.put('/api/profile/', payload, cfg);
         this.notify(`${this.$t('settings.toasts.saved')}!`, 'success', 1500);
-        if(['first_name','last_name','username'].includes(field)){
+        if(['first_name','last_name'].includes(field)){
           this.emitUserProfileUpdated();
         }
       } catch(e){
@@ -366,7 +346,6 @@ export default {
     emitUserProfileUpdated(){
       try {
         window.dispatchEvent(new CustomEvent('user-profile-updated', { detail: {
-          username: this.profile.username,
           first_name: this.profile.first_name,
           last_name: this.profile.last_name,
         }}));
@@ -412,6 +391,7 @@ export default {
   const res = await axios.put('/api/company/settings/', { name, address, legal_details }, cfg);
         this.company = res.data;
         this.notify(`${this.$t('settings.toasts.saved')}!`, 'success', 1500);
+        try { window.dispatchEvent(new CustomEvent('company-updated', { detail: { name: this.company.name } })); } catch(_) { /* no-op */ }
       } catch (e) {
         this.notify(this.$t('settings.toasts.companySaveError'), 'error');
       }

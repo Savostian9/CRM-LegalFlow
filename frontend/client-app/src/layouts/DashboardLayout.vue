@@ -128,7 +128,7 @@
 </template>
 
 <script>
-import axios from 'axios';
+import axios from '@/axios-setup';
 import LangSwitcher from '@/components/LangSwitcher.vue';
 import { billingUsageState, loadBillingUsage } from '@/billing/usageStore.js';
 
@@ -141,9 +141,11 @@ export default {
       email: '',
       firstName: '',
       lastName: '',
+      companyName: '',
       role: 'MANAGER',
       showLogoutConfirm: false,
       profileUpdatedHandler: null,
+      companyUpdatedHandler: null,
       unreadCount: 0,
       notifInterval: null,
       trialDismissed: false,
@@ -151,6 +153,7 @@ export default {
   },
   computed: {
     displayName() {
+      if (this.companyName) return this.companyName;
       const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
       if (full) return full;
       return this.username || this.email || '';
@@ -158,7 +161,7 @@ export default {
     userInitials() {
       const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
       if (full) return full.charAt(0).toUpperCase();
-      const base = this.username || this.email || '';
+      const base = this.companyName || this.username || this.email || '';
       return base ? base.charAt(0).toUpperCase() : '';
     },
     isTrial() {
@@ -234,15 +237,18 @@ export default {
       return;
     }
     try {
-      const response = await axios.get('http://127.0.0.1:8000/api/user-info/', {
-        headers: { Authorization: `Token ${token}` }
-      });
+      const response = await axios.get('/api/user-info/', { headers: { Authorization: `Token ${token}` } });
       this.username = response.data.username;
       this.email = response.data.email;
       this.firstName = response.data.first_name || '';
       this.lastName = response.data.last_name || '';
       this.role = (response.data.role || 'MANAGER').toUpperCase();
       try { localStorage.setItem('user-role', this.role); } catch (e) { void 0; }
+      // Load company name for sidebar display
+      try {
+        const cs = await axios.get('/api/company/settings/', { headers: { Authorization: `Token ${token}` } });
+        this.companyName = (cs.data && cs.data.name) || '';
+      } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Ошибка получения данных пользователя:', error);
       localStorage.removeItem('user-token');
@@ -256,6 +262,11 @@ export default {
       if (typeof d.last_name === 'string') this.lastName = d.last_name;
     };
     window.addEventListener('user-profile-updated', this.profileUpdatedHandler);
+    this.companyUpdatedHandler = (e) => {
+      const d = (e && e.detail) || {};
+      if (typeof d.name === 'string') this.companyName = d.name;
+    };
+    window.addEventListener('company-updated', this.companyUpdatedHandler);
     // Старт обновления уведомлений
     this.fetchUnread();
     this.notifInterval = setInterval(this.fetchUnread, 30000); // каждые 30 секунд
@@ -266,6 +277,9 @@ export default {
   beforeUnmount() {
     if (this.profileUpdatedHandler) {
       window.removeEventListener('user-profile-updated', this.profileUpdatedHandler);
+    }
+    if (this.companyUpdatedHandler) {
+      window.removeEventListener('company-updated', this.companyUpdatedHandler);
     }
     window.removeEventListener('notifications-updated', this.fetchUnread);
     if (this.notifInterval) clearInterval(this.notifInterval);
