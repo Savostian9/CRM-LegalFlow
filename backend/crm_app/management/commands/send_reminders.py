@@ -50,58 +50,24 @@ class Command(BaseCommand):
             except Exception as e:
                 email_ok = False
                 self.stderr.write(f"Failed to send reminder #{rem.id} to {to_email}: {e}")
-            # Создаём уведомления (всегда, даже если письмо не ушло)
+            # Создаём ОДНО уведомление ответственному сотруднику (без дубликатов для всей компании)
             try:
-                # Выбираем компанию клиента (по created_by либо по связанному user)
-                company_id = None
-                try:
-                    if getattr(client, 'created_by', None) and client.created_by.company_id:
-                        company_id = client.created_by.company_id
-                    elif getattr(client, 'user', None) and client.user.company_id:
-                        company_id = client.user.company_id
-                except Exception:
-                    company_id = None
+                company = None
+                if getattr(client, 'created_by', None) and client.created_by.company_id:
+                    company = client.created_by.company
+                elif getattr(client, 'user', None) and client.user.company_id:
+                    company = client.user.company
 
-                # Рассылка уведомлений ВСЕМ внутренним сотрудникам компании клиента.
-                # Предыдущая логика отправляла только одному менеджеру => пользователи "не видят" новые уведомления.
-                staff = []
-                try:
-                    company = None
-                    # 1) company через created_by
-                    if getattr(client, 'created_by', None) and client.created_by.company_id:
-                        company = client.created_by.company
-                    # 2) иначе через связанный user (клиентский аккаунт)
-                    if not company and getattr(client, 'user', None) and client.user.company_id:
-                        company = client.user.company
-                    if company:
-                        staff_qs = company.users.filter(is_client=False)
-                        # опциональный фильтр по ролям
-                        staff = list(staff_qs)
-                except Exception:
-                    staff = []
-                # Fallback: если никого не нашли, хотя бы created_by
-                if not staff and getattr(client, 'created_by', None):
-                    staff = [client.created_by]
-                # Ещё fallback: любой пользователь (owner)
-                if not staff:
-                    try:
-                        if company:
-                            owner = getattr(company, 'owner', None)
-                            if owner:
-                                staff = [owner]
-                    except Exception:
-                        pass
-
-                status_note = 'отправлено' if email_ok else 'ОШИБКА отправки email'
-                title = f"Напоминание: {doc_name} ({status_note})"
-                msg_preview = f"Клиент: {client.first_name} {client.last_name} ({client.email})"
-                scheduled_dt = timezone.make_aware(timezone.datetime.combine(rem.reminder_date, rem.reminder_time)) if rem.reminder_date else now
-
-                for u in staff:
-                    if not u:
-                        continue
+                recipient = getattr(client, 'created_by', None)
+                if not recipient and company:
+                    recipient = getattr(company, 'owner', None)
+                if recipient:
+                    status_note = 'отправлено' if email_ok else 'ОШИБКА отправки email'
+                    title = f"Напоминание: {doc_name} ({status_note})"
+                    msg_preview = f"Клиент: {client.first_name} {client.last_name} ({client.email})"
+                    scheduled_dt = timezone.make_aware(timezone.datetime.combine(rem.reminder_date, rem.reminder_time)) if rem.reminder_date else now
                     Notification.objects.get_or_create(
-                        user=u,
+                        user=recipient,
                         reminder=rem,
                         defaults={
                             'client': client,
@@ -113,7 +79,7 @@ class Command(BaseCommand):
                         }
                     )
             except Exception:
-                self.stderr.write(f"Failed to create staff notifications for reminder #{rem.id}")
+                self.stderr.write(f"Failed to create notification for reminder #{rem.id}")
             # sent_at уже установлено при бронировании (claimed)
             if email_ok:
                 sent += 1
