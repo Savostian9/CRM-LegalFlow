@@ -171,13 +171,15 @@ class RegisterRequestView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
-        username = request.data.get('username')
-        password = request.data.get('password')
-        company_name = request.data.get('company_name') or request.data.get('company') or request.data.get('org')
+        data = request.data.copy()
+        email = data.get('email')
+        password = data.get('password')
+        company_name = data.get('company_name') or data.get('company') or data.get('org')
+        # Username не запрашиваем на форме: по умолчанию используем email
+        username = data.get('username') or email
 
-        if not email or not username or not password:
-            return Response({'error': 'Имя пользователя, email и пароль обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not email or not password:
+            return Response({'error': 'Email и пароль обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Helper: ensure company + trial for a user without company
         def _ensure_trial_company(u: User):
@@ -216,13 +218,7 @@ class RegisterRequestView(APIView):
                     'error': 'Пользователь с таким email уже зарегистрирован. Войдите в систему или воспользуйтесь восстановлением пароля.',
                     'error_code': 'USER_EXISTS'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            # Пользователь не подтвержден: обновим пароль и, при возможности, имя пользователя
-            try:
-                if username and user.username != username and not User.objects.filter(username=username).exclude(pk=user.pk).exists():
-                    user.username = username
-            except Exception:
-                # Если валидация имени не прошла — игнорируем, оставим прежнее
-                pass
+            # Пользователь не подтвержден: обновим пароль (username оставляем как есть)
             user.set_password(password)
             # Убедимся, что статус до подтверждения корректный
             user.is_active = False
@@ -252,8 +248,8 @@ class RegisterRequestView(APIView):
                 'trial': trial_block
             }, status=status.HTTP_201_CREATED)
         except User.DoesNotExist:
-            # Регистрируем нового пользователя стандартным путем
-            serializer = UserRegistrationSerializer(data=request.data)
+            # Регистрируем нового пользователя стандартным путем (username = email)
+            serializer = UserRegistrationSerializer(data={'username': username, 'email': email, 'password': password})
             if serializer.is_valid():
                 user = serializer.save(is_client=True)
                 token = ''.join(random.choices('0123456789', k=6))

@@ -15,14 +15,14 @@
         </div>
   <div v-if="inviteToken" class="invite-banner">{{ $t('auth.register.inviteBanner') }}</div>
         <div v-if="!inviteToken" class="form-group">
-          <label for="username">{{ $t('auth.register.companyNameLabel') }}</label>
+          <label for="company_name">{{ $t('auth.register.companyNameLabel') }}</label>
           <div class="input-wrapper">
             <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5a5.5 5.5 0 0 1 3.096 10.047 9.005 9.005 0 0 1 5.9 8.19.75.75 0 0 1-1.496.065 7.505 7.505 0 0 0-15 0 .75.75 0 0 1-1.496-.065 9.005 9.005 0 0 1 5.9-8.19A5.5 5.5 0 0 1 12 2.5ZM8 8a4 4 0 1 0 8 0 4 4 0 0 0-8 0Z" /></svg>
             <input
               type="text"
-              id="username"
-              name="username"
-              v-model.trim="username"
+              id="company_name"
+              name="company_name"
+              v-model.trim="company_name"
               required
               :placeholder="$t('auth.register.companyNamePH')"
               autocomplete="off"
@@ -131,14 +131,15 @@
 </template>
 
 <script>
-import axios from 'axios';
+import axios from '@/axios-setup.js';
 
 export default {
   name: 'RegisterView',
   components: { },
   data() {
     return {
-      username: '',
+      username: '', // используется только для ветки приглашения
+      company_name: '',
       first_name: '',
       last_name: '',
       email: '',
@@ -158,23 +159,18 @@ export default {
       this.error = '';
       this.isLoading = true;
       try {
-        // Базовая нормализация
-        if (!this.username) {
-          if (this.email) {
-            const base = this.email.split('@')[0] || 'user';
-            this.username = base.replace(/[^\w.@+-]/g, '').slice(0, 30) || ('user' + Math.floor(Math.random()*1000));
-          }
-        }
         if (!this.email) {
             throw new Error('NO_EMAIL');
         }
-        // Минимальная длина username
-        if (this.username.length < 3) {
-          this.username = this.username.padEnd(3, '0');
-        }
         if (this.inviteToken) {
             // Регистрация по приглашению: принимаем приглашение и переходим на страницу подтверждения email
-          const resp = await axios.post('http://127.0.0.1:8000/api/company/invites/accept/', {
+          // Для приглашений всё ещё нужен username: сгенерируем из email при необходимости
+          if (!this.username && this.email) {
+            const base = this.email.split('@')[0] || 'user';
+            this.username = base.replace(/[^\w.@+-]/g, '').slice(0, 30) || ('user' + Math.floor(Math.random()*1000));
+            if (this.username.length < 3) this.username = this.username.padEnd(3, '0');
+          }
+          const resp = await axios.post('/api/company/invites/accept/', {
             token: this.inviteToken,
             username: this.username,
             email: this.email,
@@ -191,9 +187,8 @@ export default {
             }
         } else {
           // Обычная регистрация с подтверждением email
-          const response = await axios.post('http://127.0.0.1:8000/api/register/', {
-            username: this.username, // backend всё ещё ожидает username (для user.username)
-            company_name: this.username, // новое поле для создания компании с именем
+          const response = await axios.post('/api/register/', {
+            company_name: this.company_name,
             email: this.email.toLowerCase(),
             password: this.password
           });
@@ -223,8 +218,8 @@ export default {
               return;
             } else if (data.email) {
               this.error = this.$t('auth.errors.emailPrefix', { msg: data.email[0] });
-            } else if (data.username) {
-              this.error = this.$t('auth.errors.usernamePrefix', { msg: data.username[0] });
+            } else if (data.company_name) {
+              this.error = data.company_name?.[0] || this.$t('auth.errors.register');
             } else if (data.password) {
               this.error = this.$t('auth.errors.passwordPrefix', { msg: data.password[0] });
             } else if (typeof data.error === 'string') {
