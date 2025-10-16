@@ -25,6 +25,7 @@ from .views import (
     InviteCreateView,
     InviteAcceptView    
 )
+from .views import AdminStatsView
 from .views import NotificationListCreateView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView, NotificationDeleteView, NotificationBulkDeleteView, BillingUsageView, BillingUpgradeView
 
 urlpatterns = [
@@ -34,6 +35,7 @@ urlpatterns = [
     path('password-reset/', PasswordResetView.as_view(), name='password-reset'),
     path('password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('user-info/', UserInfoView.as_view(), name='user-info'),
+        path('admin/stats/', AdminStatsView.as_view(), name='admin-stats'),
     path('profile/', ProfileView.as_view(), name='profile'),
     path('profile/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('profile/delete-account/', DeleteAccountView.as_view(), name='delete-account'),

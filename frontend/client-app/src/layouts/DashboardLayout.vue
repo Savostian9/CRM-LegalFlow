@@ -84,6 +84,15 @@
               <span>Мой план</span>
             </router-link>
           </li>
+          <li v-if="isSuperuser">
+            <router-link
+              to="/dashboard/admin"
+              :class="{ active: $route.path.startsWith('/dashboard/admin') }"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a3 3 0 0 1 3 3v2h2.5A2.5 2.5 0 0 1 20 9.5V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9.5A2.5 2.5 0 0 1 6.5 7H9V5a3 3 0 0 1 3-3Zm-1.5 5h3V5a1.5 1.5 0 0 0-3 0v2Z"/></svg>
+              <span>Админ</span>
+            </router-link>
+          </li>
         </ul>
       </nav>
       <div class="sidebar-footer">
@@ -149,6 +158,7 @@ export default {
       unreadCount: 0,
       notifInterval: null,
       trialDismissed: false,
+      isSuperuser: false,
     };
   },
   computed: {
@@ -243,7 +253,9 @@ export default {
       this.firstName = response.data.first_name || '';
       this.lastName = response.data.last_name || '';
       this.role = (response.data.role || 'MANAGER').toUpperCase();
+      this.isSuperuser = !!response.data.is_superuser;
       try { localStorage.setItem('user-role', this.role); } catch (e) { void 0; }
+      try { localStorage.setItem('is-superuser', this.isSuperuser ? '1' : '0'); } catch (e) { void 0; }
       // Load company name for sidebar display
       try {
         const cs = await axios.get('/api/company/settings/', { headers: { Authorization: `Token ${token}` } });

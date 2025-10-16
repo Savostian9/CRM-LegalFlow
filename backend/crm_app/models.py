@@ -270,6 +270,8 @@ class Notification(models.Model):
         ('SYSTEM', 'Система'),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    # Optional link to a Task this notification refers to (for filtering and UI linking)
+    task = models.ForeignKey('Task', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
     client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
     reminder = models.ForeignKey(Reminder, on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
     title = models.CharField(max_length=200)
@@ -288,6 +290,7 @@ class Notification(models.Model):
             models.Index(fields=['user', 'is_read']),
             models.Index(fields=['source']),
             models.Index(fields=['visible_at']),
+            models.Index(fields=['task']),
         ]
 
     def __str__(self):

@@ -424,11 +424,67 @@ class UserInfoView(APIView):
             'email': user.email,
             'first_name': user.first_name,
             'last_name': user.last_name,
+            'is_superuser': bool(getattr(user, 'is_superuser', False)),
             'is_client': getattr(user, 'is_client', False),
             'is_manager': getattr(user, 'is_manager', False),
             'role': getattr(user, 'role', 'ADMIN'),
             'company_id': getattr(user.company, 'id', None)
         })
+
+from django.db.models import Count
+
+class AdminStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not getattr(user, 'is_superuser', False):
+            return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Companies and plans
+        companies = Company.objects.all().values('id', 'name', 'plan', 'created_at', 'trial_started_at', 'trial_ends_at', 'owner_id')
+        plans = Company.objects.values('plan').annotate(count=Count('id')).order_by('plan')
+
+        # Users and roles
+        users_total = User.objects.count()
+        users_by_role = User.objects.values('role').annotate(count=Count('id')).order_by('role')
+
+        # Per-company user counts
+        company_user_counts = User.objects.values('company_id').annotate(count=Count('id'))
+        counts_map = {row['company_id']: row['count'] for row in company_user_counts}
+
+        # Other entities
+        clients_total = Client.objects.count()
+        cases_total = LegalCase.objects.count()
+        tasks_total = Task.objects.count()
+        reminders_total = Reminder.objects.count()
+
+        companies_detail = []
+        for c in companies:
+            companies_detail.append({
+                'id': c['id'],
+                'name': c['name'],
+                'plan': c['plan'],
+                'created_at': c['created_at'],
+                'trial_started_at': c['trial_started_at'],
+                'trial_ends_at': c['trial_ends_at'],
+                'users_count': counts_map.get(c['id'], 0),
+            })
+
+        payload = {
+            'totals': {
+                'companies': len(companies_detail),
+                'users': users_total,
+                'clients': clients_total,
+                'cases': cases_total,
+                'tasks': tasks_total,
+                'reminders': reminders_total,
+            },
+            'plans': list(plans),
+            'usersByRole': list(users_by_role),
+            'companies': companies_detail,
+        }
+        return Response(payload)
 
 # --- Профиль пользователя ---
 class ProfileView(APIView):
@@ -1063,15 +1119,20 @@ class TaskListCreateView(APIView):
         # Видимость задач:
         # - ADMIN/LEAD/LAWYER/ASSISTANT: задачи по клиентам своей компании
         # - MANAGER: задачи только по своим клиентам
+        base_qs = Task.objects.select_related('client', 'created_by')
         if request.user.role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
-            qs = Task.objects.select_related('client', 'created_by').filter(
+            # Видимость: задачи по клиентам своей компании или личные задачи сотрудников компании
+            qs = base_qs.filter(
                 models.Q(client__created_by__company_id=request.user.company_id) |
                 models.Q(client__user__company_id=request.user.company_id) |
                 models.Q(client__isnull=True, created_by__company_id=request.user.company_id)
             )
         else:
-            qs = Task.objects.select_related('client', 'created_by').filter(
-                models.Q(client__created_by=request.user) | models.Q(client__isnull=True, created_by=request.user)
+            # Менеджер: свои задачи + те, где он в исполнителях
+            qs = base_qs.filter(
+                models.Q(client__created_by=request.user) |
+                models.Q(client__isnull=True, created_by=request.user) |
+                models.Q(assignees=request.user)
             )
         # Фильтры
         task_types = request.query_params.get('types')  # CSV
@@ -1112,7 +1173,56 @@ class TaskListCreateView(APIView):
                 else:
                     if client.created_by_id and client.created_by_id != request.user.id:
                         return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+            # Сохраняем задачу с создателем
             task = serializer.save(created_by=request.user)
+            # Если в запросе переданы назначенные исполнители — добавим их
+            try:
+                assignee_ids = request.data.get('assignees') or []
+                if isinstance(assignee_ids, list) and assignee_ids:
+                    users = User.objects.filter(id__in=[int(i) for i in assignee_ids if str(i).isdigit()])
+                    if users:
+                        task.assignees.add(*list(users))
+            except Exception:
+                pass
+            # Создаём уведомления только для назначенных МЕНЕДЖЕРОВ (кроме автора)
+            try:
+                # Подготовим имя постановщика задачи (создателя)
+                creator = request.user
+                creator_name = ''
+                try:
+                    full = f"{getattr(creator, 'first_name', '') or ''} {getattr(creator, 'last_name', '') or ''}".strip()
+                    if full:
+                        creator_name = full
+                    else:
+                        creator_name = getattr(creator, 'username', '') or getattr(creator, 'email', '') or 'Пользователь'
+                except Exception:
+                    creator_name = getattr(creator, 'username', '') or getattr(creator, 'email', '') or 'Пользователь'
+
+                for u in task.assignees.exclude(id=request.user.id):
+                    if getattr(u, 'role', '').upper() != 'MANAGER':
+                        continue
+                    title = 'Новая задача'
+                    msg_parts = []
+                    if task.title:
+                        msg_parts.append(task.title)
+                    try:
+                        when = task.start.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M')
+                        msg_parts.append(f"на {when}")
+                    except Exception:
+                        pass
+                    # Добавляем информацию о постановщике
+                    msg_parts.append(f"Поставил: {creator_name}")
+                    msg = ' · '.join([p for p in msg_parts if p])
+                    Notification.objects.create(
+                        user=u,
+                        task=task,
+                        client=task.client if hasattr(task, 'client') else None,
+                        title=title,
+                        message=msg,
+                        source='SYSTEM'
+                    )
+            except Exception:
+                pass
             return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1231,9 +1341,11 @@ class UpcomingTasksWidgetView(APIView):
             else:
                 qs = base_qs.none()
         else:
+            # Менеджер: свои или назначенные ему
             qs = base_qs.filter(
                 Q(client__created_by=request.user) |
-                Q(client__isnull=True, created_by=request.user)
+                Q(client__isnull=True, created_by=request.user) |
+                Q(assignees=request.user)
             )
         limit = 100 if range_type in ('week', 'month') else 50
         qs = qs.order_by('start')[:limit]
@@ -1327,6 +1439,8 @@ class NotificationListCreateView(APIView):
         role = getattr(request.user, 'role', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
             qs = Notification.objects.filter(user__company_id=request.user.company_id)
+            # Never show notifications about tasks created by the current user
+            qs = qs.exclude(task__created_by=request.user)
         else:
             qs = Notification.objects.filter(user=request.user)
         # Одноразовое сидирование из Reminder, если ещё не делали
@@ -1449,8 +1563,9 @@ class NotificationMarkAllReadView(APIView):
         role = getattr(request.user, 'role', None)
         company_id = getattr(request.user, 'company_id', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
-            # Отмечаем прочитанными ВСЕ уведомления компании (отражает то, что админ видит в списке)
-            Notification.objects.filter(user__company_id=company_id, is_read=False).update(is_read=True)
+            # Отмечаем прочитанными ВСЕ уведомления компании (отражает то, что админ видит в списке),
+            # исключая уведомления о задачах, поставленных текущим пользователем
+            Notification.objects.filter(user__company_id=company_id, is_read=False).exclude(task__created_by=request.user).update(is_read=True)
         else:
             Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({'detail': 'ok'})
@@ -1461,7 +1576,7 @@ class NotificationUnreadCountView(APIView):
     def get(self, request):
         role = getattr(request.user, 'role', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
-            cnt = Notification.objects.filter(user__company_id=request.user.company_id, is_read=False).count()
+            cnt = Notification.objects.filter(user__company_id=request.user.company_id, is_read=False).exclude(task__created_by=request.user).count()
         else:
             cnt = Notification.objects.filter(user=request.user, is_read=False).count()
         return Response({'unread': cnt})

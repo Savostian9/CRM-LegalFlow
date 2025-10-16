@@ -24,6 +24,7 @@ import SettingsView from '../views/SettingsView.vue'
 import TasksView from '../views/TasksView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
 import MyPlanView from '../views/MyPlanView.vue'
+import AdminDashboardView from '../views/AdminDashboardView.vue'
 
 const routes = [
   // --- Маршруты без бокового меню ---
@@ -125,6 +126,12 @@ const routes = [
         name: 'my-plan',
         component: MyPlanView
       },
+      {
+        path: 'admin',
+        name: 'admin-dashboard',
+        component: AdminDashboardView,
+        meta: { requiresSuperuser: true }
+      },
       // Сюда вы будете добавлять новые маршруты: 'cases', 'tasks' и т.д.
     ]
   }
@@ -139,11 +146,18 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('user-token')
   const role = localStorage.getItem('user-role')
+  const isSuperuser = localStorage.getItem('is-superuser') === '1'
 
   // Проверяем, требует ли маршрут (или его родитель) авторизации
   if (to.matched.some(record => record.meta.requiresAuth) && !token) {
     // Если да, и токена нет - перенаправляем на страницу входа
     next('/login')
+    return
+  }
+
+  // Роут только для суперпользователя
+  if (to.matched.some(r => r.meta && r.meta.requiresSuperuser) && !isSuperuser) {
+    next('/dashboard')
     return
   }
 

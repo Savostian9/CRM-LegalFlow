@@ -69,7 +69,7 @@
         <UiSelect
           class="af-select"
           v-model="assigneeFilter"
-          :options="[{ value:'', label: ($t('clients.extra.allOption')||$t('tasks.filters.statusAll')) }, ...users.map(u => ({ value: String(u.id), label: ( (u.first_name||'') + ' ' + (u.last_name||'') ).trim() || u.username || u.email || ('ID '+u.id) }))]"
+          :options="[{ value:'', label: ($t('clients.extra.allOption')||$t('tasks.filters.statusAll')) }, ...users.map(u => ({ value: String(u.id), label: userLabel(u) }))]"
           :placeholder="$t('clients.extra.allOption') || $t('tasks.filters.statusAll')"
           :aria-label="$t('tasks.assignee') || 'Assignee'"
         />
@@ -195,6 +195,21 @@ export default {
     '$route.query.task': function(){ this.tryOpenFromRoute() }
   },
   methods: {
+    humanizeLogin(value){
+      try{
+        if(!value) return ''
+        const local = String(value).split('@')[0]
+        const parts = local.split(/[^A-Za-zА-Яа-яЁё]+/).map(p => p.replace(/\d+/g,'').trim()).filter(Boolean)
+        if(!parts.length) return ''
+        return parts.map(p => p.charAt(0).toUpperCase()+p.slice(1)).join(' ')
+      }catch{ return '' }
+    },
+    userLabel(u){
+      const full = `${u.first_name || ''} ${u.last_name || ''}`.trim()
+      if(full) return full
+      const base = u.username || u.email || ''
+      return this.humanizeLogin(base) || base || (u.id ? ('ID '+u.id) : '')
+    },
     token(){ return localStorage.getItem('user-token') },
     async loadTasks(){
       this.loading = true
@@ -230,12 +245,15 @@ export default {
         const me = await axios.get('http://127.0.0.1:8000/api/user-info/', {
           headers: { Authorization: 'Token ' + this.token() }
         })
-        this.users = [{ id: me.data.id, username: me.data.username }]
+        this.users = [{
+          id: me.data.id,
+          username: me.data.username,
+          first_name: me.data.first_name || '',
+          last_name: me.data.last_name || '',
+          email: me.data.email || ''
+        }]
       } finally {
-        const mapEntries = this.users.map(u => {
-          const full = `${u.first_name || ''} ${u.last_name || ''}`.trim()
-          return [u.id, full || u.username || u.email || ('ID '+u.id)]
-        })
+        const mapEntries = this.users.map(u => [u.id, this.userLabel(u)])
         this.usersMap = Object.fromEntries(mapEntries)
       }
     },
@@ -375,7 +393,7 @@ export default {
     assigneeOptions(){
       return [
         { value:'', label: this.$t('tasks.unassigned') },
-        ...this.users.map(u => ({ value: String(u.id), label: ((u.first_name||'') + (u.last_name?(' '+u.last_name): (u.first_name?'' : '')) || u.username || u.email) }))
+        ...this.users.map(u => ({ value: String(u.id), label: this.userLabel(u) }))
       ]
     },
     statusSelectOptions(){

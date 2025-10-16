@@ -1,6 +1,7 @@
 # файл: backend/crm_app/serializers.py
 
 from rest_framework import serializers
+from django.db import models
 from django.contrib.auth import authenticate
 from .models import User, Client, LegalCase, Document, UploadedFile, Task, Reminder, Company, Invite, Notification
 
@@ -461,7 +462,15 @@ class TaskSerializer(serializers.ModelSerializer):
         # Ограничиваем выбор клиента только клиентами, созданными текущим пользователем
         request = self.context.get('request') if isinstance(self.context, dict) else None
         if request and getattr(request, 'user', None) and 'client_id' in self.fields:
-            self.fields['client_id'].queryset = Client.objects.filter(created_by=request.user)
+            user = request.user
+            if getattr(user, 'role', None) in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and getattr(user, 'company_id', None):
+                # Админские роли: клиенты всей компании
+                self.fields['client_id'].queryset = Client.objects.filter(
+                    models.Q(created_by__company_id=user.company_id) | models.Q(user__company_id=user.company_id)
+                )
+            else:
+                # Менеджер: только свои клиенты
+                self.fields['client_id'].queryset = Client.objects.filter(created_by=user)
 
     def validate(self, attrs):
         """Позволяем создавать задачу вообще без полей: если start не передан, ставим текущее время.
