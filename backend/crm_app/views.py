@@ -1439,8 +1439,15 @@ class NotificationListCreateView(APIView):
         role = getattr(request.user, 'role', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
             qs = Notification.objects.filter(user__company_id=request.user.company_id)
-            # Never show notifications about tasks created by the current user
-            qs = qs.exclude(task__created_by=request.user)
+            # Never show notifications about tasks created by the current user.
+            # If the DB schema doesn't have task_id yet (no migration), skip the exclude gracefully.
+            try:
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute("SELECT task_id FROM crm_app_notification LIMIT 1")
+                qs = qs.exclude(task__created_by=request.user)
+            except Exception:
+                pass
         else:
             qs = Notification.objects.filter(user=request.user)
         # Одноразовое сидирование из Reminder, если ещё не делали
@@ -1564,8 +1571,16 @@ class NotificationMarkAllReadView(APIView):
         company_id = getattr(request.user, 'company_id', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
             # Отмечаем прочитанными ВСЕ уведомления компании (отражает то, что админ видит в списке),
-            # исключая уведомления о задачах, поставленных текущим пользователем
-            Notification.objects.filter(user__company_id=company_id, is_read=False).exclude(task__created_by=request.user).update(is_read=True)
+            # исключая уведомления о задачах, поставленных текущим пользователем.
+            qs = Notification.objects.filter(user__company_id=company_id, is_read=False)
+            try:
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute("SELECT task_id FROM crm_app_notification LIMIT 1")
+                qs = qs.exclude(task__created_by=request.user)
+            except Exception:
+                pass
+            qs.update(is_read=True)
         else:
             Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({'detail': 'ok'})
@@ -1576,7 +1591,15 @@ class NotificationUnreadCountView(APIView):
     def get(self, request):
         role = getattr(request.user, 'role', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
-            cnt = Notification.objects.filter(user__company_id=request.user.company_id, is_read=False).exclude(task__created_by=request.user).count()
+            qs = Notification.objects.filter(user__company_id=request.user.company_id, is_read=False)
+            try:
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute("SELECT task_id FROM crm_app_notification LIMIT 1")
+                qs = qs.exclude(task__created_by=request.user)
+            except Exception:
+                pass
+            cnt = qs.count()
         else:
             cnt = Notification.objects.filter(user=request.user, is_read=False).count()
         return Response({'unread': cnt})
