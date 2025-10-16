@@ -4,10 +4,13 @@
       <div class="sidebar-header">
   <router-link :to="{ name: 'dashboard' }" class="logo">{{ $t('app.name') }}</router-link>
       </div>
-      <div class="user-profile">
-  <div class="avatar">{{ userInitials }}</div>
-  <span class="username" :title="displayName">{{ displayName }}</span>
-      </div>
+        <div class="user-profile">
+          <div class="avatar">{{ userInitials }}</div>
+          <div class="user-meta">
+            <div class="company-name" :title="companyName || displayName">{{ companyName || displayName }}</div>
+            <div class="person-name" :title="fullName">{{ fullName }}</div>
+          </div>
+        </div>
       <nav class="nav-links">
         <ul>
           <li>
@@ -168,18 +171,19 @@ export default {
       if (full) return full;
       return this.username || this.email || '';
     },
+    fullName() {
+      const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
+      if (full) return full;
+      return this.username || this.email || '';
+    },
     userInitials() {
       const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
       if (full) return full.charAt(0).toUpperCase();
       const base = this.companyName || this.username || this.email || '';
       return base ? base.charAt(0).toUpperCase() : '';
     },
-    isTrial() {
-      return billingUsageState.isTrial;
-    },
-    daysLeft() {
-      return billingUsageState.daysLeft;
-    },
+    isTrial() { return billingUsageState.isTrial; },
+    daysLeft() { return billingUsageState.daysLeft; },
     showTrialBanner() {
       if (this.trialDismissed) return false;
       if (!this.isTrial) return false;
@@ -434,6 +438,20 @@ export default {
   font-size: 18px;
   font-weight: 600;
   margin-right: 15px;
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.company-name {
+  font-weight: 600;
+  color: var(--sidebar-title);
+}
+.person-name {
+  font-size: 12px;
+  color: var(--sidebar-text);
 }
 
 .username {
