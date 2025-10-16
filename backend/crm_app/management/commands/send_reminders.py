@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.core.mail import send_mail
 from django.conf import settings
 from crm_app.models import Reminder, Notification, User
+from django.db import transaction
 
 
 class Command(BaseCommand):
@@ -21,6 +22,11 @@ class Command(BaseCommand):
                 continue
             # Проверяем время, если оно задано: отправляем только если наступило
             if rem.reminder_time and now.time() < rem.reminder_time:
+                continue
+            # Идемпотентность: атомарно "забронируем" напоминание, чтобы в параллельных процессах не отправить дубликаты
+            claimed = Reminder.objects.filter(pk=rem.pk, sent_at__isnull=True).update(sent_at=timezone.now())
+            if not claimed:
+                # Уже взято/отправлено другим процессом
                 continue
             subject = 'Напоминание / Przypomnienie o wygasającym dokumencie'
             doc_name = rem.get_reminder_type_display()
@@ -108,8 +114,7 @@ class Command(BaseCommand):
                     )
             except Exception:
                 self.stderr.write(f"Failed to create staff notifications for reminder #{rem.id}")
-            rem.sent_at = timezone.now()
-            rem.save(update_fields=['sent_at'])
+            # sent_at уже установлено при бронировании (claimed)
             if email_ok:
                 sent += 1
         self.stdout.write(self.style.SUCCESS(f'Sent reminders: {sent}'))
