@@ -46,6 +46,23 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
+    def save(self, *args, **kwargs):
+        """Нормализуем email и username к нижнему регистру, чтобы избежать
+        проблем со входом/поиском при разном регистре введенных букв.
+        """
+        try:
+            if self.email:
+                self.email = self.email.strip().lower()
+        except Exception:
+            pass
+        try:
+            # Во многих местах username у нас равен email — также приводим к нижнему регистру
+            if self.username:
+                self.username = self.username.strip().lower()
+        except Exception:
+            pass
+        return super().save(*args, **kwargs)
+
 # --- Модель для токена подтверждения email ---
 class EmailVerificationToken(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

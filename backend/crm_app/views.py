@@ -172,11 +172,11 @@ class RegisterRequestView(APIView):
 
     def post(self, request):
         data = request.data.copy()
-        email = data.get('email')
+        email = (data.get('email') or '').strip().lower()
         password = data.get('password')
         company_name = data.get('company_name') or data.get('company') or data.get('org')
         # Username не запрашиваем на форме: по умолчанию используем email
-        username = data.get('username') or email
+        username = (data.get('username') or email or '').strip().lower()
 
         if not email or not password:
             return Response({'error': 'Email и пароль обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -212,7 +212,7 @@ class RegisterRequestView(APIView):
 
         # Если пользователь с таким email уже существует
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
             if user.is_active:
                 return Response({
                     'error': 'Пользователь с таким email уже зарегистрирован. Войдите в систему или воспользуйтесь восстановлением пароля.',
@@ -274,14 +274,14 @@ class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         token = request.data.get('token')
 
         if not email or not token:
             return Response({'error': 'Email и токен обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
             verification_token = EmailVerificationToken.objects.get(user=user, token=token)
 
             # ПРОВЕРКА: если прошло больше 5 минут, код недействителен
@@ -345,12 +345,12 @@ class PasswordResetView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         if not email:
             return Response({'error': 'Email обязателен.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
         except User.DoesNotExist:
             return Response({'error': 'Пользователь с таким email не найден.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -666,7 +666,7 @@ class InviteAcceptView(APIView):
 
     def post(self, request):
         token = request.data.get('token')
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         password = request.data.get('password')
         desired_username = request.data.get('username')
         first_name = (request.data.get('first_name') or '').strip()
@@ -678,12 +678,12 @@ class InviteAcceptView(APIView):
         except Invite.DoesNotExist:
             return Response({'detail': 'Приглашение не найдено'}, status=status.HTTP_404_NOT_FOUND)
         # Создаём пользователя и привязываем к компании
-        if User.objects.filter(email=email).exists():
+        if User.objects.filter(email__iexact=email).exists():
             return Response({'detail': 'Email уже используется'}, status=status.HTTP_400_BAD_REQUEST)
         # Выберем имя пользователя: из формы, если свободно; иначе fallback к email
-        username_value = (desired_username or '').strip() or email
+        username_value = ((desired_username or '').strip() or email).lower()
         try:
-            if username_value and User.objects.filter(username=username_value).exists():
+            if username_value and User.objects.filter(username__iexact=username_value).exists():
                 # если занято — используем email как имя пользователя
                 username_value = email
         except Exception:
@@ -716,9 +716,9 @@ class ResendVerificationEmailView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         try:
-            user = User.objects.get(email=email, is_active=False)
+            user = User.objects.get(email__iexact=email, is_active=False)
             # Удаляем старый токен, если он был
             EmailVerificationToken.objects.filter(user=user).delete()
 

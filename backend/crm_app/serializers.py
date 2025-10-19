@@ -36,19 +36,25 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
     def validate_username(self, value):
         import re
+        value = (value or '').strip().lower()
         # Разрешенный набор по умолчанию Django: латиница/цифры/ @ . + - _
         if not re.match(r'^[\w.@+-]+\Z', value):
             raise serializers.ValidationError('Введите корректное имя пользователя. Допустимы буквы, цифры и символы @/./+/-/_ .')
-        if User.objects.filter(username=value).exists():
+        if User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError('Пользователь с таким именем уже существует.')
         return value
 
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
+        # Считаем email уникальным без учета регистра
+        value = (value or '').strip().lower()
+        if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError('Пользователь с таким email уже существует.')
         return value
 
     def create(self, validated_data):
+        # Нормализуем вход для надежности
+        validated_data['username'] = (validated_data.get('username') or '').strip().lower()
+        validated_data['email'] = (validated_data.get('email') or '').strip().lower()
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
@@ -67,13 +73,13 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def validate_username(self, value):
         import re
-        value = (value or '').strip()
+        value = (value or '').strip().lower()
         if not value:
             raise serializers.ValidationError('Имя пользователя обязательно.')
         if not re.match(r'^[\w.@+-]+\Z', value):
             raise serializers.ValidationError('Введите корректное имя пользователя. Допустимы буквы, цифры и символы @/./+/-/_ .')
         # Уникальность с исключением текущего пользователя
-        qs = User.objects.filter(username=value)
+        qs = User.objects.filter(username__iexact=value)
         user = self.instance if isinstance(self.instance, User) else None
         if user:
             qs = qs.exclude(pk=user.pk)
@@ -117,8 +123,9 @@ class EmailAuthTokenSerializer(serializers.Serializer):
     password = serializers.CharField()
 
     def validate(self, attrs):
-        email = attrs.get('email')
-        username = attrs.get('username')
+        # Нормализуем регистр
+        email = (attrs.get('email') or '').strip().lower() or None
+        username = (attrs.get('username') or '').strip().lower() or None
         password = attrs.get('password')
 
         if (not email and not username) or not password:
@@ -127,12 +134,12 @@ class EmailAuthTokenSerializer(serializers.Serializer):
         user_obj = None
         if email:
             try:
-                user_obj = User.objects.get(email=email)
+                user_obj = User.objects.get(email__iexact=email)
             except User.DoesNotExist:
                 pass
         if user_obj is None and username:
             try:
-                user_obj = User.objects.get(username=username)
+                user_obj = User.objects.get(username__iexact=username)
             except User.DoesNotExist:
                 pass
         if user_obj is None:
@@ -202,10 +209,10 @@ class ClientSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('legal_cases', None)
         reminders_data = validated_data.pop('reminders', None)
-        base_email = validated_data['email']
+        base_email = (validated_data['email'] or '').strip().lower()
         # Ищем пользователя с таким email
         try:
-            existing_user = User.objects.get(email=base_email)
+            existing_user = User.objects.get(email__iexact=base_email)
         except User.DoesNotExist:
             existing_user = None
 
@@ -216,12 +223,12 @@ class ClientSerializer(serializers.ModelSerializer):
             local, at, domain = base_email.partition('@')
             idx = 2
             new_email = f"{local}+{idx}@{domain}" if at else f"{base_email}.{idx}"
-            while User.objects.filter(email=new_email).exists():
+            while User.objects.filter(email__iexact=new_email).exists():
                 idx += 1
                 new_email = f"{local}+{idx}@{domain}" if at else f"{base_email}.{idx}"
             user = User.objects.create_user(
-                username=new_email,
-                email=new_email,
+                username=new_email.lower(),
+                email=new_email.lower(),
                 password=None,
                 is_active=False,
                 is_client=True
@@ -232,8 +239,8 @@ class ClientSerializer(serializers.ModelSerializer):
                 user = existing_user
             else:
                 user = User.objects.create_user(
-                    username=base_email,
-                    email=base_email,
+                    username=base_email.lower(),
+                    email=base_email.lower(),
                     password=None,
                     is_active=False,
                     is_client=True
@@ -263,7 +270,8 @@ class ClientSerializer(serializers.ModelSerializer):
         # Обновляем поля самого клиента
         instance.first_name = validated_data.get('first_name', instance.first_name)
         instance.last_name = validated_data.get('last_name', instance.last_name)
-        instance.email = validated_data.get('email', instance.email)
+        if 'email' in validated_data:
+            instance.email = (validated_data.get('email') or '').strip().lower() or instance.email
         instance.phone_number = validated_data.get('phone_number', instance.phone_number)
         instance.address = validated_data.get('address', instance.address)
         instance.service_cost = validated_data.get('service_cost', instance.service_cost)

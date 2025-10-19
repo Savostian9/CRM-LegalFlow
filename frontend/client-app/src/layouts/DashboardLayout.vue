@@ -228,7 +228,7 @@ export default {
       try {
         const token = localStorage.getItem('user-token');
         if (!token) return;
-        const res = await axios.get('http://127.0.0.1:8000/api/notifications/unread-count/', { headers: { Authorization: `Token ${token}` }});
+        const res = await axios.get('/api/notifications/unread-count/', { headers: { Authorization: `Token ${token}` }});
         this.unreadCount = res.data.unread || 0;
       } catch (e) { /* silent */ }
     },
@@ -438,20 +438,29 @@ export default {
   font-size: 18px;
   font-weight: 600;
   margin-right: 15px;
+  flex: 0 0 40px; /* фиксированный круг — не сжимается */
+  flex-shrink: 0; /* дополнительная страховка от сжатия */
 }
 
 .user-meta {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0; /* разрешаем переносы внутри flex-элемента */
 }
 .company-name {
   font-weight: 600;
   color: var(--sidebar-title);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere; /* переносим очень длинные слова/строки */
 }
 .person-name {
   font-size: 12px;
   color: var(--sidebar-text);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .username {
