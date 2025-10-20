@@ -55,6 +55,7 @@
             <span class="date">{{ formatDate(t.start) }}</span>
             <span class="client">{{ t.client_name || '—' }}</span>
             <span class="title">{{ t.title || placeholderTitle }}</span>
+            <span class="assignee">{{ getAssigneeLabel(t) }}</span>
             <span class="status" :class="t.status.toLowerCase()">{{ statusLabel(t.status) }}</span>
             <div class="actions">
               <button class="btn small" @click.stop="markDone(t)">{{ $t('dashboard.markDone') }}</button>
@@ -70,6 +71,15 @@
             </header>
             <div class="tm-body">
               <div class="tm-grid">
+                <label class="full">
+                  {{ $t('tasks.client') }}
+                  <ClientAutocomplete
+                    v-model="selectedClientId"
+                    :initial-label="clientInitialLabel"
+                    :placeholder="$t('tasks.chooseClient')"
+                    @client-selected="(c)=>{ selectedClientId=c?.id||''; clientInitialLabel=(c ? `${c.first_name||''} ${c.last_name||''}`.trim() : '') }"
+                  />
+                </label>
                 <label>
                   {{ $t('tasks.titleLabel') }}
                   <input type="text" v-model="editForm.title" :placeholder="$t('tasks.titlePH')"/>
@@ -80,11 +90,21 @@
                 </label>
                 <label>
                   {{ $t('tasks.table.status') }}
-                  <select v-model="editForm.status">
-                    <option value="SCHEDULED">{{ $t('tasks.status.SCHEDULED') }}</option>
-                    <option value="DONE">{{ $t('tasks.status.DONE') }}</option>
-                    <option value="CANCELLED">{{ $t('tasks.status.CANCELLED') }}</option>
-                  </select>
+                  <UiSelect v-model="editForm.status" :options="[
+                    { value:'SCHEDULED', label: $t('tasks.status.SCHEDULED') },
+                    { value:'DONE', label: $t('tasks.status.DONE') },
+                    { value:'CANCELLED', label: $t('tasks.status.CANCELLED') }
+                  ]" aria-label="Status" />
+                </label>
+                <label>
+                  {{ $t('tasks.assignee') }}
+                  <UiSelect
+                    v-model="selectedAssignee"
+                    :options="assigneeOptions"
+                    :placeholder="$t('tasks.unassigned')"
+                    aria-label="Assignee"
+                  />
+                  <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
                 </label>
               </div>
             </div>
@@ -147,10 +167,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+/* eslint-disable */
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+// UiSelect and ClientAutocomplete are registered globally in main.js
 
 const tab = ref('today')
 const items = ref([])
@@ -186,6 +208,11 @@ async function load(){
       { headers: { Authorization: 'Token ' + token } }
     )
     items.value = resp.data
+  } catch(e) {
+    // Гасим 500 и показываем пустой список + тост
+    items.value = []
+    const msg = (e?.response?.data && (typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data))) || e.message || 'Ошибка загрузки задач'
+    showToast(msg)
   } finally {
     loading.value = false
   }
@@ -214,6 +241,23 @@ function statusLabel(s){
   return s === 'SCHEDULED' ? t('dashboard.taskStatus.scheduled') : s === 'DONE' ? t('dashboard.taskStatus.done') : t('dashboard.taskStatus.cancelled')
 }
 
+function getAssigneeLabel(task){
+  // Prefer assignees array (first), then task.assignee, else empty
+  const makeLabel = (id) => {
+    const u = users.value.find(x => String(x.id) === String(id))
+    if(!u) return ''
+    const full = `${u.first_name || ''} ${u.last_name || ''}`.trim()
+    return full || (u.username || u.email || ('ID ' + u.id))
+  }
+  if (Array.isArray(task?.assignees) && task.assignees.length){
+    const label = makeLabel(task.assignees[0])
+    if (task.assignees.length > 1) return label ? label + ' +' + (task.assignees.length - 1) : ''
+    return label || '—'
+  }
+  if (task?.assignee) return makeLabel(task.assignee) || '—'
+  return '—'
+}
+
 async function markDone(t){
   const token = localStorage.getItem('user-token')
   await axios.put(
@@ -236,6 +280,35 @@ const activeClientId = ref(null)
 const toast = ref('')
 const lastError = ref('')
 let toastTimer = null
+// Refs used by updateTask for optional client/assignee override
+const selectedClientId = ref(null)
+const selectedAssignee = ref('')
+const clientInitialLabel = ref('')
+
+// Users for assignee select
+const users = ref([])
+const usersFallback = ref(false)
+
+function humanizeLogin(value){
+  try{
+    if(!value) return ''
+    const local = String(value).split('@')[0]
+    const parts = local.split(/[^A-Za-zА-Яа-яЁё]+/).map(p => p.replace(/\d+/g,'').trim()).filter(Boolean)
+    if(!parts.length) return ''
+    return parts.map(p => p.charAt(0).toUpperCase()+p.slice(1)).join(' ')
+  }catch{ return '' }
+}
+function userLabel(u){
+  const full = `${u.first_name || ''} ${u.last_name || ''}`.trim()
+  if(full) return full
+  const base = u.username || u.email || ''
+  return humanizeLogin(base) || base || (u.id ? ('ID '+u.id) : '')
+}
+const assigneeOptions = computed(() => [
+  { value:'', label: t('tasks.unassigned') },
+  ...users.value.map(u => ({ value: String(u.id), label: userLabel(u) }))
+])
+// used directly in template
 
 function toDateInput(d){
   const pad = n => String(n).padStart(2,'0')
@@ -254,6 +327,20 @@ function openTask(t){
     (typeof t.client === 'number') ? t.client :
     t?.client_id || t?.clientId || t?.client_pk || null
   )) || null
+  selectedClientId.value = activeClientId.value
+  if (t && t.client && typeof t.client === 'object'){
+    const fn = t.client.first_name || ''
+    const ln = t.client.last_name || ''
+    clientInitialLabel.value = `${fn} ${ln}`.trim()
+  } else if (t && t.client_name) {
+    clientInitialLabel.value = t.client_name
+  } else { clientInitialLabel.value = '' }
+
+  if (Array.isArray(t?.assignees) && t.assignees.length){
+    selectedAssignee.value = String(t.assignees[0])
+  } else if (t?.assignee) {
+    selectedAssignee.value = String(t.assignee)
+  } else { selectedAssignee.value = '' }
   showTaskModal.value = true
 }
 
@@ -280,16 +367,44 @@ async function updateTask(){
     const token = localStorage.getItem('user-token')
     const startDate = new Date(editForm.value.start + 'T00:00:00')
     const endDate = new Date(startDate.getTime() + 24*60*60*1000)
+    // Build payload retaining existing client/assignees for PUT update
+    const existingCid = (activeTask.value && (
+      (activeTask.value.client && activeTask.value.client.id) ? activeTask.value.client.id : activeTask.value.client_id || null
+    )) || null
+    const resolvedCid = (selectedClientId.value !== null && selectedClientId.value !== '')
+      ? Number(selectedClientId.value)
+      : (existingCid!=null ? Number(existingCid) : null)
+
+    const existingAssignees = Array.isArray(activeTask.value?.assignees) ? activeTask.value.assignees : []
+    let resolvedAssignees = existingAssignees.filter(x => x!=null).map(n => Number(n)).filter(n => !Number.isNaN(n))
+    if (selectedAssignee.value !== ''){
+      const aid = Number(selectedAssignee.value)
+      if (!Number.isNaN(aid)) resolvedAssignees = [aid]
+    }
+
     const payload = {
       start: startDate.toISOString(),
       end: endDate.toISOString(),
       status: editForm.value.status,
-      all_day: true
+      all_day: true,
+      ...(resolvedCid!=null && !Number.isNaN(resolvedCid) ? { client_id: resolvedCid } : {}),
+      assignees: resolvedAssignees
     }
     if (editForm.value.title && editForm.value.title.trim().length) {
       payload.title = editForm.value.title.trim()
     }
-    await axios.put(`http://127.0.0.1:8000/api/tasks/${editForm.value.id}/`, payload, { headers:{ Authorization:'Token '+ token } })
+    // Robust update: try PUT first, fallback to PATCH on 405
+    const headers = { Authorization: 'Token ' + token }
+    try {
+      await axios.put(`/api/tasks/${editForm.value.id}/`, payload, { headers })
+    } catch(err){
+      const status = err?.response?.status
+      if (status === 405) {
+        await axios.patch(`/api/tasks/${editForm.value.id}/`, payload, { headers })
+      } else {
+        throw err
+      }
+    }
     // Обновим локально список
     const idx = items.value.findIndex(x => x.id === editForm.value.id)
     if(idx !== -1){
@@ -347,6 +462,7 @@ onMounted(() => {
     loadFinance()
   }
   loadNotifications()
+  loadUsers()
 })
 
 async function loadFinance(){
@@ -355,6 +471,11 @@ async function loadFinance(){
   try{
     const resp = await axios.get('http://127.0.0.1:8000/api/finance/summary/', { headers: { Authorization: 'Token ' + token } })
     summary.value = resp.data
+  } catch(e){
+    // Без паники на главной: просто нули
+    summary.value = { expected_payments_month: 0, receipts_month: 0, expected_payments_total: 0, receipts_total: 0, currency: 'PLN' }
+    const msg = (e?.response?.data && (typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data))) || e.message || 'Ошибка загрузки сводки'
+    showToast(msg)
   } finally {
     finLoading.value = false
   }
@@ -414,6 +535,20 @@ async function openNotification(n){
   } catch(e){ /* ignore */ }
   router.push('/dashboard/notifications')
 }
+
+async function loadUsers(){
+  const token = localStorage.getItem('user-token')
+  try{
+    const resp = await axios.get('http://127.0.0.1:8000/api/company/users/', { headers:{ Authorization:'Token '+token }})
+    users.value = Array.isArray(resp.data) ? resp.data : []
+  }catch(e){
+    usersFallback.value = true
+    try{
+      const me = await axios.get('http://127.0.0.1:8000/api/user-info/', { headers:{ Authorization:'Token '+token }})
+      users.value = [{ id: me.data.id, username: me.data.username, first_name: me.data.first_name || '', last_name: me.data.last_name || '', email: me.data.email || '' }]
+    }catch{ users.value = [] }
+  }
+}
 </script>
 
 <style scoped>
@@ -449,7 +584,7 @@ async function openNotification(n){
 .tabs .active { background:var(--primary-color); color:#fff; border-color:var(--primary-color); }
 .tabs .active::after { width:100%; left:0; opacity:1; }
 .task-list { list-style:none; margin:0; padding:0; }
-.task-list li { display:grid; grid-template-columns: 18px 110px 1fr 2fr 120px auto; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid #f1f5f9; cursor:pointer; }
+.task-list li { display:grid; grid-template-columns: 18px 110px 1fr 2fr 1.2fr 120px auto; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid #f1f5f9; cursor:pointer; }
 .task-list li:last-child{ border-bottom:none; }
 .task-row:hover { background:#f8fafc; }
 .task-row:focus { outline:2px solid var(--primary-color); outline-offset:2px; }
@@ -458,6 +593,7 @@ async function openNotification(n){
 .tm-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e5e7eb; }
 .tm-body { padding:16px 18px; }
 .tm-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.tm-grid label.full { grid-column: 1 / -1; }
 .tm-grid label { display:flex; flex-direction:column; gap:6px; font-size:14px; font-weight:500; color:#334155; }
 .tm-grid input, .tm-grid select { border:1px solid var(--form-border); border-radius:var(--form-radius,8px); padding:8px 10px; background:var(--form-bg,#fff); transition:border-color .18s ease, box-shadow .18s ease; }
 .tm-grid input:focus, .tm-grid select:focus { outline:none; border-color:var(--form-border-focus); box-shadow:var(--form-focus-ring); }
@@ -480,6 +616,7 @@ async function openNotification(n){
 .task-list .status { font-weight:600; }
 .task-list .status.done{ color:#16a34a; }
 .task-list .status.cancelled{ color:#dc2626; }
+.task-list .assignee { color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* legacy per-button styles removed (using unified .btn) */
 /* New unified button system (blue like client page) */
 .btn { background:linear-gradient(180deg,#4A90E2,#4A90E2); color:#fff !important; border:1px solid #4A90E2; font-weight:500; padding:10px 18px; border-radius:8px; font-size:14px; line-height:1.2; display:inline-flex; align-items:center; gap:8px; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,.08); transition:background .25s, box-shadow .25s, border-color .25s, color .25s, transform .18s; }

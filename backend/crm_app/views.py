@@ -432,6 +432,7 @@ class UserInfoView(APIView):
         })
 
 from django.db.models import Count
+from django.db.models import Case, When, Value, IntegerField, F, DateTimeField
 
 class AdminStatsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -1155,6 +1156,24 @@ class TaskListCreateView(APIView):
         if start and end:
             qs = qs.filter(end__gte=start, start__lte=end)
 
+        # Сортировка: ближайшие задачи сверху, прошедшие — внизу
+        now = timezone.now()
+        try:
+            qs = qs.annotate(
+                is_past=Case(
+                    When(start__lt=now, then=Value(1)),
+                    default=Value(0),
+                    output_field=IntegerField()
+                ),
+                sort_start=Case(
+                    When(start__lt=now, then=Value(None, output_field=DateTimeField())),
+                    default=F('start'),
+                    output_field=DateTimeField()
+                ),
+            ).order_by('is_past', 'sort_start', '-start')
+        except Exception:
+            # если БД не поддерживает такую сортировку — fallback по start
+            qs = qs.order_by('start')
         serializer = TaskSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -1244,17 +1263,28 @@ class TaskDetailView(APIView):
             if not (user_company_id and (owner_company_id == user_company_id or client_user_company_id == user_company_id or created_by_company_id == user_company_id)):
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
         else:
-            if task.client:
-                if task.client.created_by_id and task.client.created_by_id != request.user.id:
-                    return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+            # MANAGER: может редактировать
+            #  - свои задачи (created_by == self)
+            #  - задачи по своим клиентам (client.created_by == self)
+            #  - и задачи, где он находится в списке assignees
+            can = False
+            if not task.client:
+                can = (task.created_by_id == request.user.id)
             else:
-                if task.created_by_id != request.user.id:
-                    return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+                if task.client.created_by_id == request.user.id:
+                    can = True
+            try:
+                if not can and task.assignees.filter(id=request.user.id).exists():
+                    can = True
+            except Exception:
+                pass
+            if not can:
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = TaskSerializer(task, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             # Если меняется клиент, проверим принадлежность
             new_client = serializer.validated_data.get('client')
-            if new_client and new_client.created_by_id != request.user.id:
+            if new_client and new_client.created_by_id != request.user.id and role not in ('ADMIN','LEAD','LAWYER','ASSISTANT'):
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
             task = serializer.save()
             return Response(TaskSerializer(task).data)
@@ -1324,7 +1354,7 @@ class UpcomingTasksWidgetView(APIView):
 
         # Базовый QS: задачи в статусе SCHEDULED, стартующие в указанный интервал.
         # Для вкладки "today" теперь включаем задачи, которые уже начались утром (раньше now), т.к. критерий start >= start_of_day.
-        base_qs = Task.objects.select_related('client', 'created_by').filter(
+        base_qs = Task.objects.select_related('client', 'created_by').prefetch_related('assignees').filter(
             status='SCHEDULED',
             start__gte=start_dt,
             start__lt=end_dt
@@ -1348,17 +1378,21 @@ class UpcomingTasksWidgetView(APIView):
                 Q(assignees=request.user)
             )
         limit = 100 if range_type in ('week', 'month') else 50
-        qs = qs.order_by('start')[:limit]
-        return Response(TaskListSerializer(qs, many=True).data)
+        try:
+            qs = qs.order_by('start')[:limit]
+            data = TaskListSerializer(qs, many=True).data
+        except Exception:
+            data = []
+        return Response(data)
 
 
 class FinanceSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Ассистенту финансы недоступны
+        # Ассистенту финансы недоступны — но на главной не валимся 500, возвращаем нулевую сводку с подсказкой
         if getattr(request.user, 'role', None) == 'ASSISTANT':
-            return Response({'detail': 'Доступ к финансовой сводке запрещен для ассистента.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'expected_payments_total': 0, 'expected_payments_month': 0, 'receipts_total': 0, 'receipts_month': 0, 'currency': 'PLN', 'month': timezone.now().strftime('%Y-%m'), 'detail': 'read_only'}, status=status.HTTP_200_OK)
         """
         Финансовая сводка для главной страницы.
 
@@ -1410,14 +1444,18 @@ class FinanceSummaryView(APIView):
         receipts_total = clients_qs.aggregate(total=Coalesce(Sum('amount_paid'), dec0))['total'] or 0
         receipts_month = 0  # Требуется модель Payment с датой для корректного подсчета за месяц
 
-        return Response({
-            'expected_payments_total': expected_total,
-            'expected_payments_month': expected_month,
-            'receipts_total': receipts_total,
-            'receipts_month': receipts_month,
-            'currency': 'PLN',
-            'month': start_month.strftime('%Y-%m')
-        })
+        try:
+            payload = {
+                'expected_payments_total': expected_total,
+                'expected_payments_month': expected_month,
+                'receipts_total': receipts_total,
+                'receipts_month': receipts_month,
+                'currency': 'PLN',
+                'month': start_month.strftime('%Y-%m')
+            }
+        except Exception:
+            payload = {'expected_payments_total': 0, 'expected_payments_month': 0, 'receipts_total': 0, 'receipts_month': 0, 'currency': 'PLN', 'month': timezone.now().strftime('%Y-%m')}
+        return Response(payload)
 
 # --- Уведомления ---
 class NotificationListCreateView(APIView):

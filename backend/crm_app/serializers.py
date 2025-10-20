@@ -514,10 +514,11 @@ class TaskSerializer(serializers.ModelSerializer):
 class TaskListSerializer(serializers.ModelSerializer):
     client_name = serializers.SerializerMethodField()
     client_id = serializers.SerializerMethodField()
+    assignees = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
-        fields = ['id', 'title', 'task_type', 'start', 'end', 'all_day', 'status', 'client_name', 'client_id']
+        fields = ['id', 'title', 'task_type', 'start', 'end', 'all_day', 'status', 'client_name', 'client_id', 'assignees']
 
     def get_client_name(self, obj):
         c = getattr(obj, 'client', None)
@@ -528,6 +529,13 @@ class TaskListSerializer(serializers.ModelSerializer):
     def get_client_id(self, obj):
         c = getattr(obj, 'client', None)
         return c.id if c else None
+
+    def get_assignees(self, obj):
+        try:
+            return list(obj.assignees.values_list('id', flat=True))
+        except Exception:
+            # Fallback if relation not available
+            return []
 
 # --- Уведомления ---
 class NotificationSerializer(serializers.ModelSerializer):

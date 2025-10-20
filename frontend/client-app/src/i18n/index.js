@@ -23,6 +23,7 @@ const messages = {
       all: 'Все',
       save: 'Сохранить',
       cancel: 'Отмена',
+      yes: 'Да',
       delete: 'Удалить',
       yesDelete: 'Да, удалить',
       copy: 'Копировать',
@@ -298,6 +299,7 @@ const messages = {
       },
       confirm: {
         deleteOne: 'Удалить задачу?',
+        discardTitle: 'Несохранённые изменения',
         discardChanges: 'Есть несохранённые изменения. Закрыть без сохранения?'
       },
       validation: {
@@ -455,6 +457,7 @@ const messages = {
       all: 'Wszystkie',
       save: 'Zapisz',
       cancel: 'Anuluj',
+      yes: 'Tak',
       delete: 'Usuń',
       yesDelete: 'Tak, usuń',
       copy: 'Kopiuj',
@@ -730,6 +733,7 @@ const messages = {
       },
       confirm: {
         deleteOne: 'Usunąć zadanie?',
+        discardTitle: 'Niezapisane zmiany',
         discardChanges: 'Są niezapisane zmiany. Zamknąć bez zapisu?'
       },
       validation: {
