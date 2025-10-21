@@ -299,6 +299,11 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 if DEBUG:
     print('[email] host=', EMAIL_HOST, 'port=', EMAIL_PORT, 'ssl=', EMAIL_USE_SSL, 'tls=', EMAIL_USE_TLS, 'user=', EMAIL_HOST_USER, 'from=', DEFAULT_FROM_EMAIL)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# Кто получает письма при ошибках
+ADMINS = [
+    ("LegalFlow Admin", "crmlegalflow@gmail.com"),
+]
 
 # URL фронтенда (используется для генерации ссылок, например, сброс пароля)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
@@ -367,15 +372,20 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "simple",
         },
+        "mail_admins": {
+            "level": "ERROR",
+            "class": "django.utils.log.AdminEmailHandler",
+            "include_html": True,
+        },
     },
     "loggers": {
         "django": {
-            "handlers": ["rotating_file", "console"],
+            "handlers": ["rotating_file", "console", "mail_admins"],
             "level": "DEBUG",
             "propagate": True,
         },
         "django.request": {
-            "handlers": ["rotating_file"],
+            "handlers": ["rotating_file", "mail_admins"],
             "level": "WARNING",
             "propagate": False,
         },
@@ -386,7 +396,7 @@ LOGGING = {
         },
     },
     "root": {
-        "handlers": ["rotating_file", "console"],
+        "handlers": ["rotating_file", "console", "mail_admins"],
         "level": "INFO", 
     },
 }
