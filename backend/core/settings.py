@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from urllib.parse import urlparse, parse_qs
+import logging
+from logging.handlers import TimedRotatingFileHandler
 
 
 
@@ -332,3 +334,58 @@ if os.environ.get('CORS_ALLOW_ALL', '').strip().lower() in {'1','true','yes','on
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name} — {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "rotating_file": {
+            "level": "DEBUG",
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "filename": os.path.join(LOG_DIR, "legalflow.log"),
+            "when": "midnight",          # новый файл каждый день
+            "backupCount": 7,            # хранить только 7 дней логов
+            "encoding": "utf-8",
+            "formatter": "verbose",
+        },
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["rotating_file", "console"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["rotating_file"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "crm_app": {
+            "handlers": ["rotating_file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": ["rotating_file", "console"],
+        "level": "INFO", 
+    },
+}
