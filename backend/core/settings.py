@@ -336,7 +336,8 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 
-LOG_DIR = os.path.join(BASE_DIR, "logs")
+# Универсальный путь: работает и локально, и в Docker
+LOG_DIR = "/app/logs" if os.path.exists("/app") else os.path.join(BASE_DIR, "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 LOGGING = {
