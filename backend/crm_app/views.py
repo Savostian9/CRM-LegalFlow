@@ -449,6 +449,15 @@ class AdminStatsView(APIView):
         # Users and roles
         users_total = User.objects.count()
         users_by_role = User.objects.values('role').annotate(count=Count('id')).order_by('role')
+        # For the admin dashboard: provide a compact list of users with last login info
+        users_list = list(
+            User.objects.select_related('company')
+            .values(
+                'id', 'username', 'email', 'first_name', 'last_name', 'role',
+                'last_login', company_name=F('company__name'), company_id=F('company_id')
+            )
+            .order_by(F('last_login').desc(nulls_last=True), 'id')
+        )
 
         # Per-company user counts
         company_user_counts = User.objects.values('company_id').annotate(count=Count('id'))
@@ -483,6 +492,7 @@ class AdminStatsView(APIView):
             },
             'plans': list(plans),
             'usersByRole': list(users_by_role),
+            'users': users_list,
             'companies': companies_detail,
         }
         return Response(payload)
