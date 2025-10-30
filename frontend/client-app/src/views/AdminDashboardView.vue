@@ -44,6 +44,37 @@
           </table>
         </div>
       </section>
+
+      <section class="users">
+        <h2>Пользователи</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Имя</th>
+                <th>Email</th>
+                <th>Роль</th>
+                <th>Компания</th>
+                <th>Последний вход</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in stats.users" :key="u.id">
+                <td>{{ u.id }}</td>
+                <td>{{ getUserName(u) }}</td>
+                <td>{{ u.email }}</td>
+                <td>{{ u.role }}</td>
+                <td>
+                  <span v-if="u.company_id">{{ u.company_name }} ({{ u.company_id }})</span>
+                  <span v-else>-</span>
+                </td>
+                <td>{{ formatLastLogin(u.last_login) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -60,7 +91,8 @@ export default {
         totals: { companies: 0, users: 0, clients: 0, cases: 0, tasks: 0, reminders: 0 },
         plans: [],
         usersByRole: [],
-        companies: []
+        companies: [],
+        users: []
       }
     }
   },
@@ -75,6 +107,20 @@ export default {
       return
     } finally {
       this.loading = false
+    }
+  },
+  methods: {
+    getUserName(u) {
+      const full = [u.first_name, u.last_name].filter(Boolean).join(' ')
+      return full || u.username || `user#${u.id}`
+    },
+    formatLastLogin(dt) {
+      if (!dt) return '—'
+      try {
+        return new Date(dt).toLocaleString()
+      } catch (e) {
+        return String(dt)
+      }
     }
   }
 }
