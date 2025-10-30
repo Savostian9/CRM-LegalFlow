@@ -25,7 +25,7 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th>
+                <th>№</th>
                 <th>Название</th>
                 <th>План</th>
                 <th>Пользователей</th>
@@ -33,8 +33,8 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="c in stats.companies" :key="c.id">
-                <td>{{ c.id }}</td>
+              <tr v-for="(c, ci) in stats.companies" :key="c.id">
+                <td>{{ ci + 1 }}</td>
                 <td>{{ c.name }}</td>
                 <td>{{ c.plan }}</td>
                 <td>{{ c.users_count }}</td>
@@ -51,17 +51,19 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th>
+                <th>№</th>
                 <th>Имя</th>
                 <th>Email</th>
                 <th>Роль</th>
                 <th>Компания</th>
+                <th>Статус</th>
                 <th>Последний вход</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="u in stats.users" :key="u.id">
-                <td>{{ u.id }}</td>
+              <tr v-for="(u, ui) in stats.users" :key="u.id">
+                <td>{{ ui + 1 }}</td>
                 <td>{{ getUserName(u) }}</td>
                 <td>{{ u.email }}</td>
                 <td>{{ u.role }}</td>
@@ -69,7 +71,35 @@
                   <span v-if="u.company_id">{{ u.company_name }} ({{ u.company_id }})</span>
                   <span v-else>-</span>
                 </td>
+                <td>
+                  <span :class="u.is_active ? 'ok' : 'pending'">{{ u.is_active ? 'Активен' : 'Ожидает подтверждение' }}</span>
+                </td>
                 <td>{{ formatLastLogin(u.last_login) }}</td>
+                <td class="actions">
+                  <button class="btn btn-danger" @click="confirmDelete(u)">Удалить</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="monthly">
+        <h2>Статистика по месяцам (12 мес)</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Месяц</th>
+                <th>Новых компаний</th>
+                <th>Новых пользователей</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="m in stats.monthly" :key="m.month">
+                <td>{{ formatMonth(m.month) }}</td>
+                <td>{{ m.companies }}</td>
+                <td>{{ m.users }}</td>
               </tr>
             </tbody>
           </table>
@@ -92,24 +122,28 @@ export default {
         plans: [],
         usersByRole: [],
         companies: [],
-        users: []
+        users: [],
+        monthly: []
       }
     }
   },
   async created() {
-    const token = localStorage.getItem('user-token')
-    try {
-      const { data } = await axios.get('/api/admin/stats/', { headers: { Authorization: `Token ${token}` } })
-      this.stats = data
-    } catch (e) {
-      this.$toast && this.$toast.error('Нет доступа или ошибка загрузки')
-      this.$router.push('/dashboard')
-      return
-    } finally {
-      this.loading = false
-    }
+    await this.refreshStats()
   },
   methods: {
+    async refreshStats() {
+      const token = localStorage.getItem('user-token')
+      try {
+        const { data } = await axios.get('/api/admin/stats/', { headers: { Authorization: `Token ${token}` } })
+        this.stats = data
+      } catch (e) {
+        this.$toast && this.$toast.error('Нет доступа или ошибка загрузки')
+        this.$router.push('/dashboard')
+        return
+      } finally {
+        this.loading = false
+      }
+    },
     getUserName(u) {
       const full = [u.first_name, u.last_name].filter(Boolean).join(' ')
       return full || u.username || `user#${u.id}`
@@ -120,6 +154,31 @@ export default {
         return new Date(dt).toLocaleString()
       } catch (e) {
         return String(dt)
+      }
+    },
+    formatMonth(label) {
+      // label like 'YYYY-MM' or ISO string
+      try {
+        const s = String(label)
+        const iso = s.length === 7 ? `${s}-01T00:00:00` : s
+        const d = new Date(iso)
+        return d.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' })
+      } catch (e) {
+        return label
+      }
+    },
+    async confirmDelete(u) {
+      if (!u || !u.id) return
+      const sure = window.confirm(`Удалить пользователя #${u.id} (${u.email})?`)
+      if (!sure) return
+      const token = localStorage.getItem('user-token')
+      try {
+        await axios.delete(`/api/company/users/${u.id}/`, { headers: { Authorization: `Token ${token}` } })
+        this.$toast && this.$toast.success('Пользователь удалён')
+        await this.refreshStats()
+      } catch (e) {
+        const msg = e?.response?.data?.detail || 'Не удалось удалить'
+        this.$toast && this.$toast.error(msg)
       }
     }
   }
@@ -150,4 +209,8 @@ table { width: 100%; border-collapse: collapse; background: #fff; border-radius:
 th, td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; text-align: left; }
 th { background: #f8fafc; font-weight: 600; font-size: 13px; color: #374151; }
 tbody tr:hover { background: #f9fafb; }
+.actions .btn { padding: 6px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+.btn-danger { background: #ef4444; color: #fff; border: 1px solid #ef4444; }
+.ok { color: #16a34a; }
+.pending { color: #f59e0b; }
 </style>

@@ -469,6 +469,8 @@ class UserInfoView(APIView):
 
 from django.db.models import Count
 from django.db.models import Case, When, Value, IntegerField, F, DateTimeField
+from django.db.models.functions import TruncMonth
+from collections import Counter
 
 class AdminStatsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -478,13 +480,16 @@ class AdminStatsView(APIView):
         if not getattr(user, 'is_superuser', False):
             return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Companies and plans
-        companies = Company.objects.all().values('id', 'name', 'plan', 'created_at', 'trial_started_at', 'trial_ends_at', 'owner_id')
-        plans = Company.objects.values('plan').annotate(count=Count('id')).order_by('plan')
+        # Companies (raw values, we'll filter out "deleted"/empty ones later)
+        companies = Company.objects.all().values(
+            'id', 'name', 'plan', 'created_at', 'trial_started_at', 'trial_ends_at', 'owner_id'
+        )
 
         # Users and roles
         users_total = User.objects.count()
-        users_by_role = User.objects.values('role').annotate(count=Count('id')).order_by('role')
+        users_by_role = (
+            User.objects.values('role').annotate(count=Count('id')).order_by('role')
+        )
         # For the admin dashboard: provide a compact list of users with last login info
         # Use annotate to alias related fields before extracting with values
         users_list = list(
@@ -492,7 +497,7 @@ class AdminStatsView(APIView):
             .annotate(company_name=F('company__name'))
             .values(
                 'id', 'username', 'email', 'first_name', 'last_name', 'role',
-                'last_login', 'company_name', 'company_id'
+                'is_active', 'last_login', 'company_name', 'company_id'
             )
             .order_by(F('last_login').desc(nulls_last=True), 'id')
         )
@@ -509,6 +514,10 @@ class AdminStatsView(APIView):
 
         companies_detail = []
         for c in companies:
+            uc = counts_map.get(c['id'], 0)
+            # Hide companies that have no owner and no users (e.g., owner deleted account and no one else remained)
+            if not c['owner_id'] and uc == 0:
+                continue
             companies_detail.append({
                 'id': c['id'],
                 'name': c['name'],
@@ -516,8 +525,65 @@ class AdminStatsView(APIView):
                 'created_at': c['created_at'],
                 'trial_started_at': c['trial_started_at'],
                 'trial_ends_at': c['trial_ends_at'],
-                'users_count': counts_map.get(c['id'], 0),
+                'users_count': uc,
             })
+
+        # Compute plans from filtered companies to avoid counting hidden/empty ones
+        plan_counter = Counter(c['plan'] for c in companies_detail if c.get('plan'))
+        plans = [{'plan': k, 'count': v} for k, v in sorted(plan_counter.items())]
+
+        # Monthly stats (last 12 months): companies created and users registered
+        try:
+            now_ts = timezone.now()
+            m_total = now_ts.year * 12 + (now_ts.month - 1)
+            start_total = m_total - 11
+            start_year = start_total // 12
+            start_month = start_total % 12 + 1
+            # Build timezone-aware start of month
+            from datetime import datetime
+            start_dt = datetime(start_year, start_month, 1, 0, 0, 0)
+            start_aware = timezone.make_aware(start_dt, timezone.get_current_timezone())
+
+            comp_qs = (
+                Company.objects.filter(created_at__gte=start_aware)
+                .annotate(month=TruncMonth('created_at'))
+                .values('month')
+                .annotate(count=Count('id'))
+                .order_by('month')
+            )
+            user_qs = (
+                User.objects.filter(date_joined__gte=start_aware)
+                .annotate(month=TruncMonth('date_joined'))
+                .values('month')
+                .annotate(count=Count('id'))
+                .order_by('month')
+            )
+            comp_map = {}
+            for row in comp_qs:
+                try:
+                    comp_map[row['month'].strftime('%Y-%m')] = row['count']
+                except Exception:
+                    comp_map[str(row['month'])[:7]] = row['count']
+            user_map = {}
+            for row in user_qs:
+                try:
+                    user_map[row['month'].strftime('%Y-%m')] = row['count']
+                except Exception:
+                    user_map[str(row['month'])[:7]] = row['count']
+
+            monthly = []
+            for i in range(12):
+                cur_total = start_total + i
+                y = cur_total // 12
+                m = cur_total % 12 + 1
+                label = f"{y}-{m:02d}"
+                monthly.append({
+                    'month': label,
+                    'companies': int(comp_map.get(label, 0) or 0),
+                    'users': int(user_map.get(label, 0) or 0),
+                })
+        except Exception:
+            monthly = []
 
         payload = {
             'totals': {
@@ -532,6 +598,7 @@ class AdminStatsView(APIView):
             'usersByRole': list(users_by_role),
             'users': users_list,
             'companies': companies_detail,
+            'monthly': monthly,
         }
         return Response(payload)
 
@@ -581,10 +648,17 @@ class DeleteAccountView(APIView):
                 company.owner = None
                 company.save(update_fields=['owner'])
         except Exception:
-            pass
+            company = None
 
         # Удаляем пользователя
         request.user.delete()
+        # Если у компании после удаления владельца не осталось пользователей — удаляем и компанию целиком,
+        # чтобы она не "светилась" в админке как пустая/удаленная фирма
+        try:
+            if company and not User.objects.filter(company_id=getattr(company, 'id', None)).exists():
+                company.delete()
+        except Exception:
+            pass
         return Response({'detail': 'Аккаунт удален'}, status=status.HTTP_200_OK)
 
 # --- Настройки компании (админ) ---
@@ -663,10 +737,13 @@ class UserDetailAdminView(APIView):
     permission_classes = [IsAuthenticated]
 
     def put(self, request, pk):
-        if request.user.role not in ('ADMIN', 'LEAD'):
+        if not getattr(request.user, 'is_superuser', False) and request.user.role not in ('ADMIN', 'LEAD'):
             return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
         try:
-            user = request.user.company.users.get(pk=pk)
+            if getattr(request.user, 'is_superuser', False):
+                user = User.objects.get(pk=pk)
+            else:
+                user = request.user.company.users.get(pk=pk)
         except Exception:
             return Response({'detail': 'Не найден'}, status=status.HTTP_404_NOT_FOUND)
         # Нельзя менять роль владельца компании на что-либо кроме ADMIN
@@ -682,13 +759,32 @@ class UserDetailAdminView(APIView):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
-        if request.user.role not in ('ADMIN', 'LEAD'):
+        if not getattr(request.user, 'is_superuser', False) and request.user.role not in ('ADMIN', 'LEAD'):
             return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
         try:
-            user = request.user.company.users.get(pk=pk)
+            if getattr(request.user, 'is_superuser', False):
+                user = User.objects.get(pk=pk)
+            else:
+                user = request.user.company.users.get(pk=pk)
         except Exception:
             return Response({'detail': 'Не найден'}, status=status.HTTP_404_NOT_FOUND)
+        # Нельзя удалить самого себя
+        if user.id == request.user.id:
+            return Response({'detail': 'Нельзя удалить собственный аккаунт из этой формы'}, status=status.HTTP_400_BAD_REQUEST)
+        # Если удаляем владелца компании — отвяжем и при необходимости удалим пустую компанию
+        try:
+            company = getattr(user, 'owned_company', None)
+            if company:
+                company.owner = None
+                company.save(update_fields=['owner'])
+        except Exception:
+            company = None
         user.delete()
+        try:
+            if company and not User.objects.filter(company_id=getattr(company, 'id', None)).exists():
+                company.delete()
+        except Exception:
+            pass
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 # --- Приглашения ---
