@@ -230,7 +230,7 @@
 </template>
 
 <script>
-import axios from '@/axios-setup.js'
+import axios from '@/axios-setup'
 export default {
   name: 'SettingsView',
   data(){
@@ -324,8 +324,8 @@ export default {
     async saveProfile(){
       const token = localStorage.getItem('user-token');
       const cfg = { headers: { Authorization: `Token ${token}` } };
-      const { first_name, last_name } = this.profile;
-      await axios.put('/api/profile/', { first_name, last_name }, cfg);
+  const { first_name, last_name } = this.profile;
+  await axios.put('/api/profile/', { first_name, last_name }, cfg);
       this.notify(`${this.$t('settings.toasts.savedProfile')}!`, 'success', 1500);
       this.emitUserProfileUpdated();
     },
@@ -388,9 +388,10 @@ export default {
       const cfg = { headers: { Authorization: `Token ${token}` } };
       const { name, address, legal_details } = this.company;
       try {
-  const res = await axios.put('/api/company/settings/', { name, address, legal_details }, cfg);
+        const res = await axios.put('/api/company/settings/', { name, address, legal_details }, cfg);
         this.company = res.data;
         this.notify(`${this.$t('settings.toasts.saved')}!`, 'success', 1500);
+        // Notify layout/sidebar to refresh company display name
         try { window.dispatchEvent(new CustomEvent('company-updated', { detail: { name: this.company.name } })); } catch(_) { /* no-op */ }
       } catch (e) {
         this.notify(this.$t('settings.toasts.companySaveError'), 'error');
@@ -414,7 +415,7 @@ export default {
       const u = this.userToDelete;
       const token = localStorage.getItem('user-token');
       try{
-        await axios.delete(`http://127.0.0.1:8000/api/company/users/${u.id}/`, { headers: { Authorization: `Token ${token}` } });
+        await axios.delete(`/api/company/users/${u.id}/`, { headers: { Authorization: `Token ${token}` } });
         this.users = this.users.filter(x => x.id !== u.id);
         this.notify(this.$t('settings.toasts.userDeleted'));
       } catch(e){

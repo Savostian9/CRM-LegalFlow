@@ -131,15 +131,16 @@
 </template>
 
 <script>
-import axios from '@/axios-setup.js';
+import axios from '@/axios-setup';
 
 export default {
   name: 'RegisterView',
   components: { },
   data() {
     return {
-      username: '', // используется только для ветки приглашения
       company_name: '',
+      // используется для ветки приглашения; генерируем при необходимости
+      username: '',
       first_name: '',
       last_name: '',
       email: '',
@@ -159,46 +160,42 @@ export default {
       this.error = '';
       this.isLoading = true;
       try {
-        if (!this.email) {
-            throw new Error('NO_EMAIL');
-        }
         if (this.inviteToken) {
-            // Регистрация по приглашению: принимаем приглашение и переходим на страницу подтверждения email
-          // Для приглашений всё ещё нужен username: сгенерируем из email при необходимости
-          if (!this.username && this.email) {
-            const base = this.email.split('@')[0] || 'user';
-            this.username = base.replace(/[^\w.@+-]/g, '').slice(0, 30) || ('user' + Math.floor(Math.random()*1000));
-            if (this.username.length < 3) this.username = this.username.padEnd(3, '0');
+          // Регистрация по приглашению: принимаем приглашение и переходим на страницу подтверждения email
+          // Сгенерируем валидный username только для backend (не показываем пользователю)
+          let invUsername = this.username && this.username.trim() ? this.username.trim() : '';
+          if (!invUsername) {
+            const base = (this.email && this.email.split('@')[0]) || 'user';
+            invUsername = base.replace(/[^\w.@+-]/g, '').slice(0, 30) || ('user' + Math.floor(Math.random()*1000));
+            if (invUsername.length < 3) invUsername = invUsername.padEnd(3, '0');
           }
           const resp = await axios.post('/api/company/invites/accept/', {
             token: this.inviteToken,
-            username: this.username,
+            username: invUsername,
             email: this.email,
             password: this.password,
             first_name: this.first_name,
             last_name: this.last_name
           });
-            if (resp && resp.status >= 200 && resp.status < 400) {
-              // Теперь требуется подтверждение email
-              const email = (resp.data && resp.data.email) || this.email
-              this.$router.push({ name: 'verify-email', query: { email } });
-              this.$toast && this.$toast.success(this.$t('auth.verify.sentToast'));
-              return;
-            }
+          if (resp && resp.status >= 200 && resp.status < 400) {
+            const email = (resp.data && resp.data.email) || this.email;
+            this.$router.push({ name: 'verify-email', query: { email } });
+            this.$toast && this.$toast.success(this.$t('auth.verify.sentToast'));
+            return;
+          }
         } else {
           // Обычная регистрация с подтверждением email
           const response = await axios.post('/api/register/', {
             company_name: this.company_name,
-            email: this.email.toLowerCase(),
+            email: (this.email || '').toLowerCase(),
             password: this.password
           });
           if (response.status === 201) {
             const sc = response.data?.status_code;
             if (sc === 'VERIFICATION_RESENT') {
-              // Показ уведомления о повторной отправке
-              this.$toast && this.$toast.info(this.$t('auth.verify.resent')); 
+              this.$toast && this.$toast.info(this.$t('auth.verify.resent'));
             }
-            this.$router.push({ name: 'verify-email', query: { email: this.email.toLowerCase() } });
+            this.$router.push({ name: 'verify-email', query: { email: (this.email || '').toLowerCase() } });
           }
         }
       } catch (err) {
@@ -214,12 +211,13 @@ export default {
               // можно предложить переход на логин
             } else if (data.status_code === 'VERIFICATION_RESENT') {
               this.$toast && this.$toast.info(this.$t('auth.verify.resent'));
-              this.$router.push({ name: 'verify-email', query: { email: this.email.toLowerCase() } });
+              this.$router.push({ name: 'verify-email', query: { email: (this.email || '').toLowerCase() } });
               return;
             } else if (data.email) {
               this.error = this.$t('auth.errors.emailPrefix', { msg: data.email[0] });
             } else if (data.company_name) {
-              this.error = data.company_name?.[0] || this.$t('auth.errors.register');
+              const msg = Array.isArray(data.company_name) ? data.company_name[0] : data.company_name;
+              this.error = msg || this.$t('auth.errors.register');
             } else if (data.password) {
               this.error = this.$t('auth.errors.passwordPrefix', { msg: data.password[0] });
             } else if (typeof data.error === 'string') {

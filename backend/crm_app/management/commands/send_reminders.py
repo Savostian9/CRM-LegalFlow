@@ -80,7 +80,11 @@ class Command(BaseCommand):
                     )
             except Exception:
                 self.stderr.write(f"Failed to create notification for reminder #{rem.id}")
+<<<<<<< HEAD
+            # sent_at already set when claimed
+=======
             # sent_at уже установлено при бронировании (claimed)
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
             if email_ok:
                 sent += 1
         self.stdout.write(self.style.SUCCESS(f'Sent reminders: {sent}'))

@@ -278,6 +278,7 @@ export default {
       if (typeof d.last_name === 'string') this.lastName = d.last_name;
     };
     window.addEventListener('user-profile-updated', this.profileUpdatedHandler);
+    // React to company name changes saved in Settings
     this.companyUpdatedHandler = (e) => {
       const d = (e && e.detail) || {};
       if (typeof d.name === 'string') this.companyName = d.name;

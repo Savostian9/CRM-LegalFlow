@@ -97,6 +97,36 @@ def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | Non
         return False
 
 
+def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | None = None) -> bool:
+    """Send mail with robust exception handling and optional HTML.
+    Returns True if SMTP reports success, False otherwise.
+    Prints diagnostic info when DEBUG is enabled.
+    """
+    from django.conf import settings
+    try:
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+        if html_body:
+            from django.core.mail import EmailMultiAlternatives
+            msg = EmailMultiAlternatives(subject, body, from_email, to)
+            msg.attach_alternative(html_body, 'text/html')
+            msg.send(fail_silently=False)
+            return True
+        sent = send_mail(subject, body, from_email, to, fail_silently=False)
+        return bool(sent)
+    except Exception as e:
+        try:
+            if getattr(settings, 'DEBUG', False):
+                print('[email][error]', subject, '->', to, 'exception:', repr(e))
+        except Exception:
+            pass
+        try:
+            # Last attempt silent
+            send_mail(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', None), to, fail_silently=True)
+        except Exception:
+            pass
+        return False
+
+
 def _get_frontend_base(request):
     """Detect frontend base URL from request headers (Origin/Referer) with env fallback.
     Returns a string like 'http://localhost:8080' without trailing slash.
