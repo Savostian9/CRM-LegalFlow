@@ -327,6 +327,12 @@ class LoginView(ObtainAuthToken):
                     },
                     status=status.HTTP_503_SERVICE_UNAVAILABLE
                 )
+            # Update last_login for token-based auth so admin can see recent activity
+            try:
+                user.last_login = timezone.now()
+                user.save(update_fields=['last_login'])
+            except Exception:
+                pass
             return Response({'token': token.key, 'user_id': user.pk, 'email': user.email})
         except Exception as e:
             from rest_framework.exceptions import ValidationError
@@ -450,11 +456,13 @@ class AdminStatsView(APIView):
         users_total = User.objects.count()
         users_by_role = User.objects.values('role').annotate(count=Count('id')).order_by('role')
         # For the admin dashboard: provide a compact list of users with last login info
+        # Use annotate to alias related fields before extracting with values
         users_list = list(
             User.objects.select_related('company')
+            .annotate(company_name=F('company__name'))
             .values(
                 'id', 'username', 'email', 'first_name', 'last_name', 'role',
-                'last_login', company_name=F('company__name'), company_id=F('company_id')
+                'last_login', 'company_name', 'company_id'
             )
             .order_by(F('last_login').desc(nulls_last=True), 'id')
         )
