@@ -67,6 +67,36 @@ def _create_notification(user, title, message='', client=None, reminder=None, so
         pass
 
 
+def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | None = None) -> bool:
+    """Send mail with robust exception handling and optional HTML.
+    Returns True if SMTP reports success, False otherwise.
+    Prints diagnostic info when DEBUG is enabled.
+    """
+    from django.conf import settings
+    try:
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+        if html_body:
+            from django.core.mail import EmailMultiAlternatives
+            msg = EmailMultiAlternatives(subject, body, from_email, to)
+            msg.attach_alternative(html_body, 'text/html')
+            msg.send(fail_silently=False)
+            return True
+        sent = send_mail(subject, body, from_email, to, fail_silently=False)
+        return bool(sent)
+    except Exception as e:
+        try:
+            if getattr(settings, 'DEBUG', False):
+                print('[email][error]', subject, '->', to, 'exception:', repr(e))
+        except Exception:
+            pass
+        try:
+            # Last attempt silent
+            send_mail(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', None), to, fail_silently=True)
+        except Exception:
+            pass
+        return False
+
+
 def _get_frontend_base(request):
     """Detect frontend base URL from request headers (Origin/Referer) with env fallback.
     Returns a string like 'http://localhost:8080' without trailing slash.
@@ -94,7 +124,8 @@ def send_welcome_verification_email(user: User, token: str):
         first_name = (getattr(user, 'first_name', '') or '').strip()
         display_name = first_name or (getattr(user, 'username', '') or '').strip() or 'друг'
         frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:8080')
-        verify_url = f"{frontend}/verify-email?email={user.email}"
+        # Include token so the page can auto-verify on open
+        verify_url = f"{frontend}/verify-email?email={user.email}&token={token}"
         subject = 'Добро пожаловать в CRM LegalFlow — подтвердите email'
         context = {
             'display_name': display_name,
@@ -306,7 +337,6 @@ class PasswordResetView(APIView):
         form = PasswordResetForm({'email': user.email})
         if form.is_valid():
             subject = 'Сброс пароля для вашей CRM-системы'
-<<<<<<< HEAD
             # Генерируем ссылку на фронтенд: берём Origin/Referer, иначе FRONTEND_URL
             frontend_base = _get_frontend_base(request)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -317,6 +347,7 @@ class PasswordResetView(APIView):
                 f"Здравствуйте, {display_name}.\n\n"
                 f"Для сброса пароля перейдите по ссылке: {reset_link}\n\n"
                 f"Если вы не запрашивали сброс пароля, проигнорируйте это письмо.\n\n"
+                f"С уважением,\nCRM LegalFlow\n\n"
                 f"------------------------------------------------------------\n\n"
                 f"Dzień dobry, {display_name},\n\n"
                 f"Aby zresetować hasło, przejdź pod link: {reset_link}\n\n"
@@ -325,17 +356,7 @@ class PasswordResetView(APIView):
             )
 
             # Пытаемся отправить письмо; при сбое не падаем 500, а возвращаем 200 с подсказкой
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'info@legalflow.pl')
-            mail_ok = True
-            try:
-                send_mail(subject, message, from_email, [user.email], fail_silently=False)
-            except Exception:
-                mail_ok = False
-                try:
-                    # Последняя попытка — без падения
-                    send_mail(subject, message, from_email, [user.email], fail_silently=True)
-                except Exception:
-                    pass
+            mail_ok = _safe_send_mail(subject, message, [user.email])
 
             # Больше не создаём системное уведомление о сбросе пароля
 
@@ -343,23 +364,6 @@ class PasswordResetView(APIView):
                 'message': 'Если email существует, ссылка для сброса пароля отправлена.',
                 'email_delivery': 'ok' if mail_ok else 'failed'
             }, status=status.HTTP_200_OK)
-=======
-            # Здесь мы создаем ссылку сброса, которая будет вести на фронтенд
-            context = {
-                'email': user.email,
-                'domain': 'localhost:8080',  # <--- Замените на домен вашего фронтенда
-                'site_name': 'CRM LegalFlow',
-                'uid': urlsafe_base64_encode(force_bytes(user.pk)),
-                'token': default_token_generator.make_token(user),
-                'protocol': 'http',
-            }
-            # Это просто пример текста, который будет в письме
-            message = f"Здравствуйте, {user.username}. Пожалуйста, перейдите по следующей ссылке для сброса пароля: http://{context['domain']}/password-reset/confirm/{context['uid']}/{context['token']}/"
-            
-            send_mail(subject, message, 'noreply@yourdomain.com', [user.email], fail_silently=False)
-            # Не создаём уведомление о сбросе пароля, чтобы не засорять ленту уведомлений
-            return Response({'message': 'Ссылка для сброса пароля отправлена на ваш email.'}, status=status.HTTP_200_OK)
->>>>>>> 5649faa (Fix docker configuration and port conflicts)
         return Response({'error': 'Произошла ошибка при обработке запроса.'}, status=status.HTTP_400_BAD_REQUEST)
     
 class PasswordResetConfirmView(APIView):
