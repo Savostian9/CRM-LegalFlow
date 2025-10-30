@@ -230,7 +230,11 @@
 </template>
 
 <script>
+<<<<<<< HEAD
 import axios from '@/axios-setup'
+=======
+import axios from '@/axios-setup.js'
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
 export default {
   name: 'SettingsView',
   data(){
@@ -270,34 +274,41 @@ export default {
     inviteBase(){ return window.location.origin + '/register' }
   },
   async created(){
-    const token = localStorage.getItem('user-token');
-    const cfg = { headers: { Authorization: `Token ${token}` } };
-    const me = await axios.get('http://127.0.0.1:8000/api/user-info/', cfg);
-    this.me = me.data;
+    try {
+      const token = localStorage.getItem('user-token');
+      const cfg = { headers: { Authorization: `Token ${token}` } };
+      // base URLs are rewritten to /api by axios-setup when needed; prefer relative
+      try {
+        const me = await axios.get('/api/user-info/', cfg);
+        this.me = me.data || this.me;
+      } catch (e) { /* unauthorized or network */ }
 
-    const prof = await axios.get('http://127.0.0.1:8000/api/profile/', cfg);
-    this.profile = prof.data;
+      try {
+        const prof = await axios.get('/api/profile/', cfg);
+        this.profile = prof.data || this.profile;
+      } catch (e) { /* ignore */ }
 
-    if (!this.isManager) {
-      try{
-        const cs = await axios.get('http://127.0.0.1:8000/api/company/settings/', cfg);
-        this.company = cs.data;
-      } catch (e) {
-        if (this.isAdmin) {
-          try{
-            const res = await axios.put('http://127.0.0.1:8000/api/company/settings/', { name: this.$t('settings.company.name') }, cfg);
-            this.company = res.data;
-          } catch (ee) {
-            /* ignore */
+      if (!this.isManager) {
+        try{
+          const cs = await axios.get('/api/company/settings/', cfg);
+          this.company = cs.data || this.company;
+        } catch (e) {
+          if (this.isAdmin) {
+            try{
+              const res = await axios.put('/api/company/settings/', { name: this.$t('settings.company.name') }, cfg);
+              this.company = res.data || this.company;
+            } catch (ee) { /* ignore */ }
           }
         }
+        try{
+          const us = await axios.get('/api/company/users/', cfg);
+          this.users = Array.isArray(us.data) ? us.data : this.users;
+        } catch (e) { /* ignore */ }
       }
-      try{
-        const us = await axios.get('http://127.0.0.1:8000/api/company/users/', cfg);
-        this.users = us.data;
-      } catch (e) { /* ignore */ }
+      await this.fetchNotifications();
+    } catch (_) {
+      // Do not let errors during created() break render in production
     }
-    await this.fetchNotifications(); // добавлено: загрузка уведомлений
   },
   methods: {
     notify(msg, type='success', ms=2000){
@@ -318,7 +329,11 @@ export default {
       const token = localStorage.getItem('user-token');
       const cfg = { headers: { Authorization: `Token ${token}` } };
       const { first_name, last_name } = this.profile;
+<<<<<<< HEAD
       await axios.put('http://127.0.0.1:8000/api/profile/', { first_name, last_name }, cfg);
+=======
+      await axios.put('/api/profile/', { first_name, last_name }, cfg);
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
       this.notify(`${this.$t('settings.toasts.savedProfile')}!`, 'success', 1500);
       this.emitUserProfileUpdated();
     },
@@ -327,7 +342,7 @@ export default {
         const token = localStorage.getItem('user-token');
         const cfg = { headers: { Authorization: `Token ${token}` } };
         const payload = { [field]: this.profile[field] };
-        await axios.put('http://127.0.0.1:8000/api/profile/', payload, cfg);
+        await axios.put('/api/profile/', payload, cfg);
         this.notify(`${this.$t('settings.toasts.saved')}!`, 'success', 1500);
         if(['first_name','last_name'].includes(field)){
           this.emitUserProfileUpdated();
@@ -351,7 +366,7 @@ export default {
       }
       const token = localStorage.getItem('user-token');
       try{
-        await axios.post('http://127.0.0.1:8000/api/profile/change-password/', { old_password: this.password.old, new_password: this.password.new }, { headers: { Authorization: `Token ${token}` } });
+  await axios.post('/api/profile/change-password/', { old_password: this.password.old, new_password: this.password.new }, { headers: { Authorization: `Token ${token}` } });
         this.password.old = this.password.new = '';
         this.notify(this.$t('settings.toasts.passwordUpdated'));
       } catch(e){
@@ -366,7 +381,7 @@ export default {
     async confirmDeletion(){
       const token = localStorage.getItem('user-token');
       try{
-        await axios.post('http://127.0.0.1:8000/api/profile/delete-account/', { password: this.deletePassword }, { headers: { Authorization: `Token ${token}` } });
+  await axios.post('/api/profile/delete-account/', { password: this.deletePassword }, { headers: { Authorization: `Token ${token}` } });
         localStorage.removeItem('user-token');
         this.showConfirmDialog = false;
         this.notify(this.$t('settings.toasts.accountDeleted'));
@@ -381,10 +396,16 @@ export default {
       const cfg = { headers: { Authorization: `Token ${token}` } };
       const { name, address, legal_details } = this.company;
       try {
+<<<<<<< HEAD
         const res = await axios.put('/api/company/settings/', { name, address, legal_details }, cfg);
         this.company = res.data;
         this.notify(`${this.$t('settings.toasts.saved')}!`, 'success', 1500);
         // Notify layout/sidebar to refresh company display name
+=======
+  const res = await axios.put('/api/company/settings/', { name, address, legal_details }, cfg);
+        this.company = res.data;
+        this.notify(`${this.$t('settings.toasts.saved')}!`, 'success', 1500);
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
         try { window.dispatchEvent(new CustomEvent('company-updated', { detail: { name: this.company.name } })); } catch(_) { /* no-op */ }
       } catch (e) {
         this.notify(this.$t('settings.toasts.companySaveError'), 'error');
@@ -392,7 +413,7 @@ export default {
     },
     async updateUser(u){
       const token = localStorage.getItem('user-token');
-      const res = await axios.put(`http://127.0.0.1:8000/api/company/users/${u.id}/`, { role: u.role }, { headers: { Authorization: `Token ${token}` } });
+  const res = await axios.put(`/api/company/users/${u.id}/`, { role: u.role }, { headers: { Authorization: `Token ${token}` } });
       Object.assign(u, res.data);
     },
     async removeUser(u){
@@ -424,7 +445,7 @@ export default {
       }
       const token = localStorage.getItem('user-token');
       try {
-        const res = await axios.post('http://127.0.0.1:8000/api/company/invites/', { role: this.inviteRole }, { headers: { Authorization: `Token ${token}` } });
+  const res = await axios.post('/api/company/invites/', { role: this.inviteRole }, { headers: { Authorization: `Token ${token}` } });
         this.invites.unshift(res.data);
       } catch (e) {
         this.notify(this.$t('settings.toasts.inviteCreateError'), 'error');
@@ -438,16 +459,20 @@ export default {
       try{
         const token = localStorage.getItem('user-token');
         const cfg = { headers: { Authorization: `Token ${token}` } };
-        const res = await axios.get('http://127.0.0.1:8000/api/notifications/', cfg);
-        let list = res.data || [];
+        const res = await axios.get('/api/notifications/', cfg);
+        const payload = res && res.data ? res.data : [];
+        const items = Array.isArray(payload) ? payload : Array.isArray(payload.items) ? payload.items : [];
+        let list = items;
         if (this.isManager) {
-          const myId = this.me.id;
-          list = list.filter(n =>
-            n.user_id === myId ||
-            n.recipient_id === myId ||
-            (n.user && (n.user.id === myId || n.user === myId)) ||
-            (n.owner_id === myId)
-          );
+          const myId = this.me && this.me.id;
+          if (myId) {
+            list = items.filter(n =>
+              n.user_id === myId ||
+              n.recipient_id === myId ||
+              (n.user && (n.user.id === myId || n.user === myId)) ||
+              (n.owner_id === myId)
+            );
+          }
         }
         this.notifications = list;
       } catch(e){

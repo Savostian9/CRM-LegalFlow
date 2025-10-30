@@ -69,7 +69,7 @@
         <UiSelect
           class="af-select"
           v-model="assigneeFilter"
-          :options="[{ value:'', label: ($t('clients.extra.allOption')||$t('tasks.filters.statusAll')) }, ...users.map(u => ({ value: String(u.id), label: ( (u.first_name||'') + ' ' + (u.last_name||'') ).trim() || u.username || u.email || ('ID '+u.id) }))]"
+          :options="[{ value:'', label: ($t('clients.extra.allOption')||$t('tasks.filters.statusAll')) }, ...users.map(u => ({ value: String(u.id), label: userLabel(u) }))]"
           :placeholder="$t('clients.extra.allOption') || $t('tasks.filters.statusAll')"
           :aria-label="$t('tasks.assignee') || 'Assignee'"
         />
@@ -108,6 +108,15 @@
         </header>
         <div class="tm-body">
           <div class="tm-grid">
+            <label class="full">
+              {{ $t('tasks.client') }}
+              <ClientAutocomplete
+                v-model="selectedClientIdEdit"
+                :initial-label="clientInitialLabelEdit"
+                :placeholder="$t('tasks.chooseClient')"
+                @client-selected="onClientSelectedEdit"
+              />
+            </label>
             <label>
               {{ $t('tasks.titleLabel') }}
               <input type="text" v-model="editForm.title" :placeholder="$t('tasks.titlePH')" />
@@ -119,6 +128,16 @@
             <label>
               {{ $t('tasks.table.status') }}
               <UiSelect v-model="editForm.status" :options="statusSelectOptions" aria-label="Status" />
+            </label>
+            <label>
+              {{ $t('tasks.assignee') }}
+              <UiSelect
+                v-model="selectedAssigneeEdit"
+                :options="[{ value:'', label: ($t('tasks.unassigned')||'— не назначен —') }, ...users.map(u => ({ value: String(u.id), label: userLabel(u) }))]"
+                :placeholder="$t('tasks.unassigned')"
+                aria-label="Assignee"
+              />
+              <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
             </label>
           </div>
         </div>
@@ -178,6 +197,10 @@ export default {
     showTaskModal: false,
       activeTask: null,
       editForm: { id:null, title:'', start:'', status:'SCHEDULED' },
+    // Edit modal: client and assignee selections
+    selectedClientIdEdit: null,
+    clientInitialLabelEdit: '',
+    selectedAssigneeEdit: '',
   updating: false,
   showDeleteConfirm: false,
   placeholderTitle: '—'
@@ -195,6 +218,21 @@ export default {
     '$route.query.task': function(){ this.tryOpenFromRoute() }
   },
   methods: {
+    humanizeLogin(value){
+      try{
+        if(!value) return ''
+        const local = String(value).split('@')[0]
+        const parts = local.split(/[^A-Za-zА-Яа-яЁё]+/).map(p => p.replace(/\d+/g,'').trim()).filter(Boolean)
+        if(!parts.length) return ''
+        return parts.map(p => p.charAt(0).toUpperCase()+p.slice(1)).join(' ')
+      }catch{ return '' }
+    },
+    userLabel(u){
+      const full = `${u.first_name || ''} ${u.last_name || ''}`.trim()
+      if(full) return full
+      const base = u.username || u.email || ''
+      return this.humanizeLogin(base) || base || (u.id ? ('ID '+u.id) : '')
+    },
     token(){ return localStorage.getItem('user-token') },
     async loadTasks(){
       this.loading = true
@@ -206,7 +244,19 @@ export default {
           headers: { Authorization: 'Token ' + this.token() },
           params
         })
-        this.tasks = resp.data
+        // Defensive sort: upcoming first, past last
+        const now = Date.now()
+        const arr = Array.isArray(resp.data) ? resp.data.slice() : []
+        arr.sort((a,b)=>{
+          const sa = a && a.start ? new Date(a.start).getTime() : 0
+          const sb = b && b.start ? new Date(b.start).getTime() : 0
+          const apast = sa < now ? 1 : 0
+          const bpast = sb < now ? 1 : 0
+          if (apast !== bpast) return apast - bpast // 0 (upcoming) first
+          if (apast === 0) return sa - sb          // upcoming asc
+          return sb - sa                            // past desc
+        })
+        this.tasks = arr
       } finally {
         this.loading = false
       }
@@ -230,12 +280,15 @@ export default {
         const me = await axios.get('http://127.0.0.1:8000/api/user-info/', {
           headers: { Authorization: 'Token ' + this.token() }
         })
-        this.users = [{ id: me.data.id, username: me.data.username }]
+        this.users = [{
+          id: me.data.id,
+          username: me.data.username,
+          first_name: me.data.first_name || '',
+          last_name: me.data.last_name || '',
+          email: me.data.email || ''
+        }]
       } finally {
-        const mapEntries = this.users.map(u => {
-          const full = `${u.first_name || ''} ${u.last_name || ''}`.trim()
-          return [u.id, full || u.username || u.email || ('ID '+u.id)]
-        })
+        const mapEntries = this.users.map(u => [u.id, this.userLabel(u)])
         this.usersMap = Object.fromEntries(mapEntries)
       }
     },
@@ -305,6 +358,26 @@ export default {
       this.editForm.title = t.title || ''
       this.editForm.status = t.status
   this.editForm.start = t.start ? this.toDateInput(new Date(t.start)) : ''
+      // Prefill client & assignee fields
+      const cid = (t && (
+        (t.client && typeof t.client === 'object' && t.client.id) ? t.client.id :
+        (typeof t.client === 'number') ? t.client : t.client_id || null
+      )) || null
+      this.selectedClientIdEdit = cid
+      if (t && t.client && typeof t.client === 'object'){
+        const fn = t.client.first_name || ''
+        const ln = t.client.last_name || ''
+        this.clientInitialLabelEdit = `${fn} ${ln}`.trim()
+      } else {
+        this.clientInitialLabelEdit = this.clientName(t)
+      }
+      if (Array.isArray(t.assignees) && t.assignees.length){
+        this.selectedAssigneeEdit = String(t.assignees[0])
+      } else if (t.assignee){
+        this.selectedAssigneeEdit = String(t.assignee)
+      } else {
+        this.selectedAssigneeEdit = ''
+      }
       this.showTaskModal = true
   this.showDeleteConfirm = false
     },
@@ -329,18 +402,67 @@ export default {
           startDate = new Date(this.editForm.start + 'T00:00:00')
           endDate = new Date(startDate.getTime() + 24*60*60*1000)
         }
+        // Build full payload for PUT
+        // Resolve client id: prefer edited value, else from current task
+        const existingCid = (this.activeTask && (
+          (this.activeTask.client && this.activeTask.client.id) ? this.activeTask.client.id : this.activeTask.client_id || null
+        )) || null
+        const resolvedCid = (this.selectedClientIdEdit !== null && this.selectedClientIdEdit !== '')
+          ? Number(this.selectedClientIdEdit)
+          : (existingCid != null ? Number(existingCid) : null)
+
+        // Resolve assignees: prefer edited single, else keep current list
+        let resolvedAssignees = []
+        if (this.selectedAssigneeEdit !== ''){
+          const aid = Number(this.selectedAssigneeEdit)
+          if (!Number.isNaN(aid)) resolvedAssignees = [aid]
+        } else if (Array.isArray(this.activeTask?.assignees)) {
+          resolvedAssignees = this.activeTask.assignees.filter(x => x != null).map(n => Number(n)).filter(n => !Number.isNaN(n))
+        }
+
         const payload = {
           title: this.editForm.title,
           ...(startDate ? { start: startDate.toISOString() } : {}),
           ...(endDate ? { end: endDate.toISOString() } : {}),
           status: this.editForm.status,
-          all_day: true
+          all_day: true,
+          ...(resolvedCid!=null && !Number.isNaN(resolvedCid) ? { client_id: resolvedCid } : {}),
+          assignees: resolvedAssignees
         }
-        await axios.put(`http://127.0.0.1:8000/api/tasks/${this.editForm.id}/`, payload, { headers:{ Authorization:'Token '+this.token() } })
+        // Robust update: try PATCH first (partial), fallback to PUT on 405
+        const headers = { Authorization:'Token '+this.token() }
+        const taskId = Number(this.editForm.id)
+        const url = `/api/tasks/${taskId}/`
+        try {
+          await axios.patch(url, payload, { headers })
+        } catch(err){
+          const status = err?.response?.status
+          if (status === 405) {
+            await axios.put(url, payload, { headers })
+          } else {
+            throw err
+          }
+        }
         this.showTaskModal = false
         await this.loadTasks()
-      } catch(e){ console.error('Update task error', e) }
+      } catch(e){
+        const status = e?.response?.status
+        const data = e?.response?.data
+        if (status === 403) {
+          alert(this.tr('tasks.updateForbidden','Нет прав для редактирования этой задачи'))
+        } else if (status === 405) {
+          alert(this.tr('tasks.updateMethodNotAllowed','Метод не разрешён для этого URL'))
+        } else if (data) {
+          const msg = typeof data === 'string' ? data : JSON.stringify(data)
+          alert(msg)
+        }
+        console.error('Update task error', e)
+      }
       finally { this.updating = false }
+    },
+    onClientSelectedEdit(c){
+      this.selectedClientIdEdit = c?.id || null
+      this.clientInitialLabelEdit = c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : ''
     },
     async deleteTask(){
       if(!this.editForm.id) return
@@ -375,7 +497,7 @@ export default {
     assigneeOptions(){
       return [
         { value:'', label: this.$t('tasks.unassigned') },
-        ...this.users.map(u => ({ value: String(u.id), label: ((u.first_name||'') + (u.last_name?(' '+u.last_name): (u.first_name?'' : '')) || u.username || u.email) }))
+        ...this.users.map(u => ({ value: String(u.id), label: this.userLabel(u) }))
       ]
     },
     statusSelectOptions(){
@@ -446,6 +568,7 @@ label { color:#334155; font-weight:600; }
 .tm-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e5e7eb; }
 .tm-body { padding:16px 18px; }
 .tm-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.tm-grid label.full { grid-column: 1 / -1; }
 .tm-grid label { display:flex; flex-direction:column; gap:6px; font-size:14px; font-weight:500; color:#334155; }
 .tm-footer { display:flex; align-items:center; gap:10px; padding:14px 18px; border-top:1px solid #e5e7eb; }
 .tm-footer .spacer { flex:1; }

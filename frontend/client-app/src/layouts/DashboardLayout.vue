@@ -4,10 +4,13 @@
       <div class="sidebar-header">
   <router-link :to="{ name: 'dashboard' }" class="logo">{{ $t('app.name') }}</router-link>
       </div>
-      <div class="user-profile">
-  <div class="avatar">{{ userInitials }}</div>
-  <span class="username" :title="displayName">{{ displayName }}</span>
-      </div>
+        <div class="user-profile">
+          <div class="avatar">{{ userInitials }}</div>
+          <div class="user-meta">
+            <div class="company-name" :title="companyName || displayName">{{ companyName || displayName }}</div>
+            <div class="person-name" :title="fullName">{{ fullName }}</div>
+          </div>
+        </div>
       <nav class="nav-links">
         <ul>
           <li>
@@ -84,6 +87,15 @@
               <span>Мой план</span>
             </router-link>
           </li>
+          <li v-if="isSuperuser">
+            <router-link
+              to="/dashboard/admin"
+              :class="{ active: $route.path.startsWith('/dashboard/admin') }"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a3 3 0 0 1 3 3v2h2.5A2.5 2.5 0 0 1 20 9.5V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9.5A2.5 2.5 0 0 1 6.5 7H9V5a3 3 0 0 1 3-3Zm-1.5 5h3V5a1.5 1.5 0 0 0-3 0v2Z"/></svg>
+              <span>Админ</span>
+            </router-link>
+          </li>
         </ul>
       </nav>
       <div class="sidebar-footer">
@@ -149,11 +161,20 @@ export default {
       unreadCount: 0,
       notifInterval: null,
       trialDismissed: false,
+      isSuperuser: false,
     };
   },
   computed: {
     displayName() {
       if (this.companyName) return this.companyName;
+<<<<<<< HEAD
+=======
+      const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
+      if (full) return full;
+      return this.username || this.email || '';
+    },
+    fullName() {
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
       const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
       if (full) return full;
       return this.username || this.email || '';
@@ -164,12 +185,8 @@ export default {
       const base = this.companyName || this.username || this.email || '';
       return base ? base.charAt(0).toUpperCase() : '';
     },
-    isTrial() {
-      return billingUsageState.isTrial;
-    },
-    daysLeft() {
-      return billingUsageState.daysLeft;
-    },
+    isTrial() { return billingUsageState.isTrial; },
+    daysLeft() { return billingUsageState.daysLeft; },
     showTrialBanner() {
       if (this.trialDismissed) return false;
       if (!this.isTrial) return false;
@@ -214,7 +231,7 @@ export default {
       try {
         const token = localStorage.getItem('user-token');
         if (!token) return;
-        const res = await axios.get('http://127.0.0.1:8000/api/notifications/unread-count/', { headers: { Authorization: `Token ${token}` }});
+        const res = await axios.get('/api/notifications/unread-count/', { headers: { Authorization: `Token ${token}` }});
         this.unreadCount = res.data.unread || 0;
       } catch (e) { /* silent */ }
     },
@@ -237,20 +254,28 @@ export default {
       return;
     }
     try {
-      const response = await axios.get('http://127.0.0.1:8000/api/user-info/', {
-        headers: { Authorization: `Token ${token}` }
-      });
+      const response = await axios.get('/api/user-info/', { headers: { Authorization: `Token ${token}` } });
       this.username = response.data.username;
       this.email = response.data.email;
       this.firstName = response.data.first_name || '';
       this.lastName = response.data.last_name || '';
       this.role = (response.data.role || 'MANAGER').toUpperCase();
+      this.isSuperuser = !!response.data.is_superuser;
       try { localStorage.setItem('user-role', this.role); } catch (e) { void 0; }
+<<<<<<< HEAD
       // Try to get company name for sidebar display
       try {
         const cs = await axios.get('/api/company/settings/', { headers: { Authorization: `Token ${token}` } });
         this.companyName = (cs.data && cs.data.name) || '';
       } catch (e) { /* not critical for display */ }
+=======
+      try { localStorage.setItem('is-superuser', this.isSuperuser ? '1' : '0'); } catch (e) { void 0; }
+      // Load company name for sidebar display
+      try {
+        const cs = await axios.get('/api/company/settings/', { headers: { Authorization: `Token ${token}` } });
+        this.companyName = (cs.data && cs.data.name) || '';
+      } catch (e) { /* ignore */ }
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
     } catch (error) {
       console.error('Ошибка получения данных пользователя:', error);
       localStorage.removeItem('user-token');
@@ -264,7 +289,10 @@ export default {
       if (typeof d.last_name === 'string') this.lastName = d.last_name;
     };
     window.addEventListener('user-profile-updated', this.profileUpdatedHandler);
+<<<<<<< HEAD
     // React to company name changes saved in Settings
+=======
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
     this.companyUpdatedHandler = (e) => {
       const d = (e && e.detail) || {};
       if (typeof d.name === 'string') this.companyName = d.name;
@@ -425,6 +453,29 @@ export default {
   font-size: 18px;
   font-weight: 600;
   margin-right: 15px;
+  flex: 0 0 40px; /* фиксированный круг — не сжимается */
+  flex-shrink: 0; /* дополнительная страховка от сжатия */
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; /* разрешаем переносы внутри flex-элемента */
+}
+.company-name {
+  font-weight: 600;
+  color: var(--sidebar-title);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere; /* переносим очень длинные слова/строки */
+}
+.person-name {
+  font-size: 12px;
+  color: var(--sidebar-text);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .username {

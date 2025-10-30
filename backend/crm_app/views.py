@@ -33,6 +33,7 @@ from django.db.models import Sum
 from .serializers import ClientListSerializer, ClientSerializer, LegalCaseSerializer, TaskSerializer, TaskListSerializer, \
     ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer
 from urllib.parse import urlparse
+from django.db.utils import OperationalError
 
 def _create_notification(user, title, message='', client=None, reminder=None, source='SYSTEM'):
     """
@@ -65,6 +66,35 @@ def _create_notification(user, title, message='', client=None, reminder=None, so
                 continue
     except Exception:
         pass
+
+def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | None = None) -> bool:
+    """Send mail with robust exception handling and optional HTML.
+    Returns True if SMTP reports success, False otherwise.
+    Prints diagnostic info when DEBUG is enabled.
+    """
+    from django.conf import settings
+    try:
+        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+        if html_body:
+            from django.core.mail import EmailMultiAlternatives
+            msg = EmailMultiAlternatives(subject, body, from_email, to)
+            msg.attach_alternative(html_body, 'text/html')
+            msg.send(fail_silently=False)
+            return True
+        sent = send_mail(subject, body, from_email, to, fail_silently=False)
+        return bool(sent)
+    except Exception as e:
+        try:
+            if getattr(settings, 'DEBUG', False):
+                print('[email][error]', subject, '->', to, 'exception:', repr(e))
+        except Exception:
+            pass
+        try:
+            # Last attempt silent
+            send_mail(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', None), to, fail_silently=True)
+        except Exception:
+            pass
+        return False
 
 
 def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | None = None) -> bool:
@@ -171,13 +201,15 @@ class RegisterRequestView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
-        username = request.data.get('username')
-        password = request.data.get('password')
-        company_name = request.data.get('company_name') or request.data.get('company') or request.data.get('org')
+        data = request.data.copy()
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password')
+        company_name = data.get('company_name') or data.get('company') or data.get('org')
+        # Username не запрашиваем на форме: по умолчанию используем email
+        username = (data.get('username') or email or '').strip().lower()
 
-        if not email or not username or not password:
-            return Response({'error': 'Имя пользователя, email и пароль обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not email or not password:
+            return Response({'error': 'Email и пароль обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Helper: ensure company + trial for a user without company
         def _ensure_trial_company(u: User):
@@ -210,19 +242,13 @@ class RegisterRequestView(APIView):
 
         # Если пользователь с таким email уже существует
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
             if user.is_active:
                 return Response({
                     'error': 'Пользователь с таким email уже зарегистрирован. Войдите в систему или воспользуйтесь восстановлением пароля.',
                     'error_code': 'USER_EXISTS'
                 }, status=status.HTTP_400_BAD_REQUEST)
-            # Пользователь не подтвержден: обновим пароль и, при возможности, имя пользователя
-            try:
-                if username and user.username != username and not User.objects.filter(username=username).exclude(pk=user.pk).exists():
-                    user.username = username
-            except Exception:
-                # Если валидация имени не прошла — игнорируем, оставим прежнее
-                pass
+            # Пользователь не подтвержден: обновим пароль (username оставляем как есть)
             user.set_password(password)
             # Убедимся, что статус до подтверждения корректный
             user.is_active = False
@@ -252,8 +278,8 @@ class RegisterRequestView(APIView):
                 'trial': trial_block
             }, status=status.HTTP_201_CREATED)
         except User.DoesNotExist:
-            # Регистрируем нового пользователя стандартным путем
-            serializer = UserRegistrationSerializer(data=request.data)
+            # Регистрируем нового пользователя стандартным путем (username = email)
+            serializer = UserRegistrationSerializer(data={'username': username, 'email': email, 'password': password})
             if serializer.is_valid():
                 user = serializer.save(is_client=True)
                 token = ''.join(random.choices('0123456789', k=6))
@@ -278,14 +304,14 @@ class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         token = request.data.get('token')
 
         if not email or not token:
             return Response({'error': 'Email и токен обязательны.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
             verification_token = EmailVerificationToken.objects.get(user=user, token=token)
 
             # ПРОВЕРКА: если прошло больше 5 минут, код недействителен
@@ -315,22 +341,46 @@ class LoginView(ObtainAuthToken):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
-        token, created = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key, 'user_id': user.pk, 'email': user.email})
+        try:
+            serializer = self.serializer_class(data=request.data, context={'request': request})
+            # If credentials invalid, this raises serializers.ValidationError -> return 400 with details
+            serializer.is_valid(raise_exception=True)
+            user = serializer.validated_data['user']
+            try:
+                token, created = Token.objects.get_or_create(user=user)
+            except OperationalError as oe:
+                # Likely missing migrations for rest_framework.authtoken
+                return Response(
+                    {
+                        'detail': 'migrations_missing',
+                        'hint': 'Apply migrations for auth token app (python manage.py migrate).'
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+            return Response({'token': token.key, 'user_id': user.pk, 'email': user.email})
+        except Exception as e:
+            from rest_framework.exceptions import ValidationError
+            if isinstance(e, ValidationError):
+                # Propagate validation details (e.detail typically contains non_field_errors)
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            # Unexpected error: don't crash with 500 in frontend; return generic error (and log server-side)
+            try:
+                import logging
+                logging.getLogger(__name__).exception('LoginView unexpected error')
+            except Exception:
+                pass
+            return Response({'detail': 'internal_error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
 class PasswordResetView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         if not email:
             return Response({'error': 'Email обязателен.'}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
         except User.DoesNotExist:
             return Response({'error': 'Пользователь с таким email не найден.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -404,11 +454,68 @@ class UserInfoView(APIView):
             'email': user.email,
             'first_name': user.first_name,
             'last_name': user.last_name,
+            'is_superuser': bool(getattr(user, 'is_superuser', False)),
             'is_client': getattr(user, 'is_client', False),
             'is_manager': getattr(user, 'is_manager', False),
             'role': getattr(user, 'role', 'ADMIN'),
             'company_id': getattr(user.company, 'id', None)
         })
+
+from django.db.models import Count
+from django.db.models import Case, When, Value, IntegerField, F, DateTimeField
+
+class AdminStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if not getattr(user, 'is_superuser', False):
+            return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Companies and plans
+        companies = Company.objects.all().values('id', 'name', 'plan', 'created_at', 'trial_started_at', 'trial_ends_at', 'owner_id')
+        plans = Company.objects.values('plan').annotate(count=Count('id')).order_by('plan')
+
+        # Users and roles
+        users_total = User.objects.count()
+        users_by_role = User.objects.values('role').annotate(count=Count('id')).order_by('role')
+
+        # Per-company user counts
+        company_user_counts = User.objects.values('company_id').annotate(count=Count('id'))
+        counts_map = {row['company_id']: row['count'] for row in company_user_counts}
+
+        # Other entities
+        clients_total = Client.objects.count()
+        cases_total = LegalCase.objects.count()
+        tasks_total = Task.objects.count()
+        reminders_total = Reminder.objects.count()
+
+        companies_detail = []
+        for c in companies:
+            companies_detail.append({
+                'id': c['id'],
+                'name': c['name'],
+                'plan': c['plan'],
+                'created_at': c['created_at'],
+                'trial_started_at': c['trial_started_at'],
+                'trial_ends_at': c['trial_ends_at'],
+                'users_count': counts_map.get(c['id'], 0),
+            })
+
+        payload = {
+            'totals': {
+                'companies': len(companies_detail),
+                'users': users_total,
+                'clients': clients_total,
+                'cases': cases_total,
+                'tasks': tasks_total,
+                'reminders': reminders_total,
+            },
+            'plans': list(plans),
+            'usersByRole': list(users_by_role),
+            'companies': companies_detail,
+        }
+        return Response(payload)
 
 # --- Профиль пользователя ---
 class ProfileView(APIView):
@@ -590,7 +697,7 @@ class InviteAcceptView(APIView):
 
     def post(self, request):
         token = request.data.get('token')
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         password = request.data.get('password')
         desired_username = request.data.get('username')
         first_name = (request.data.get('first_name') or '').strip()
@@ -602,12 +709,12 @@ class InviteAcceptView(APIView):
         except Invite.DoesNotExist:
             return Response({'detail': 'Приглашение не найдено'}, status=status.HTTP_404_NOT_FOUND)
         # Создаём пользователя и привязываем к компании
-        if User.objects.filter(email=email).exists():
+        if User.objects.filter(email__iexact=email).exists():
             return Response({'detail': 'Email уже используется'}, status=status.HTTP_400_BAD_REQUEST)
         # Выберем имя пользователя: из формы, если свободно; иначе fallback к email
-        username_value = (desired_username or '').strip() or email
+        username_value = ((desired_username or '').strip() or email).lower()
         try:
-            if username_value and User.objects.filter(username=username_value).exists():
+            if username_value and User.objects.filter(username__iexact=username_value).exists():
                 # если занято — используем email как имя пользователя
                 username_value = email
         except Exception:
@@ -640,9 +747,9 @@ class ResendVerificationEmailView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip().lower()
         try:
-            user = User.objects.get(email=email, is_active=False)
+            user = User.objects.get(email__iexact=email, is_active=False)
             # Удаляем старый токен, если он был
             EmailVerificationToken.objects.filter(user=user).delete()
 
@@ -1043,15 +1150,20 @@ class TaskListCreateView(APIView):
         # Видимость задач:
         # - ADMIN/LEAD/LAWYER/ASSISTANT: задачи по клиентам своей компании
         # - MANAGER: задачи только по своим клиентам
+        base_qs = Task.objects.select_related('client', 'created_by')
         if request.user.role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
-            qs = Task.objects.select_related('client', 'created_by').filter(
+            # Видимость: задачи по клиентам своей компании или личные задачи сотрудников компании
+            qs = base_qs.filter(
                 models.Q(client__created_by__company_id=request.user.company_id) |
                 models.Q(client__user__company_id=request.user.company_id) |
                 models.Q(client__isnull=True, created_by__company_id=request.user.company_id)
             )
         else:
-            qs = Task.objects.select_related('client', 'created_by').filter(
-                models.Q(client__created_by=request.user) | models.Q(client__isnull=True, created_by=request.user)
+            # Менеджер: свои задачи + те, где он в исполнителях
+            qs = base_qs.filter(
+                models.Q(client__created_by=request.user) |
+                models.Q(client__isnull=True, created_by=request.user) |
+                models.Q(assignees=request.user)
             )
         # Фильтры
         task_types = request.query_params.get('types')  # CSV
@@ -1074,6 +1186,24 @@ class TaskListCreateView(APIView):
         if start and end:
             qs = qs.filter(end__gte=start, start__lte=end)
 
+        # Сортировка: ближайшие задачи сверху, прошедшие — внизу
+        now = timezone.now()
+        try:
+            qs = qs.annotate(
+                is_past=Case(
+                    When(start__lt=now, then=Value(1)),
+                    default=Value(0),
+                    output_field=IntegerField()
+                ),
+                sort_start=Case(
+                    When(start__lt=now, then=Value(None, output_field=DateTimeField())),
+                    default=F('start'),
+                    output_field=DateTimeField()
+                ),
+            ).order_by('is_past', 'sort_start', '-start')
+        except Exception:
+            # если БД не поддерживает такую сортировку — fallback по start
+            qs = qs.order_by('start')
         serializer = TaskSerializer(qs, many=True)
         return Response(serializer.data)
 
@@ -1092,7 +1222,56 @@ class TaskListCreateView(APIView):
                 else:
                     if client.created_by_id and client.created_by_id != request.user.id:
                         return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+            # Сохраняем задачу с создателем
             task = serializer.save(created_by=request.user)
+            # Если в запросе переданы назначенные исполнители — добавим их
+            try:
+                assignee_ids = request.data.get('assignees') or []
+                if isinstance(assignee_ids, list) and assignee_ids:
+                    users = User.objects.filter(id__in=[int(i) for i in assignee_ids if str(i).isdigit()])
+                    if users:
+                        task.assignees.add(*list(users))
+            except Exception:
+                pass
+            # Создаём уведомления только для назначенных МЕНЕДЖЕРОВ (кроме автора)
+            try:
+                # Подготовим имя постановщика задачи (создателя)
+                creator = request.user
+                creator_name = ''
+                try:
+                    full = f"{getattr(creator, 'first_name', '') or ''} {getattr(creator, 'last_name', '') or ''}".strip()
+                    if full:
+                        creator_name = full
+                    else:
+                        creator_name = getattr(creator, 'username', '') or getattr(creator, 'email', '') or 'Пользователь'
+                except Exception:
+                    creator_name = getattr(creator, 'username', '') or getattr(creator, 'email', '') or 'Пользователь'
+
+                for u in task.assignees.exclude(id=request.user.id):
+                    if getattr(u, 'role', '').upper() != 'MANAGER':
+                        continue
+                    title = 'Новая задача'
+                    msg_parts = []
+                    if task.title:
+                        msg_parts.append(task.title)
+                    try:
+                        when = task.start.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M')
+                        msg_parts.append(f"на {when}")
+                    except Exception:
+                        pass
+                    # Добавляем информацию о постановщике
+                    msg_parts.append(f"Поставил: {creator_name}")
+                    msg = ' · '.join([p for p in msg_parts if p])
+                    Notification.objects.create(
+                        user=u,
+                        task=task,
+                        client=task.client if hasattr(task, 'client') else None,
+                        title=title,
+                        message=msg,
+                        source='SYSTEM'
+                    )
+            except Exception:
+                pass
             return Response(TaskSerializer(task).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1114,17 +1293,28 @@ class TaskDetailView(APIView):
             if not (user_company_id and (owner_company_id == user_company_id or client_user_company_id == user_company_id or created_by_company_id == user_company_id)):
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
         else:
-            if task.client:
-                if task.client.created_by_id and task.client.created_by_id != request.user.id:
-                    return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+            # MANAGER: может редактировать
+            #  - свои задачи (created_by == self)
+            #  - задачи по своим клиентам (client.created_by == self)
+            #  - и задачи, где он находится в списке assignees
+            can = False
+            if not task.client:
+                can = (task.created_by_id == request.user.id)
             else:
-                if task.created_by_id != request.user.id:
-                    return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+                if task.client.created_by_id == request.user.id:
+                    can = True
+            try:
+                if not can and task.assignees.filter(id=request.user.id).exists():
+                    can = True
+            except Exception:
+                pass
+            if not can:
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = TaskSerializer(task, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             # Если меняется клиент, проверим принадлежность
             new_client = serializer.validated_data.get('client')
-            if new_client and new_client.created_by_id != request.user.id:
+            if new_client and new_client.created_by_id != request.user.id and role not in ('ADMIN','LEAD','LAWYER','ASSISTANT'):
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
             task = serializer.save()
             return Response(TaskSerializer(task).data)
@@ -1194,7 +1384,7 @@ class UpcomingTasksWidgetView(APIView):
 
         # Базовый QS: задачи в статусе SCHEDULED, стартующие в указанный интервал.
         # Для вкладки "today" теперь включаем задачи, которые уже начались утром (раньше now), т.к. критерий start >= start_of_day.
-        base_qs = Task.objects.select_related('client', 'created_by').filter(
+        base_qs = Task.objects.select_related('client', 'created_by').prefetch_related('assignees').filter(
             status='SCHEDULED',
             start__gte=start_dt,
             start__lt=end_dt
@@ -1211,22 +1401,28 @@ class UpcomingTasksWidgetView(APIView):
             else:
                 qs = base_qs.none()
         else:
+            # Менеджер: свои или назначенные ему
             qs = base_qs.filter(
                 Q(client__created_by=request.user) |
-                Q(client__isnull=True, created_by=request.user)
+                Q(client__isnull=True, created_by=request.user) |
+                Q(assignees=request.user)
             )
         limit = 100 if range_type in ('week', 'month') else 50
-        qs = qs.order_by('start')[:limit]
-        return Response(TaskListSerializer(qs, many=True).data)
+        try:
+            qs = qs.order_by('start')[:limit]
+            data = TaskListSerializer(qs, many=True).data
+        except Exception:
+            data = []
+        return Response(data)
 
 
 class FinanceSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Ассистенту финансы недоступны
+        # Ассистенту финансы недоступны — но на главной не валимся 500, возвращаем нулевую сводку с подсказкой
         if getattr(request.user, 'role', None) == 'ASSISTANT':
-            return Response({'detail': 'Доступ к финансовой сводке запрещен для ассистента.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response({'expected_payments_total': 0, 'expected_payments_month': 0, 'receipts_total': 0, 'receipts_month': 0, 'currency': 'PLN', 'month': timezone.now().strftime('%Y-%m'), 'detail': 'read_only'}, status=status.HTTP_200_OK)
         """
         Финансовая сводка для главной страницы.
 
@@ -1278,14 +1474,18 @@ class FinanceSummaryView(APIView):
         receipts_total = clients_qs.aggregate(total=Coalesce(Sum('amount_paid'), dec0))['total'] or 0
         receipts_month = 0  # Требуется модель Payment с датой для корректного подсчета за месяц
 
-        return Response({
-            'expected_payments_total': expected_total,
-            'expected_payments_month': expected_month,
-            'receipts_total': receipts_total,
-            'receipts_month': receipts_month,
-            'currency': 'PLN',
-            'month': start_month.strftime('%Y-%m')
-        })
+        try:
+            payload = {
+                'expected_payments_total': expected_total,
+                'expected_payments_month': expected_month,
+                'receipts_total': receipts_total,
+                'receipts_month': receipts_month,
+                'currency': 'PLN',
+                'month': start_month.strftime('%Y-%m')
+            }
+        except Exception:
+            payload = {'expected_payments_total': 0, 'expected_payments_month': 0, 'receipts_total': 0, 'receipts_month': 0, 'currency': 'PLN', 'month': timezone.now().strftime('%Y-%m')}
+        return Response(payload)
 
 # --- Уведомления ---
 class NotificationListCreateView(APIView):
@@ -1307,6 +1507,15 @@ class NotificationListCreateView(APIView):
         role = getattr(request.user, 'role', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
             qs = Notification.objects.filter(user__company_id=request.user.company_id)
+            # Never show notifications about tasks created by the current user.
+            # If the DB schema doesn't have task_id yet (no migration), skip the exclude gracefully.
+            try:
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute("SELECT task_id FROM crm_app_notification LIMIT 1")
+                qs = qs.exclude(task__created_by=request.user)
+            except Exception:
+                pass
         else:
             qs = Notification.objects.filter(user=request.user)
         # Одноразовое сидирование из Reminder, если ещё не делали
@@ -1429,8 +1638,17 @@ class NotificationMarkAllReadView(APIView):
         role = getattr(request.user, 'role', None)
         company_id = getattr(request.user, 'company_id', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
-            # Отмечаем прочитанными ВСЕ уведомления компании (отражает то, что админ видит в списке)
-            Notification.objects.filter(user__company_id=company_id, is_read=False).update(is_read=True)
+            # Отмечаем прочитанными ВСЕ уведомления компании (отражает то, что админ видит в списке),
+            # исключая уведомления о задачах, поставленных текущим пользователем.
+            qs = Notification.objects.filter(user__company_id=company_id, is_read=False)
+            try:
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute("SELECT task_id FROM crm_app_notification LIMIT 1")
+                qs = qs.exclude(task__created_by=request.user)
+            except Exception:
+                pass
+            qs.update(is_read=True)
         else:
             Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
         return Response({'detail': 'ok'})
@@ -1441,7 +1659,15 @@ class NotificationUnreadCountView(APIView):
     def get(self, request):
         role = getattr(request.user, 'role', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
-            cnt = Notification.objects.filter(user__company_id=request.user.company_id, is_read=False).count()
+            qs = Notification.objects.filter(user__company_id=request.user.company_id, is_read=False)
+            try:
+                from django.db import connection
+                with connection.cursor() as cur:
+                    cur.execute("SELECT task_id FROM crm_app_notification LIMIT 1")
+                qs = qs.exclude(task__created_by=request.user)
+            except Exception:
+                pass
+            cnt = qs.count()
         else:
             cnt = Notification.objects.filter(user=request.user, is_read=False).count()
         return Response({'unread': cnt})

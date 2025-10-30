@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from urllib.parse import urlparse, parse_qs
+import logging
+from logging.handlers import TimedRotatingFileHandler
 
 
 
@@ -39,7 +41,15 @@ def _load_dotenv(env_path: Path) -> None:
         pass
 
 # Load project-level .env from repository root (BASE_DIR is backend/, parent is repo root)
-_load_dotenv(BASE_DIR.parent / '.env')
+# Determine environment mode
+MODE = os.environ.get("MODE", "local")
+
+# Load the appropriate .env file
+if MODE == "production":
+    _load_dotenv(BASE_DIR.parent / ".env.production")
+else:
+    _load_dotenv(BASE_DIR.parent / ".env.local")
+
 
 
 # Quick-start development settings - unsuitable for production
@@ -266,11 +276,34 @@ AUTH_USER_MODEL = 'crm_app.User'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
-EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'True') == 'True'
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'False') == 'True'
+# Auto-normalize SSL/TLS: if port is 587 prefer TLS; if 465 prefer SSL unless explicitly overridden.
+_env_ssl = os.getenv('EMAIL_USE_SSL')
+_env_tls = os.getenv('EMAIL_USE_TLS')
+if _env_ssl is not None:
+    EMAIL_USE_SSL = _env_ssl.strip().lower() in {'1','true','yes','on'}
+else:
+    EMAIL_USE_SSL = EMAIL_PORT == 465
+if _env_tls is not None:
+    EMAIL_USE_TLS = _env_tls.strip().lower() in {'1','true','yes','on'}
+else:
+    EMAIL_USE_TLS = EMAIL_PORT in (587, 25) and not EMAIL_USE_SSL
+# Avoid enabling both simultaneously
+if EMAIL_USE_SSL and EMAIL_USE_TLS:
+    # Prefer TLS for port 587, otherwise keep SSL
+    if EMAIL_PORT == 587:
+        EMAIL_USE_SSL = False
+    else:
+        EMAIL_USE_TLS = False
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+if DEBUG:
+    print('[email] host=', EMAIL_HOST, 'port=', EMAIL_PORT, 'ssl=', EMAIL_USE_SSL, 'tls=', EMAIL_USE_TLS, 'user=', EMAIL_HOST_USER, 'from=', DEFAULT_FROM_EMAIL)
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+# Кто получает письма при ошибках
+ADMINS = [
+    ("LegalFlow Admin", "crmlegalflow@gmail.com"),
+]
 
 # URL фронтенда (используется для генерации ссылок, например, сброс пароля)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
@@ -306,3 +339,64 @@ if os.environ.get('CORS_ALLOW_ALL', '').strip().lower() in {'1','true','yes','on
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+
+# Универсальный путь: работает и локально, и в Docker
+LOG_DIR = "/app/logs" if os.path.exists("/app") else os.path.join(BASE_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{asctime}] {levelname} {name} — {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "rotating_file": {
+            "level": "DEBUG",
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "filename": os.path.join(LOG_DIR, "legalflow.log"),
+            "when": "midnight",          # новый файл каждый день
+            "backupCount": 7,            # хранить только 7 дней логов
+            "encoding": "utf-8",
+            "formatter": "verbose",
+        },
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+        "mail_admins": {
+            "level": "ERROR",
+            "class": "django.utils.log.AdminEmailHandler",
+            "include_html": True,
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["rotating_file", "console", "mail_admins"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["rotating_file", "mail_admins"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "crm_app": {
+            "handlers": ["rotating_file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": ["rotating_file", "console", "mail_admins"],
+        "level": "INFO", 
+    },
+}

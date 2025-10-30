@@ -51,9 +51,15 @@ export default {
   },
   computed:{
     dropdownStyle(){
-      const top = Math.round(this.rect.top + this.rect.height + window.scrollY + 8);
-      const left = Math.round(this.rect.left + window.scrollX);
+      // Position fixed is relative to viewport; do NOT add window scroll offsets.
+      let top = Math.round(this.rect.top + this.rect.height + 8);
+      const left = Math.round(this.rect.left);
       const minWidth = Math.max(200, this.rect.width);
+      // Clamp within viewport so list doesn't fly off-screen
+      const estimatedH = Math.min(360, ((this.options || []).length * 32) + 12);
+      const maxTop = (typeof window !== 'undefined' ? (window.innerHeight - estimatedH - 8) : top);
+      if (top > maxTop) top = Math.max(8, maxTop);
+      if (top < 8) top = 8;
       return { top: top + 'px', left: left + 'px', minWidth: minWidth + 'px' };
     }
   },

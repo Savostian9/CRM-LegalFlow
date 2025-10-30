@@ -7,12 +7,17 @@ import VueTelInput from 'vue-tel-input' // <-- ДОБАВЬТЕ ЭТУ СТРО�
 import 'vue-tel-input/vue-tel-input.css'
 import './styles/forms.css'
 import i18n from './i18n'
+import UiSelect from './components/UiSelect.vue'
+import ClientAutocomplete from './components/ClientAutocomplete.vue'
 
 const app = createApp(App)
 
 app.use(router) // <--- ВОТ ЭТА СТРОКА ВСЁ ИСПРАВИТ
 app.use(VueTelInput)
 app.use(i18n)
+// Global components so they can be used in any view's template without local imports
+app.component('UiSelect', UiSelect)
+app.component('ClientAutocomplete', ClientAutocomplete)
 
 // Инициализация темы из localStorage
 const savedTheme = localStorage.getItem('theme') || 'light'

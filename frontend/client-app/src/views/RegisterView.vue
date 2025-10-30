@@ -131,16 +131,25 @@
 </template>
 
 <script>
+<<<<<<< HEAD
 import axios from '../axios-setup';
+=======
+import axios from '@/axios-setup.js';
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
 
 export default {
   name: 'RegisterView',
   components: { },
   data() {
     return {
+<<<<<<< HEAD
       company_name: '',
       // Internal-only username used for invite acceptance when backend requires it
       username: '',
+=======
+      username: '', // используется только для ветки приглашения
+      company_name: '',
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
       first_name: '',
       last_name: '',
       email: '',
@@ -160,6 +169,7 @@ export default {
       this.error = '';
       this.isLoading = true;
       try {
+<<<<<<< HEAD
         if (this.inviteToken) {
             // Регистрация по приглашению: принимаем приглашение и переходим на страницу подтверждения email
           // Сгенерируем валидный username только для backend (не показываем пользователю)
@@ -168,6 +178,18 @@ export default {
             const base = (this.email && this.email.split('@')[0]) || 'user';
             invUsername = base.replace(/[^\w.@+-]/g, '').slice(0, 30) || ('user' + Math.floor(Math.random()*1000));
             if (invUsername.length < 3) invUsername = invUsername.padEnd(3, '0');
+=======
+        if (!this.email) {
+            throw new Error('NO_EMAIL');
+        }
+        if (this.inviteToken) {
+            // Регистрация по приглашению: принимаем приглашение и переходим на страницу подтверждения email
+          // Для приглашений всё ещё нужен username: сгенерируем из email при необходимости
+          if (!this.username && this.email) {
+            const base = this.email.split('@')[0] || 'user';
+            this.username = base.replace(/[^\w.@+-]/g, '').slice(0, 30) || ('user' + Math.floor(Math.random()*1000));
+            if (this.username.length < 3) this.username = this.username.padEnd(3, '0');
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
           }
           const resp = await axios.post('/api/company/invites/accept/', {
             token: this.inviteToken,
@@ -187,7 +209,11 @@ export default {
         } else {
           // Обычная регистрация с подтверждением email
           const response = await axios.post('/api/register/', {
+<<<<<<< HEAD
             company_name: this.company_name, // любое название компании, без ограничений на символы
+=======
+            company_name: this.company_name,
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
             email: this.email.toLowerCase(),
             password: this.password
           });
@@ -218,8 +244,12 @@ export default {
             } else if (data.email) {
               this.error = this.$t('auth.errors.emailPrefix', { msg: data.email[0] });
             } else if (data.company_name) {
+<<<<<<< HEAD
               const msg = Array.isArray(data.company_name) ? data.company_name[0] : data.company_name;
               this.error = msg || this.$t('auth.errors.register');
+=======
+              this.error = data.company_name?.[0] || this.$t('auth.errors.register');
+>>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
             } else if (data.password) {
               this.error = this.$t('auth.errors.passwordPrefix', { msg: data.password[0] });
             } else if (typeof data.error === 'string') {
