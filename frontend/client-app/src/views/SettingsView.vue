@@ -568,7 +568,12 @@ export default {
 .invites-list { margin-top: 14px; }
 .invite-link { display: inline-block; margin-top: 12px; padding: 10px 14px; font-size: 16px; font-weight: 600; color: var(--dark-blue); background: #f3f6fb; border: 1px solid var(--input-border-color); border-radius: 10px; letter-spacing: 0.2px; word-break: break-all; }
 .invite-form { display:flex; gap:12px; align-items:center; }
-.invite-form select { height: 48px; padding: 0 15px; border: 1px solid var(--form-border,#e2e8f0); border-radius: var(--form-radius,8px); font-size: 15px; background: #fff; transition:border-color .18s, box-shadow .18s; }
+.invite-form select { height: 48px; padding: 0 38px 0 15px; border: 1px solid var(--form-border,#e2e8f0); border-radius: var(--form-radius,8px); font-size: 15px; background: #fff; transition:border-color .18s, box-shadow .18s; cursor: pointer; 
+  /* show a clear dropdown indicator so users know it's a list */
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a6a7b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+}
 .invite-form select:focus { outline:none; border-color:var(--form-border-focus,#4A9E80); box-shadow:var(--form-focus-ring,0 0 0 2px rgba(74,158,128,.18)); }
 
 .static-role { height: 48px; display: flex; align-items: center; padding: 0 15px; border: 1px solid var(--form-border,#e2e8f0); border-radius: var(--form-radius,8px); background: #f9fafb; color: #111827; }

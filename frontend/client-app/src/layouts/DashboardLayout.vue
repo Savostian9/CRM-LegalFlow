@@ -8,7 +8,7 @@
           <div class="avatar">{{ userInitials }}</div>
           <div class="user-meta">
             <div class="company-name" :title="companyName || displayName">{{ companyName || displayName }}</div>
-            <div class="person-name" :title="fullName">{{ fullName }}</div>
+            <div class="person-name" :title="fullName">{{ personDisplay }}</div>
           </div>
         </div>
       <nav class="nav-links">
@@ -71,6 +71,15 @@
           </li>
           <li>
             <router-link
+              to="/dashboard/faq"
+              :class="{ active: $route.path.startsWith('/dashboard/faq') }"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2Zm0 18a8 8 0 1 1 8-8 8.009 8.009 0 0 1-8 8Zm0-6a1 1 0 0 0-1 1v1a1 1 0 1 0 2 0v-1a1 1 0 0 0-1-1Zm0-8a4 4 0 0 0-4 4 1 1 0 0 0 2 0 2 2 0 1 1 2.829 1.858A3.489 3.489 0 0 0 11 14a1 1 0 0 0 2 0 1.5 1.5 0 0 1 .9-1.372A4 4 0 0 0 12 6Z"/></svg>
+              <span>{{ $t('nav.faq') || 'FAQ' }}</span>
+            </router-link>
+          </li>
+          <li>
+            <router-link
               to="/dashboard/settings"
               :class="{ active: $route.path.startsWith('/dashboard/settings') }"
             >
@@ -126,6 +135,18 @@
       <router-view />
     </main>
 
+    <!-- First-run: suggest reading FAQ -->
+    <div v-if="showFaqPrompt" class="modal-overlay" @keydown.esc.prevent="dismissFaqPrompt" tabindex="-1">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="faq-prompt-title">
+        <p id="faq-prompt-title">Хотите быстрее разобраться в системе?</p>
+        <p class="muted">Загляните в раздел FAQ — короткие ответы помогут быстро освоиться с нашей CRM.</p>
+        <div class="modal-actions">
+          <button class="modal-btn primary" @click="openFaq">Перейти в FAQ</button>
+          <button class="modal-btn secondary" @click="dismissFaqPrompt">Позже</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Logout confirm modal -->
     <div v-if="showLogoutConfirm" class="modal-overlay" @keydown.esc.prevent="cancelLogout" tabindex="-1">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="logout-title">
@@ -162,6 +183,7 @@ export default {
       notifInterval: null,
       trialDismissed: false,
       isSuperuser: false,
+      showFaqPrompt: false,
     };
   },
   computed: {
@@ -175,6 +197,15 @@ export default {
       const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
       if (full) return full;
       return this.username || this.email || '';
+    },
+    personDisplay() {
+      // Для аккуратных переносов e-mail добавляем нулевую ширину после "." и "@"
+      const src = this.fullName || '';
+      if (!src) return '';
+      if (src.includes('@')) {
+        return src.replaceAll('.', '.\u200B').replaceAll('@', '@\u200B');
+      }
+      return src;
     },
     userInitials() {
       const full = `${this.firstName || ''} ${this.lastName || ''}`.trim();
@@ -242,6 +273,21 @@ export default {
     goUpgrade() {
       // Пока просто уведомление. Позже — переход на страницу оплаты.
       this.$toast && this.$toast.info('Функция апгрейда скоро будет доступна.');
+    },
+    openFaq() {
+      try {
+        const uid = localStorage.getItem('user-id');
+        if (uid) localStorage.setItem(`faq-prompt-seen:${uid}`, '1');
+      } catch (e) { /* ignore */ }
+      this.showFaqPrompt = false;
+      this.$router.push('/dashboard/faq');
+    },
+    dismissFaqPrompt() {
+      this.showFaqPrompt = false;
+      try {
+        const uid = localStorage.getItem('user-id');
+        if (uid) localStorage.setItem(`faq-prompt-seen:${uid}`, '1');
+      } catch (e) { /* ignore */ }
     }
   },
   async created() {
@@ -290,6 +336,17 @@ export default {
     window.addEventListener('notifications-updated', this.fetchUnread);
     try { if (sessionStorage.getItem('trial-banner-dismissed') === '1') this.trialDismissed = true; } catch (e) { /* ignore */ }
     this.ensureBillingUsage();
+
+    // First-run FAQ prompt (per user account, stored in localStorage)
+    try {
+      const uid = localStorage.getItem('user-id');
+      if (uid) {
+        const key = `faq-prompt-seen:${uid}`;
+        if (!localStorage.getItem(key)) {
+          this.showFaqPrompt = true;
+        }
+      }
+    } catch (e) { /* ignore */ }
   },
   beforeUnmount() {
     if (this.profileUpdatedHandler) {
@@ -452,16 +509,19 @@ export default {
 .company-name {
   font-weight: 600;
   color: var(--sidebar-title);
+  /* имя/компания может переноситься, но без разрывов по одной букве */
   white-space: normal;
-  word-break: break-word;
-  overflow-wrap: anywhere; /* переносим очень длинные слова/строки */
+  word-break: normal;
+  overflow-wrap: break-word; /* переносим только при необходимости, по словам/точкам */
 }
 .person-name {
   font-size: 12px;
   color: var(--sidebar-text);
+  /* Показываем полностью, допускаем перенос по точкам/"@" (см. personDisplay) */
   white-space: normal;
   word-break: break-word;
   overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .username {
@@ -584,6 +644,12 @@ export default {
   font-size: 16px;
   color: var(--dark-blue);
   font-weight: 500;
+}
+.modal .muted {
+  color: #475569;
+  font-weight: 400;
+  font-size: 14px;
+  margin-top: -8px;
 }
 .modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
 .modal-btn {

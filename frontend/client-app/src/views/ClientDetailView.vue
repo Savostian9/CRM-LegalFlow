@@ -173,9 +173,9 @@
                   </div>
                   <div class="doc-actions">
                     <div v-if="doc.files && doc.files.length > 0" class="uploaded-files">
-                      <div v-for="(file, fileIndex) in doc.files" :key="fileIndex" class="file-chip">
-                        <span @click="viewFile(file)" class="file-name">{{ file.name }}</span>
-                        <button type="button" @click="removeUploadedFile(legalCase, docIndex, fileIndex)" class="delete-file-btn">&times;</button>
+                      <div v-for="(file, fileIndex) in doc.files" :key="file.id || fileIndex" class="file-chip">
+                        <span @click="viewFile(file)" class="file-name">{{ getFileDisplayName(file) }}</span>
+                        <button type="button" @click="removeUploadedFile(caseIndex, docIndex, file)" class="delete-file-btn">&times;</button>
                       </div>
                     </div>
                     <button type="button" @click="triggerUpload(caseIndex, docIndex)" class="btn small upload-doc">{{ $t('clientDetail.cases.upload') }}</button>
@@ -492,13 +492,35 @@ export default {
       this.confirmDialogMessage = '';
       this.confirmCallback = null;
     },
-    removeUploadedFile(legalCase, docIndex, fileIndex) {
-      const doc = legalCase.documents[docIndex];
-      doc.files.splice(fileIndex, 1);
-      if (doc.files.length === 0) {
-        doc.status = 'NOT_SUBMITTED';
+    async removeUploadedFile(caseIndex, docIndex, file) {
+      if (!file) return;
+      // Серверный файл
+      if (file.id) {
+        const token = localStorage.getItem('user-token');
+        try {
+          await axios.delete(`http://127.0.0.1:8000/api/files/${file.id}/`, {
+            headers: { Authorization: `Token ${token}` }
+          });
+          // Локально обновляем список файлов
+          const doc = this.editableClient?.legal_cases?.[caseIndex]?.documents?.[docIndex];
+          if (doc && Array.isArray(doc.files)) {
+            doc.files = doc.files.filter(f => (f.id || null) !== file.id);
+            if (doc.files.length === 0) doc.status = 'NOT_SUBMITTED';
+          }
+          this.showToast(this.$t('clientDetail.toasts.saved'), 'success', 900);
+        } catch (e) {
+          console.error('Delete file failed', e.response?.data || e);
+          this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+        }
+        return;
       }
-      this.saveAllChanges();
+      // Локально добавленный до сохранения
+      const doc = this.editableClient?.legal_cases?.[caseIndex]?.documents?.[docIndex];
+      if (!doc) return;
+      const idx = (doc.files || []).indexOf(file);
+      if (idx >= 0) doc.files.splice(idx, 1);
+      if ((doc.files || []).length === 0) doc.status = 'NOT_SUBMITTED';
+      // Не перезагружаем карточку
     },
     triggerUpload(caseIndex, docIndex) {
       this.uploadingDocContext = { caseIndex, docIndex };
@@ -514,42 +536,77 @@ export default {
         console.error('File input not found or click method not available');
       }
     },
-    handleFileUpload(event) {
+    async handleFileUpload(event) {
       const files = event.target.files;
       if (!files.length || !this.uploadingDocContext) return;
 
       const { caseIndex, docIndex } = this.uploadingDocContext;
-      
-      if (!this.editableClient.legal_cases[caseIndex] || 
-          !this.editableClient.legal_cases[caseIndex].documents[docIndex]) {
-        console.error('Document not found for upload');
-        return;
-      }
-      
-      const doc = this.editableClient.legal_cases[caseIndex].documents[docIndex];
-      if (!doc.files) {
-        doc.files = [];
-      }
-      
-      for (const file of files) {
-        doc.files.push({
-          url: URL.createObjectURL(file),
-          name: file.name,
-        });
-      }
-      
-      if (files.length > 0) {
-        doc.status = 'SUBMITTED';
-      }
+      const currentCase = this.editableClient?.legal_cases?.[caseIndex];
+      if (!currentCase) { console.error('Case not found'); return; }
+      const currentDoc = currentCase.documents?.[docIndex];
+      if (!currentDoc) { console.error('Document not found'); return; }
 
-      this.uploadingDocContext = null;
-      event.target.value = '';
-      this.saveAllChanges();
+      try {
+        // Убедимся, что у документа есть ID в базе
+        let docId = currentDoc.id;
+        if (!docId) {
+          await this.saveAllChanges();
+          await this.fetchClientData();
+          const refreshedCase = this.editableClient?.legal_cases?.[caseIndex];
+          const match = refreshedCase?.documents?.find(d => d.document_type === currentDoc.document_type);
+          if (match && match.id) {
+            docId = match.id;
+          }
+        }
+        if (!docId) {
+          this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+          return;
+        }
+
+        // Загружаем одним запросом без полной перезагрузки карточки
+        const token = localStorage.getItem('user-token');
+        const fd = new FormData();
+        for (const f of files) fd.append('files', f);
+        try {
+          const res = await axios.post(`http://127.0.0.1:8000/api/documents/${docId}/files/`, fd, {
+            headers: { Authorization: `Token ${token}`, 'Content-Type': 'multipart/form-data' }
+          });
+          const payload = res?.data;
+          const uploaded = Array.isArray(payload) ? payload : (payload ? [payload] : []);
+          if (!Array.isArray(currentDoc.files)) currentDoc.files = [];
+          uploaded.forEach(u => currentDoc.files.push(u));
+          if (uploaded.length > 0) currentDoc.status = 'SUBMITTED';
+          this.showToast(this.$t('clientDetail.toasts.saved'), 'success', 1200);
+        } catch (e) {
+          console.error('Upload failed', e.response?.data || e);
+          this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+        }
+      } finally {
+        this.uploadingDocContext = null;
+        if (event && event.target) event.target.value = '';
+      }
     },
     viewFile(file) {
-      if (file.url) {
-        window.open(file.url, '_blank');
-      }
+      const url = this.getFileUrl(file);
+      if (url) window.open(url, '_blank');
+    },
+    getFileDisplayName(file) {
+      if (!file) return '';
+      if (file.name) return file.name;
+      const url = file.file || file.url || '';
+      if (!url) return '';
+      try {
+        const parts = url.split('?')[0].split('#')[0].split('/');
+        return decodeURIComponent(parts[parts.length - 1] || 'file');
+      } catch { return 'file'; }
+    },
+    getFileUrl(file) {
+      if (!file) return '';
+      if (file.url) return file.url;
+      const f = file.file;
+      if (!f) return '';
+      if (/^https?:\/\//i.test(f)) return f;
+      return `http://127.0.0.1:8000${f.startsWith('/') ? '' : '/'}${f}`;
     },
     async saveAllChanges() {
         if (this.isSaving) return;

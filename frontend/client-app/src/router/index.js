@@ -12,6 +12,7 @@ import PasswordResetConfirmView from '../views/PasswordResetConfirmView.vue'
 import PrivacyPolicy from '../views/PrivacyPolicy.vue'
 import CookiesPolicy from '../views/CookiesPolicy.vue'
 import TermsView from '../views/TermsView.vue'
+import FaqView from '../views/FaqView.vue'
 
 // --- Главный макет и страницы личного кабинета ---
 import DashboardLayout from '../layouts/DashboardLayout.vue'
@@ -73,6 +74,11 @@ const routes = [
     name: 'terms',
     component: TermsView
   },
+  {
+    path: '/faq',
+    name: 'faq-public',
+    component: FaqView
+  },
 
   // --- Маршруты ВНУТРИ личного кабинета (с постоянным боковым меню) ---
   {
@@ -125,6 +131,11 @@ const routes = [
         path: 'plan',
         name: 'my-plan',
         component: MyPlanView
+      },
+      {
+        path: 'faq',
+        name: 'faq',
+        component: FaqView
       },
       {
         path: 'admin',

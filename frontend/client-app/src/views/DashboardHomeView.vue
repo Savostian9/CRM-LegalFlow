@@ -39,8 +39,13 @@
           </div>
         </div>
         <div v-if="loading" class="widget-empty">{{ $t('common.loading') }}</div>
-        <div v-else-if="items.length===0" class="widget-empty">
-          {{ $t('dashboard.noTasks') }} <router-link to="/dashboard/calendar">{{ $t('dashboard.createTask') }}</router-link>
+        <div v-else-if="items.length===0" class="widget-empty empty-modern">
+          <div class="empty-title">{{ tr('dashboard.noTasks','Нет задач') }}</div>
+          <div class="empty-sub">{{ tr('dashboard.noTasksHint','Создайте задачу — это поможет не упустить важное.') }}</div>
+          <div class="empty-actions">
+            <button class="btn" @click="openCreateModal">{{ tr('dashboard.createTask','Создать задачу') }}</button>
+            <router-link class="btn outline" to="/dashboard/calendar">{{ tr('dashboard.openCalendar','Открыть календарь') }}</router-link>
+          </div>
         </div>
         <ul v-else class="task-list">
           <li v-for="t in items"
@@ -127,6 +132,58 @@
             </div>
           </div>
         </div>
+        <!-- Quick create task modal -->
+        <div v-if="showCreateModal" class="task-modal-overlay" @click.self="closeCreateModal">
+          <div class="task-modal">
+            <header class="tm-header">
+              <h3>{{ tr('tasks.newTask','Новая задача') }}</h3>
+              <button class="icon" @click="closeCreateModal">×</button>
+            </header>
+            <div class="tm-body">
+              <div class="tm-grid">
+                <label class="full">
+                  {{ $t('tasks.client') }}
+                  <ClientAutocomplete
+                    v-model="newSelectedClientId"
+                    :placeholder="$t('tasks.chooseClient')"
+                    @client-selected="(c)=>{ newSelectedClientId=c?.id||'' }"
+                  />
+                </label>
+                <label>
+                  {{ $t('tasks.titleLabel') }}
+                  <input type="text" v-model="createForm.title" :placeholder="$t('tasks.titlePH')" />
+                </label>
+                <label>
+                  {{ $t('tasks.start') }}
+                  <input type="date" v-model="createForm.start" />
+                </label>
+                <label>
+                  {{ $t('tasks.table.status') }}
+                  <UiSelect v-model="createForm.status" :options="[
+                    { value:'SCHEDULED', label: $t('tasks.status.SCHEDULED') },
+                    { value:'DONE', label: $t('tasks.status.DONE') },
+                    { value:'CANCELLED', label: $t('tasks.status.CANCELLED') }
+                  ]" aria-label="Status" />
+                </label>
+                <label>
+                  {{ $t('tasks.assignee') }}
+                  <UiSelect
+                    v-model="newSelectedAssignee"
+                    :options="assigneeOptions"
+                    :placeholder="$t('tasks.unassigned')"
+                    aria-label="Assignee"
+                  />
+                  <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
+                </label>
+              </div>
+            </div>
+            <footer class="tm-footer">
+              <div class="spacer"></div>
+              <button class="btn outline" @click="closeCreateModal" :disabled="creating">{{ $t('common.cancel') }}</button>
+              <button class="btn" @click="createTask" :disabled="creating">{{ creating ? (t('common.saving') || 'Сохранение...') : tr('tasks.create','Создать') }}</button>
+            </footer>
+          </div>
+        </div>
       </div>
       <!-- Notifications widget -->
       <div class="widget notifications">
@@ -158,6 +215,19 @@
         </ul>
         <div v-else class="widget-empty">{{ tr('notifications.empty','Нет уведомлений') }}</div>
         <div class="notif-footer" v-if="unreadCount>0">{{ trUnread(unreadCount) }}</div>
+      </div>
+      <!-- Help / FAQ widget -->
+      <div class="widget help">
+        <div class="help-card no-icon">
+          <div class="hc-content">
+            <h3 class="hc-title">Нужна помощь?</h3>
+            <p class="hc-sub">Ответы на частые вопросы и короткие подсказки по работе с системой.</p>
+            <div class="hc-actions">
+              <router-link class="btn" to="/dashboard/faq">Открыть FAQ</router-link>
+              <a class="btn outline" href="mailto:crmlegalflow@gmail.com">Написать в поддержку</a>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <transition name="fade-toast">
@@ -465,6 +535,53 @@ onMounted(() => {
   loadUsers()
 })
 
+// --- Quick create modal state & logic ---
+const showCreateModal = ref(false)
+const creating = ref(false)
+const createForm = ref({ title:'', start:'', status:'SCHEDULED' })
+const newSelectedClientId = ref('')
+const newSelectedAssignee = ref('')
+
+function openCreateModal(){
+  // Default date = today
+  const today = new Date()
+  const pad = (n)=> String(n).padStart(2,'0')
+  createForm.value = { title:'', start:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`, status:'SCHEDULED' }
+  newSelectedClientId.value = ''
+  newSelectedAssignee.value = ''
+  showCreateModal.value = true
+}
+function closeCreateModal(){ if(!creating.value) showCreateModal.value = false }
+
+async function createTask(){
+  if(!createForm.value.start){
+    showToast(tr('tasks.validationDate','Укажите дату задачи'))
+    return
+  }
+  creating.value = true
+  try{
+    const token = localStorage.getItem('user-token')
+    const startDate = new Date(createForm.value.start + 'T00:00:00')
+    const endDate = new Date(startDate.getTime() + 24*60*60*1000)
+    const payload = {
+      title: (createForm.value.title || '').trim() || undefined,
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+      status: createForm.value.status,
+      all_day: true,
+      ...(newSelectedClientId.value ? { client_id: Number(newSelectedClientId.value) } : {}),
+      ...(newSelectedAssignee.value ? { assignees: [Number(newSelectedAssignee.value)] } : { assignees: [] })
+    }
+    await axios.post('http://127.0.0.1:8000/api/tasks/', payload, { headers:{ Authorization:'Token '+token } })
+    showCreateModal.value = false
+    await load()
+    showToast(tr('tasks.created','Задача создана'))
+  }catch(e){
+    const msg = (e?.response?.data && (typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data))) || e.message || 'Ошибка создания задачи'
+    showToast(msg)
+  }finally{ creating.value = false }
+}
+
 async function loadFinance(){
   finLoading.value = true
   const token = localStorage.getItem('user-token')
@@ -633,6 +750,22 @@ async function loadUsers(){
 /* Override legacy list button styling so mark-done is blue by default */
 /* removed old gradient override so action button uses unified white->blue hover */
 .widget-empty { padding:16px; color:#5a6a7b; }
+.widget-empty.empty-modern{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:10px; padding:28px 16px; }
+.empty-title{ font-weight:700; color:#0f172a; margin-top:4px; }
+.empty-sub{ color:#475569; font-size:13px; }
+.empty-actions{ display:flex; gap:10px; margin-top:4px; }
+/* Unify hover style for both buttons in empty state */
+.empty-modern .empty-actions .btn:hover,
+.empty-modern .empty-actions .btn.outline:hover{ background:#f1f5f9; color:#1e293b !important; border-color:var(--primary-color,#4A90E2); box-shadow:0 2px 6px -2px rgba(0,0,0,.2); }
+
+/* Help card modern style */
+.help .help-card{ display:flex; align-items:center; gap:16px; padding:18px; border-top:1px solid #eef2f7; background:linear-gradient(180deg,#f8fbff,#f6f9ff); border-radius:0 0 12px 12px; }
+.help .help-card.no-icon{ gap:0; }
+.help .hc-title{ margin:0 0 4px; font-size:18px; font-weight:700; color:#0f172a; }
+.help .hc-sub{ margin:0 0 10px; color:#475569; font-size:13px; }
+.help .hc-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+.help .hc-actions .btn:hover,
+.help .hc-actions .btn.outline:hover{ background:#f1f5f9; color:#1e293b !important; border-color:var(--primary-color,#4A90E2); box-shadow:0 2px 6px -2px rgba(0,0,0,.2); }
 .notifications .notif-actions { display:flex; gap:8px; }
 .btn-mini { background:linear-gradient(180deg,#4A90E2,#4A90E2); color:#fff; border:1px solid #4A90E2; padding:4px 12px; font-size:11px; font-weight:600; line-height:1; border-radius:18px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:background .25s,border-color .25s,box-shadow .25s; }
 .btn-mini:hover { background:linear-gradient(180deg,#4A90E2,#3b7fc9); border-color:#3b7fc9; box-shadow:0 2px 6px -2px rgba(0,0,0,.2); }

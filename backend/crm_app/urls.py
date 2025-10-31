@@ -26,7 +26,7 @@ from .views import (
     InviteAcceptView    
 )
 from .views import AdminStatsView
-from .views import NotificationListCreateView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView, NotificationDeleteView, NotificationBulkDeleteView, BillingUsageView, BillingUpgradeView
+from .views import NotificationListCreateView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView, NotificationDeleteView, NotificationBulkDeleteView, BillingUsageView, BillingUpgradeView, DocumentFileUploadView, UploadedFileDeleteView
 
 urlpatterns = [
     path('register/', RegisterRequestView.as_view(), name='register'),
@@ -49,6 +49,9 @@ urlpatterns = [
     path('clients/', ClientListView.as_view(), name='client-list'),
     path('clients/<int:pk>/', ClientDetailView.as_view(), name='client-detail'),
     path('clients/<int:client_pk>/cases/', CaseCreateView.as_view(), name='case-create'),
+    # Документы / файлы
+    path('documents/<int:document_id>/files/', DocumentFileUploadView.as_view(), name='document-file-upload'),
+    path('files/<int:pk>/', UploadedFileDeleteView.as_view(), name='uploaded-file-delete'),
     # Задачи / календарь
     path('tasks/', TaskListCreateView.as_view(), name='task-list-create'),
     path('tasks/<int:pk>/', TaskDetailView.as_view(), name='task-detail'),

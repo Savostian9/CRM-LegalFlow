@@ -27,11 +27,11 @@ from django.core.mail import send_mail # Если его еще нет
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
-from .models import Client, LegalCase, Document, Task, Reminder, Company, Invite, Notification
+from .models import Client, LegalCase, Document, Task, Reminder, Company, Invite, Notification, UploadedFile
 from .billing.plans import get_plan_limits, format_usage
 from django.db.models import Sum
 from .serializers import ClientListSerializer, ClientSerializer, LegalCaseSerializer, TaskSerializer, TaskListSerializer, \
-    ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer
+    ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer, UploadedFileSerializer
 from urllib.parse import urlparse
 from django.db.utils import OperationalError
 
@@ -1347,23 +1347,24 @@ class TaskListCreateView(APIView):
                         task.assignees.add(*list(users))
             except Exception:
                 pass
-            # Создаём уведомления только для назначенных МЕНЕДЖЕРОВ (кроме автора)
+            # Создаём уведомления для всех назначенных исполнителей (кроме автора)
             try:
                 # Подготовим имя постановщика задачи (создателя)
                 creator = request.user
-                creator_name = ''
+                # Отображаемое имя: Имя Фамилия -> Компания -> Email/логин
                 try:
-                    full = f"{getattr(creator, 'first_name', '') or ''} {getattr(creator, 'last_name', '') or ''}".strip()
+                    first = (getattr(creator, 'first_name', '') or '').strip()
+                    last = (getattr(creator, 'last_name', '') or '').strip()
+                    full = f"{first} {last}".strip()
                     if full:
                         creator_name = full
                     else:
-                        creator_name = getattr(creator, 'username', '') or getattr(creator, 'email', '') or 'Пользователь'
+                        company_name = (getattr(getattr(creator, 'company', None), 'name', '') or '').strip()
+                        creator_name = company_name or getattr(creator, 'email', '') or getattr(creator, 'username', '') or 'Пользователь'
                 except Exception:
-                    creator_name = getattr(creator, 'username', '') or getattr(creator, 'email', '') or 'Пользователь'
+                    creator_name = getattr(creator, 'email', '') or getattr(creator, 'username', '') or 'Пользователь'
 
                 for u in task.assignees.exclude(id=request.user.id):
-                    if getattr(u, 'role', '').upper() != 'MANAGER':
-                        continue
                     title = 'Новая задача'
                     msg_parts = []
                     if task.title:
@@ -1424,6 +1425,12 @@ class TaskDetailView(APIView):
                 pass
             if not can:
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+        # Сохраним текущий список исполнителей, чтобы понять, кого добавили при обновлении
+        try:
+            old_assignees = set(task.assignees.values_list('id', flat=True))
+        except Exception:
+            old_assignees = set()
+
         serializer = TaskSerializer(task, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             # Если меняется клиент, проверим принадлежность
@@ -1431,6 +1438,50 @@ class TaskDetailView(APIView):
             if new_client and new_client.created_by_id != request.user.id and role not in ('ADMIN','LEAD','LAWYER','ASSISTANT'):
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
             task = serializer.save()
+
+            # После сохранения проверим, появились ли новые исполнители — уведомим их
+            try:
+                new_assignees = set(task.assignees.values_list('id', flat=True))
+                added_ids = [aid for aid in new_assignees if aid not in old_assignees and aid != request.user.id]
+                if added_ids:
+                    # Имя постановщика (кто выполнял обновление)
+                    updater = request.user
+                    try:
+                        first = (getattr(updater, 'first_name', '') or '').strip()
+                        last = (getattr(updater, 'last_name', '') or '').strip()
+                        full = f"{first} {last}".strip()
+                        if full:
+                            updater_name = full
+                        else:
+                            company_name = (getattr(getattr(updater, 'company', None), 'name', '') or '').strip()
+                            updater_name = company_name or getattr(updater, 'email', '') or getattr(updater, 'username', '') or 'Пользователь'
+                    except Exception:
+                        updater_name = getattr(updater, 'email', '') or getattr(updater, 'username', '') or 'Пользователь'
+
+                    from .models import User as _User
+                    for u in _User.objects.filter(id__in=added_ids):
+                        title = 'Задача назначена'
+                        msg_parts = []
+                        if task.title:
+                            msg_parts.append(task.title)
+                        try:
+                            when = task.start.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M')
+                            msg_parts.append(f"на {when}")
+                        except Exception:
+                            pass
+                        msg_parts.append(f"Назначил: {updater_name}")
+                        msg = ' · '.join([p for p in msg_parts if p])
+                        Notification.objects.create(
+                            user=u,
+                            task=task,
+                            client=task.client if hasattr(task, 'client') else None,
+                            title=title,
+                            message=msg,
+                            source='SYSTEM'
+                        )
+            except Exception:
+                pass
+
             return Response(TaskSerializer(task).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1827,3 +1878,107 @@ class NotificationBulkDeleteView(APIView):
         deleted = qs.count()
         qs.delete()
         return Response({'deleted': deleted})
+
+# --- Загрузка и удаление файлов документов ---
+class DocumentFileUploadView(APIView):
+    """Загрузка одного или нескольких файлов к документу.
+    Принимает multipart/form-data с ключом 'file' (один файл) или 'files' (несколько файлов).
+    Дополнительно поддерживает поле 'description'.
+
+    Права доступа:
+    - ADMIN/LEAD/LAWYER/ASSISTANT: документ клиента своей компании
+    - MANAGER: документ клиента, которого он создал (created_by == self)
+    - ASSISTANT может загружать, если принадлежит той же компании (как выше)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, document_id):
+        # Находим документ
+        try:
+            doc = Document.objects.select_related('legal_case__client__created_by', 'legal_case__client__user').get(pk=document_id)
+        except Document.DoesNotExist:
+            return Response({'detail': 'Документ не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Проверяем права
+        role = getattr(request.user, 'role', None)
+        user_company_id = getattr(request.user, 'company_id', None)
+        owner_company_id = getattr(getattr(getattr(doc.legal_case.client, 'created_by', None), 'company', None), 'id', None)
+        client_user_company_id = getattr(getattr(getattr(doc.legal_case.client, 'user', None), 'company', None), 'id', None)
+
+        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT'):
+            if not (user_company_id and (owner_company_id == user_company_id or client_user_company_id == user_company_id)):
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            # MANAGER: только для своих клиентов
+            if getattr(doc.legal_case.client, 'created_by_id', None) != request.user.id:
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Получаем файлы из запроса
+        files = request.FILES.getlist('files') or []
+        if not files:
+            f = request.FILES.get('file')
+            if f:
+                files = [f]
+        if not files:
+            return Response({'detail': 'Файл не передан'}, status=status.HTTP_400_BAD_REQUEST)
+
+        description = request.data.get('description', '')
+
+        created = []
+        for f in files:
+            try:
+                uf = UploadedFile.objects.create(document=doc, file=f, description=description or '')
+                created.append(uf)
+            except Exception as e:
+                return Response({'detail': 'Ошибка сохранения файла', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        data = UploadedFileSerializer(created, many=True, context={'request': request}).data
+        # После загрузки пометим документ "SUBMITTED", если были файлы
+        try:
+            if created and getattr(doc, 'status', None) == 'NOT_SUBMITTED':
+                doc.status = 'SUBMITTED'
+                doc.save(update_fields=['status'])
+        except Exception:
+            pass
+        # Если передан один файл — вернем объект, иначе список
+        if len(data) == 1:
+            return Response(data[0], status=status.HTTP_201_CREATED)
+        return Response(data, status=status.HTTP_201_CREATED)
+
+
+class UploadedFileDeleteView(APIView):
+    """Удаление загруженного файла документа (и физического файла)."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            uf = UploadedFile.objects.select_related('document__legal_case__client__created_by', 'document__legal_case__client__user').get(pk=pk)
+        except UploadedFile.DoesNotExist:
+            return Response({'detail': 'Файл не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        doc = uf.document
+        role = getattr(request.user, 'role', None)
+        user_company_id = getattr(request.user, 'company_id', None)
+        owner_company_id = getattr(getattr(getattr(doc.legal_case.client, 'created_by', None), 'company', None), 'id', None)
+        client_user_company_id = getattr(getattr(getattr(doc.legal_case.client, 'user', None), 'company', None), 'id', None)
+
+        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT'):
+            if not (user_company_id and (owner_company_id == user_company_id or client_user_company_id == user_company_id)):
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            if getattr(doc.legal_case.client, 'created_by_id', None) != request.user.id:
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # Удаляем файл
+            uf.delete()
+            # Если не осталось файлов у документа — можно сбросить статус на NOT_SUBMITTED
+            try:
+                if not uf.document.files.exists() and getattr(uf.document, 'status', None) == 'SUBMITTED':
+                    uf.document.status = 'NOT_SUBMITTED'
+                    uf.document.save(update_fields=['status'])
+            except Exception:
+                pass
+        except Exception as e:
+            return Response({'detail': 'Ошибка удаления файла', 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(status=status.HTTP_204_NO_CONTENT)

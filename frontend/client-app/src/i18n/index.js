@@ -13,6 +13,7 @@ const messages = {
       calendar: 'Календарь',
       settings: 'Настройки',
       notifications: 'Уведомления',
+      faq: 'FAQ',
       logout: 'Выйти'
     },
     modal: {
@@ -288,7 +289,7 @@ const messages = {
       allDay: 'Весь день',
       assignee: 'Ответственный',
       unassigned: '— не назначен —',
-      assigneeFallback: 'Показан только ваш аккаунт (нужны права Лид/Админ для списка пользователей).',
+  assigneeFallback: 'Показан только ваш аккаунт (нужны права Руководителя или Администратора для списка пользователей).',
       save: 'Сохранить',
   gotoClient: 'К клиенту',
       form: {
@@ -436,6 +437,9 @@ const messages = {
       ,deletedOne: 'Уведомление удалено'
       ,deletedMany: 'Удалено уведомлений: {n}'
     }
+    ,faq: {
+      title: 'FAQ — Частые вопросы'
+    }
   },
   pl: {
     app: { name: 'LegalFlow' },
@@ -447,6 +451,7 @@ const messages = {
       calendar: 'Kalendarz',
       settings: 'Ustawienia',
       notifications: 'Powiadomienia',
+      faq: 'FAQ',
       logout: 'Wyloguj się'
     },
     modal: {
@@ -722,7 +727,7 @@ const messages = {
       allDay: 'Cały dzień',
       assignee: 'Odpowiedzialny',
       unassigned: '— nieprzypisane —',
-      assigneeFallback: 'Wyświetlono tylko Twoje konto (wymagane uprawnienia Lider/Admin do listy użytkowników).',
+  assigneeFallback: 'Wyświetlono tylko Twoje konto (wymagane uprawnienia Kierownik/Administrator do listy użytkowników).',
       save: 'Zapisz',
   gotoClient: 'Do klienta',
       form: {
@@ -869,6 +874,9 @@ const messages = {
       ,confirmDeleteMany: 'Usunąć zaznaczone powiadomienia ({n})?'
       ,deletedOne: 'Powiadomienie usunięte'
       ,deletedMany: 'Usunięto powiadomień: {n}'
+    }
+    ,faq: {
+      title: 'FAQ — Najczęstsze pytania'
     }
   }
 }

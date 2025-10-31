@@ -72,8 +72,9 @@
           :options="[{ value:'', label: ($t('clients.extra.allOption')||$t('tasks.filters.statusAll')) }, ...users.map(u => ({ value: String(u.id), label: userLabel(u) }))]"
           :placeholder="$t('clients.extra.allOption') || $t('tasks.filters.statusAll')"
           :aria-label="$t('tasks.assignee') || 'Assignee'"
+          :disabled="disableAssigneeFilterForManager"
         />
-        <button class="af-clear" v-if="assigneeFilter" @click="assigneeFilter=''">{{ $t('clients.extra.reset') || 'Reset' }}</button>
+        <button class="af-clear" v-if="assigneeFilter && !disableAssigneeFilterForManager" @click="assigneeFilter=''">{{ $t('clients.extra.reset') || 'Reset' }}</button>
       </div>
 
   <div v-if="loading" class="empty">{{ $t('tasks.loading') }}</div>
@@ -180,6 +181,8 @@ export default {
       users: [],
       usersMap: {},
       usersFallback: false,
+      currentUserId: null,
+      role: '',
       showForm: false,
       submitting: false,
       query: '',
@@ -207,9 +210,15 @@ export default {
     }
   },
   created(){
-    this.loadTasks()
-    this.loadClients()
-    this.loadUsers()
+    // сначала получим текущего пользователя и роль, чтобы настроить фильтр "Ответственный" для менеджера
+    this.loadMe().finally(() => {
+      if ((this.role || '').toUpperCase() === 'MANAGER' && this.currentUserId) {
+        this.assigneeFilter = String(this.currentUserId)
+      }
+      this.loadTasks()
+      this.loadClients()
+      this.loadUsers()
+    })
   const now = new Date()
   this.form.start = this.toDateInput(now)
   this.$nextTick(() => { this.tryOpenFromRoute() })
@@ -287,10 +296,22 @@ export default {
           last_name: me.data.last_name || '',
           email: me.data.email || ''
         }]
+        // если ранее не удалось получить текущего пользователя, установим его отсюда
+        if (!this.currentUserId) this.currentUserId = me.data.id
+        if (!this.role && me?.data?.role) this.role = String(me.data.role || '').toUpperCase()
       } finally {
         const mapEntries = this.users.map(u => [u.id, this.userLabel(u)])
         this.usersMap = Object.fromEntries(mapEntries)
       }
+    },
+    async loadMe(){
+      try{
+        const me = await axios.get('http://127.0.0.1:8000/api/user-info/', {
+          headers: { Authorization: 'Token ' + this.token() }
+        })
+        this.currentUserId = me?.data?.id || null
+        this.role = String(me?.data?.role || '').toUpperCase()
+      } catch(e){ /* no-op */ }
     },
     async createTask(){
       this.submitting = true
@@ -494,6 +515,9 @@ export default {
     }
   }
   ,computed:{
+    disableAssigneeFilterForManager(){
+      return (this.role || '').toUpperCase() === 'MANAGER'
+    },
     assigneeOptions(){
       return [
         { value:'', label: this.$t('tasks.unassigned') },
@@ -516,6 +540,11 @@ export default {
       ]
     },
     filteredTasks(){
+      // Если менеджер — показываем только задачи, где он ответственным (UI-фильтр необнуляемый)
+      if (this.disableAssigneeFilterForManager && this.currentUserId) {
+        const id = Number(this.currentUserId)
+        return this.tasks.filter(t => Array.isArray(t.assignees) && t.assignees.includes(id))
+      }
       if(!this.assigneeFilter) return this.tasks
       const id = Number(this.assigneeFilter)
       return this.tasks.filter(t => Array.isArray(t.assignees) && t.assignees.includes(id))
