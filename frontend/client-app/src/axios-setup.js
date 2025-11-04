@@ -9,6 +9,19 @@ const ABSOLUTE_BACKEND_HOSTS = [
 
 axios.interceptors.request.use((config) => {
   try {
+    // Attach app locale so backend can localize messages
+    try {
+      const savedLocale = (typeof localStorage !== 'undefined' && localStorage.getItem('locale')) || ''
+      if (savedLocale) {
+        config.headers = config.headers || {}
+        config.headers['X-Locale'] = savedLocale
+        // Also set Accept-Language for compatibility
+        if (!config.headers['Accept-Language']) {
+          config.headers['Accept-Language'] = savedLocale
+        }
+      }
+    } catch (_) { /* ignore */ }
+
     const url = config.url || ''
     if (typeof url === 'string') {
       for (const re of ABSOLUTE_BACKEND_HOSTS) {

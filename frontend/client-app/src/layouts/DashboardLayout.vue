@@ -93,7 +93,7 @@
               :class="{ active: $route.path.startsWith('/dashboard/plan') }"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M11.7 2.3a1 1 0 0 1 0-1.4l.01-.01a1 1 0 0 1 1.41 0l2.3 2.29a1 1 0 0 1 0 1.42L13.12 7.9a1 1 0 0 1-1.42 0l-.01-.01a1 1 0 0 1 0-1.41L12.3 4H8a4 4 0 0 0-4 4v3a1 1 0 1 1-2 0V8a6 6 0 0 1 6-6h4.3l-1.6-1.7Zm8 9.4a1 1 0 0 1 0 1.4l-.01.01a1 1 0 0 1-1.41 0l-2.3-2.29a1 1 0 0 1 0-1.42l2.3-2.29a1 1 0 0 1 1.42 0l.01.01a1 1 0 0 1 0 1.41L19.7 11H20a4 4 0 0 1 4 4v3a1 1 0 1 1-2 0v-3a2 2 0 0 0-2-2h-.3l1.3 1.3a1 1 0 0 1 0 1.4l-.01.01a1 1 0 0 1-1.41 0l-2.3-2.29a1 1 0 0 1 0-1.42l2.3-2.29a1 1 0 0 1 1.42 0l.01.01a1 1 0 0 1 0 1.41L19.7 13H20a4 4 0 0 1 4 4v3a1 1 0 1 1-2 0v-3a2 2 0 0 0-2-2h-.3l1.3 1.3ZM8 13a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2H9v2a1 1 0 1 1-2 0v-2H5a1 1 0 1 1 0-2h2v-2a1 1 0 0 1 1-1Z"/></svg>
-              <span>Мой план</span>
+              <span>{{ $t('billing.title') }}</span>
             </router-link>
           </li>
           <li v-if="isSuperuser">
@@ -118,11 +118,12 @@
     <main class="main-content">
       <div v-if="showTrialBanner" class="trial-banner" :class="{ 'trial-ending-soon': (daysLeft||0) <= 3 }">
         <div class="trial-text">
-          <strong>Trial</strong> — осталось {{ daysLeft }} {{ dayWord }}. План: TRIAL.
-          <span v-if="daysLeft === 0">Срок истёк — обновите план, чтобы продолжить без ограничений.</span>
+          <strong>Trial</strong>
+          — {{$t('billing.trial.remaining', { days: daysLeft, dayWord: dayWord })}}
+          <span v-if="daysLeft === 0">{{ $t('billing.trial.expired') }}</span>
         </div>
         <div class="trial-actions">
-          <button class="upgrade-btn" @click="goUpgrade">Перейти на Starter</button>
+          <button class="upgrade-btn" @click="goUpgrade">{{ $t('billing.trial.upgradeStarter') }}</button>
           <button class="close-btn" @click="dismissTrial">×</button>
         </div>
       </div>
@@ -138,11 +139,11 @@
     <!-- First-run: suggest reading FAQ -->
     <div v-if="showFaqPrompt" class="modal-overlay" @keydown.esc.prevent="dismissFaqPrompt" tabindex="-1">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="faq-prompt-title">
-        <p id="faq-prompt-title">Хотите быстрее разобраться в системе?</p>
-        <p class="muted">Загляните в раздел FAQ — короткие ответы помогут быстро освоиться с нашей CRM.</p>
+        <p id="faq-prompt-title">{{ $t('faq.prompt.title') }}</p>
+        <p class="muted">{{ $t('faq.prompt.subtitle') }}</p>
         <div class="modal-actions">
-          <button class="modal-btn primary" @click="openFaq">Перейти в FAQ</button>
-          <button class="modal-btn secondary" @click="dismissFaqPrompt">Позже</button>
+          <button class="modal-btn primary" @click="openFaq">{{ $t('faq.prompt.go') }}</button>
+          <button class="modal-btn secondary" @click="dismissFaqPrompt">{{ $t('faq.prompt.later') }}</button>
         </div>
       </div>
     </div>
@@ -222,7 +223,12 @@ export default {
       return true;
     },
     dayWord() {
-      const d = this.daysLeft;
+      const d = this.daysLeft || 0;
+      const loc = (this.$i18n && this.$i18n.locale) || 'ru';
+      if (loc.startsWith('pl')) {
+        return d === 1 ? 'dzień' : 'dni';
+      }
+      // ru default
       if (d === 1) return 'день';
       if (d >= 2 && d <= 4) return 'дня';
       return 'дней';
@@ -272,7 +278,7 @@ export default {
     },
     goUpgrade() {
       // Пока просто уведомление. Позже — переход на страницу оплаты.
-      this.$toast && this.$toast.info('Функция апгрейда скоро будет доступна.');
+      this.$toast && this.$toast.info(this.$t('billing.toast.upgradeSoon'));
     },
     openFaq() {
       try {

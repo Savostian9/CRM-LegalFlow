@@ -40,7 +40,7 @@
         </div>
         <div v-if="loading" class="widget-empty">{{ $t('common.loading') }}</div>
         <div v-else-if="items.length===0" class="widget-empty empty-modern">
-          <div class="empty-title">{{ tr('dashboard.noTasks','Нет задач') }}</div>
+          <div class="empty-title">{{ tr('dashboard.noTasks','Нет задач.') }}</div>
           <div class="empty-sub">{{ tr('dashboard.noTasksHint','Создайте задачу — это поможет не упустить важное.') }}</div>
           <div class="empty-actions">
             <button class="btn" @click="openCreateModal">{{ tr('dashboard.createTask','Создать задачу') }}</button>
@@ -220,11 +220,11 @@
       <div class="widget help">
         <div class="help-card no-icon">
           <div class="hc-content">
-            <h3 class="hc-title">Нужна помощь?</h3>
-            <p class="hc-sub">Ответы на частые вопросы и короткие подсказки по работе с системой.</p>
+            <h3 class="hc-title">{{ $t('help.title') }}</h3>
+            <p class="hc-sub">{{ $t('help.subtitle') }}</p>
             <div class="hc-actions">
-              <router-link class="btn" to="/dashboard/faq">Открыть FAQ</router-link>
-              <a class="btn outline" href="mailto:crmlegalflow@gmail.com">Написать в поддержку</a>
+              <router-link class="btn" to="/dashboard/faq">{{ $t('help.openFaq') }}</router-link>
+              <a class="btn outline" href="mailto:crmlegalflow@gmail.com">{{ $t('help.contactSupport') }}</a>
             </div>
           </div>
         </div>
@@ -422,7 +422,7 @@ function closeTaskModal(force=false){
 }
 
 // Placeholder title for tasks lacking user-provided title
-const placeholderTitle = 'Без названия'
+const placeholderTitle = (t('tasks.untitled') === 'tasks.untitled') ? 'Без названия' : t('tasks.untitled')
 
 function statusDotClass(status){
   const s = (status || '').toLowerCase()

@@ -156,7 +156,9 @@ const messages = {
       week: 'Неделя',
       month: 'Месяц',
       noTasks: 'Нет задач.',
+      noTasksHint: 'Создайте задачу — это поможет не упустить важное.',
       createTask: 'Создать задачу',
+      openCalendar: 'Открыть календарь',
       expectedPaymentsMonth: 'Ожидаемые платежи (месяц)',
       receiptsMonth: 'Поступления (месяц)',
       expectedPaymentsTotal: 'Ожидаемые платежи (всего)',
@@ -278,12 +280,20 @@ const messages = {
       add: 'Добавить задачу',
       cancel: 'Отмена',
       newTask: 'Новая задача',
+      create: 'Создать',
+      created: 'Задача создана',
+      validationDate: 'Укажите дату задачи',
+      optional: 'Необязательно: будет сейчас',
+      updateForbidden: 'Нет прав для редактирования этой задачи',
+      updateMethodNotAllowed: 'Метод не разрешён для этого URL',
+      createError: 'Не удалось создать задачу',
       editTask: 'Редактировать задачу',
       client: 'Клиент',
       chooseClient: 'Выберите клиента',
       type: 'Тип',
       titleLabel: 'Заголовок',
       titlePH: 'Короткое описание',
+      untitled: 'Без названия',
       start: 'Начало',
       end: 'Окончание',
       allDay: 'Весь день',
@@ -423,6 +433,7 @@ const messages = {
       loading: 'Загрузка...',
       refresh: 'Обновить',
       markAll: 'Отметить все прочитанными',
+      unreadCount: 'Непрочитанных: {count}',
       marking: 'Отмечаем...',
       markOne: 'Прочитано',
       unread: 'Непрочитанных: {n}',
@@ -438,7 +449,150 @@ const messages = {
       ,deletedMany: 'Удалено уведомлений: {n}'
     }
     ,faq: {
-      title: 'FAQ — Частые вопросы'
+      title: 'FAQ — Частые вопросы',
+      lead: 'Ниже собрали ответы на популярные вопросы по работе с системой.',
+      footer: 'Не нашли ответ? Напишите нам на почту',
+      prompt: {
+        title: 'Хотите быстрее разобраться в системе?',
+        subtitle: 'Загляните в раздел FAQ — короткие ответы помогут быстро освоиться с нашей CRM.',
+        go: 'Перейти в FAQ',
+        later: 'Позже'
+      },
+      items: [
+        {
+          anchor: 'invite-users',
+          q: 'Как пригласить сотрудника в компанию?',
+          a: `<div>
+      <p><strong>Приглашение создаётся во вкладке «Приглашения»</strong> в разделе «Настройки».</p>
+      <ul>
+        <li>Выберите роль, которая будет присвоена приглашённому (например: Менеджер, Юрист/Консультант, Ассистент).</li>
+        <li>Нажмите «Создать приглашение» — система создаст ссылку-приглашение.</li>
+        <li>Скопируйте и отправьте ссылку коллеге — после регистрации он автоматически появится в списке «Пользователи».</li>
+      </ul>
+      <p>Приглашать сотрудников может только Руководитель компании.</p>
+    </div>`
+        },
+        {
+          anchor: 'roles-rights',
+          q: 'Какие роли есть в системе?',
+          a: `<ul class="faq-roles">
+      <li><strong>Руководитель</strong> — полный доступ к клиентам, задачам и делам компании, настройкам и пользователям.</li>
+      <li><strong>Менеджер</strong> — работа с клиентами и делами компании, задачи и календарь, доступ к разделу «Финансы».</li>
+        <li><strong>Юрист/Консультант</strong> — работа с клиентами и делами, задачи и календарь, доступ к разделу «Финансы».</li>
+        <li><strong>Ассистент</strong> — нет доступа к разделу «Финансы»; помогает по задачам и календарю.</li>
+    </ul>
+    <div class="faq-matrix">
+      <p><strong>Доступ и видимость:</strong></p>
+      <ul>
+        <li>Финансы: доступны ролям <strong>Руководитель</strong>, <strong>Менеджер</strong>, <strong>Юрист/Консультант</strong>; у <strong>Ассистент</strong> доступа нет.</li>
+        <li>Клиенты и дела: <strong>Руководитель</strong> видит всех клиентов компании; <strong>Менеджер</strong> — только своих (назначенных ему) клиентов и их дела; <strong>Юрист/Консультант</strong> и <strong>Ассистент</strong> — видят всех клиентов.</li>
+        <li>Пользователи и настройки компании: только <strong>Руководитель</strong>.</li>
+        <li>Задачи и календарь: доступны всем ролям.</li>
+        <li>Уведомления: доступны всем ролям.</li>
+      </ul>
+    </div>`
+        },
+        {
+          anchor: 'create-client',
+          q: 'Как создать клиента?',
+          a: `<div>
+      <p><strong>Где:</strong> раздел «Клиенты».</p>
+      <ol>
+        <li>Нажмите кнопку «Добавить клиента».</li>
+        <li>Заполните поля: Имя, Фамилия, Email, Телефон.</li>
+        <li>Если у вас роль Руководитель/Администратор — вы можете назначить ответственного менеджера.</li>
+        <li>Сохраните. Новый клиент появится в списке. Менеджер увидит только назначенных ему клиентов.</li>
+      </ol>
+    </div>`
+        },
+        {
+          anchor: 'create-case',
+          q: 'Как создать дело и добавить документы?',
+          a: `<div>
+      <p><strong>Где:</strong> в карточке клиента (открывается кликом по строке клиента в списке).</p>
+      <ol>
+        <li>Откройте Клиенты → клик по нужному клиенту.</li>
+        <li>Внизу карточки нажмите «Добавить новое дело».</li>
+        <li>Укажите Вид дела, даты подачи/решения и Статус дела.</li>
+        <li>Изменения в карточке сохраняются автоматически при выборе значений.</li>
+        <li>При необходимости добавьте напоминания клиенту в секции «Напоминания клиенту» — письмо уйдёт на email клиента в указанное время.</li>
+      </ol>
+      <p style="margin-top:8px"><strong>Документы по делу (чек‑лист):</strong></p>
+      <ul>
+        <li>Раскройте дело и перейдите в «Чек-лист поданных документов».</li>
+        <li>Отмечайте галочкой документы, которые уже поданы.</li>
+        <li>Чтобы приложить файлы, нажмите «Загрузить» напротив документа и выберите файлы — они появятся как метки и доступны для просмотра.</li>
+        <li>Если нужен другой тип документа, нажмите «Добавить документ», впишите название и при необходимости загрузите файлы.</li>
+        <li>Ненужную строку можно удалить крестиком.</li>
+      </ul>
+    </div>`
+        },
+        {
+          anchor: 'tasks-usage',
+          q: 'Как работают задачи (создание, права, статусы)?',
+          a: `<ul>
+      <li><strong>Где создать:</strong> разделы «Календарь» и «Задачи» — кнопка «Создать задачу».</li>
+      <li><strong>Что можно менять:</strong> заголовок, даты, клиента, статус, ответственного.</li>
+      <li><strong>Назначение:</strong> Руководитель может назначать задачу менеджеру и другим пользователям компании.</li>
+      <li><strong>Статусы:</strong> Запланировано, Выполнено, Отменено. На главной есть кнопка «Готово» для быстрого закрытия задачи.</li>
+      <li><strong>Права по задачам:</strong> задачи и календарь доступны всем ролям. Руководитель — видит все задачи компании; Менеджер — видит только задачи, где он назначен ответственным; Юрист/Консультант и Ассистент — видят все задачи.</li>
+      <li><strong>Уведомления:</strong> входящие оповещения видны в разделе «Уведомления»; можно отмечать как прочитанные.</li>
+    </ul>`
+        },
+        {
+          anchor: 'notifications-how',
+          q: 'Как работают уведомления?',
+          a: `<ul>
+      <li><strong>Что приходит:</strong> уведомления о назначенных задачах и о факте отправки напоминания клиенту.</li>
+      <li><strong>Напоминания клиенту:</strong> вы создаёте напоминание в карточке клиента; в назначенный день и (если указано) время система автоматически отправит клиенту письмо на его email. После отправки в системе появляется внутреннее уведомление для ответственного сотрудника с пометкой «отправлено» (или «ошибка отправки», если письмо не ушло).</li>
+      <li><strong>Куда отправляется:</strong> письмо — на email из карточки клиента; внутреннее уведомление — в виджете и разделе «Уведомления».</li>
+      <li><strong>Где смотреть:</strong> виджет «Уведомления» на главной и раздел «Уведомления» в кабинете. В сайдбаре отображается счётчик непрочитанных.</li>
+      <li><strong>Как читать:</strong> клик по уведомлению открывает карточку клиента, если он указан в задаче либо напоминании. Можно отметить одно или все уведомления как прочитанные.</li>
+      <li><strong>Метки:</strong> в уведомлении отображаются клиент, пользователь, тип напоминания и источник (Напоминание/Система).</li>
+    </ul>`
+        }
+      ]
+    }
+    ,help: {
+      title: 'Нужна помощь?',
+      subtitle: 'Ответы на частые вопросы и короткие подсказки по работе с системой.',
+      openFaq: 'Открыть FAQ',
+      contactSupport: 'Написать в поддержку'
+    }
+    ,billing: {
+      title: 'Мой план',
+      error: 'Ошибка',
+      usageLimits: 'Использование и лимиты',
+      resource: 'Ресурс',
+      current: 'Текущее',
+      limit: 'Лимит',
+      rows: {
+        users: 'Пользователи',
+        clients: 'Клиенты',
+        cases: 'Дела',
+        files: 'Файлы',
+        storageMb: 'Хранилище (MB)',
+        tasksMonth: 'Задачи / месяц',
+        remindersActive: 'Активные напоминания',
+        emailsMonth: 'Email / месяц'
+      },
+      trial: {
+        remaining: 'Осталось {days} {dayWord} Trial периода.',
+        until: 'До: {date}',
+        expired: 'Срок истёк — обновите план, чтобы продолжить без ограничений.',
+        upgradeStarter: 'Перейти на Starter'
+      },
+      upgrade: { toPro: 'Апгрейд до Pro' },
+      plan: {
+        currentStarter: 'Текущий план Starter активен.',
+        proActive: 'План Pro активен. Максимальные лимиты.',
+        active: 'Активен'
+      },
+      toast: {
+        upgradeSoon: 'Функция апгрейда скоро будет доступна.',
+        upgraded: 'План обновлён до {plan}',
+        upgradeFailed: 'Не удалось обновить план'
+      }
     }
   },
   pl: {
@@ -594,7 +748,9 @@ const messages = {
       week: 'Tydzień',
       month: 'Miesiąc',
       noTasks: 'Brak zadań.',
+      noTasksHint: 'Utwórz zadanie — to pomoże nie przegapić ważnych spraw.',
       createTask: 'Utwórz zadanie',
+      openCalendar: 'Otwórz kalendarz',
       expectedPaymentsMonth: 'Oczekiwane płatności (miesiąc)',
       receiptsMonth: 'Wpływy (miesiąc)',
       expectedPaymentsTotal: 'Oczekiwane płatności (łącznie)',
@@ -716,12 +872,20 @@ const messages = {
       add: 'Dodaj zadanie',
       cancel: 'Anuluj',
       newTask: 'Nowe zadanie',
+      create: 'Utwórz',
+      created: 'Zadanie utworzone',
+      validationDate: 'Podaj datę zadania',
+      optional: 'Opcjonalnie: ustawiamy teraz',
+      updateForbidden: 'Brak uprawnień do edycji tego zadania',
+      updateMethodNotAllowed: 'Metoda niedozwolona dla tego adresu',
+      createError: 'Nie udało się utworzyć zadania',
       editTask: 'Edytuj zadanie',
       client: 'Klient',
       chooseClient: 'Wybierz klienta',
       type: 'Typ',
       titleLabel: 'Tytuł',
       titlePH: 'Krótki opis',
+      untitled: 'Bez tytułu',
       start: 'Początek',
       end: 'Koniec',
       allDay: 'Cały dzień',
@@ -861,6 +1025,7 @@ const messages = {
       loading: 'Ładowanie...',
       refresh: 'Odśwież',
       markAll: 'Oznacz wszystkie jako przeczytane',
+      unreadCount: 'Nieprzeczytane: {count}',
       marking: 'Oznaczanie...',
       markOne: 'Przeczytane',
       unread: 'Nieprzeczytane: {n}',
@@ -876,7 +1041,150 @@ const messages = {
       ,deletedMany: 'Usunięto powiadomień: {n}'
     }
     ,faq: {
-      title: 'FAQ — Najczęstsze pytania'
+      title: 'FAQ — Najczęstsze pytania',
+      lead: 'Poniżej zebraliśmy odpowiedzi na najpopularniejsze pytania dotyczące pracy z systemem.',
+      footer: 'Nie znaleźliście odpowiedzi? Napiszcie do nas na',
+      prompt: {
+        title: 'Chcesz szybciej poznać system?',
+        subtitle: 'Zajrzyj do działu FAQ — krótkie odpowiedzi pomogą szybko odnaleźć się w naszym CRM.',
+        go: 'Przejdź do FAQ',
+        later: 'Później'
+      },
+      items: [
+        {
+          anchor: 'invite-users',
+          q: 'Jak zaprosić pracownika do firmy?',
+          a: `<div>
+      <p><strong>Zaproszenie tworzysz w zakładce „Zaproszenia”</strong> w sekcji „Ustawienia”.</p>
+      <ul>
+        <li>Wybierz rolę, którą otrzyma zapraszana osoba (np. Menedżer, Prawnik/Konsultant, Asystent).</li>
+        <li>Kliknij „Utwórz zaproszenie” — system wygeneruje link zaproszenia.</li>
+        <li>Skopiuj i wyślij link koledze — po rejestracji automatycznie pojawi się na liście „Użytkownicy”.</li>
+      </ul>
+      <p>Zapraszać pracowników może tylko Kierownik firmy.</p>
+    </div>`
+        },
+        {
+          anchor: 'roles-rights',
+          q: 'Jakie role są w systemie?',
+          a: `<ul class="faq-roles">
+      <li><strong>Kierownik</strong> — pełny dostęp do klientów, zadań i spraw firmy, ustawień oraz użytkowników.</li>
+      <li><strong>Menedżer</strong> — praca z klientami i sprawami firmy, zadania i kalendarz, dostęp do sekcji „Finanse”.</li>
+        <li><strong>Prawnik/Konsultant</strong> — praca z klientami i sprawami, zadania i kalendarz, dostęp do sekcji „Finanse”.</li>
+        <li><strong>Asystent</strong> — brak dostępu do sekcji „Finanse”; pomaga przy zadaniach i kalendarzu.</li>
+    </ul>
+    <div class="faq-matrix">
+      <p><strong>Dostęp i widoczność:</strong></p>
+      <ul>
+        <li>Finanse: dostępne dla ról <strong>Kierownik</strong>, <strong>Menedżer</strong>, <strong>Prawnik/Konsultant</strong>; <strong>Asystent</strong> nie ma dostępu.</li>
+        <li>Klienci i sprawy: <strong>Kierownik</strong> widzi wszystkich klientów firmy; <strong>Menedżer</strong> — tylko swoich (przypisanych) klientów i ich sprawy; <strong>Prawnik/Konsultant</strong> i <strong>Asystent</strong> — widzą wszystkich klientów.</li>
+        <li>Użytkownicy i ustawienia firmy: tylko <strong>Kierownik</strong>.</li>
+        <li>Zadania i kalendarz: dostępne dla wszystkich ról.</li>
+        <li>Powiadomienia: dostępne dla wszystkich ról.</li>
+      </ul>
+    </div>`
+        },
+        {
+          anchor: 'create-client',
+          q: 'Jak utworzyć klienta?',
+          a: `<div>
+      <p><strong>Gdzie:</strong> sekcja „Klienci”.</p>
+      <ol>
+        <li>Kliknij przycisk „Dodaj klienta”.</li>
+        <li>Uzupełnij pola: Imię, Nazwisko, Email, Telefon.</li>
+        <li>Jeśli masz rolę Kierownik/Administrator — możesz wskazać odpowiedzialnego menedżera.</li>
+        <li>Zapisz. Nowy klient pojawi się na liście. Menedżer widzi tylko przypisanych do niego klientów.</li>
+      </ol>
+    </div>`
+        },
+        {
+          anchor: 'create-case',
+          q: 'Jak utworzyć sprawę i dodać dokumenty?',
+          a: `<div>
+      <p><strong>Gdzie:</strong> w karcie klienta (otwierasz klikając w wiersz klienta na liście).</p>
+      <ol>
+        <li>Otwórz Klienci → kliknij odpowiedniego klienta.</li>
+        <li>Na dole karty kliknij „Dodaj nową sprawę”.</li>
+        <li>Wskaż Rodzaj sprawy, daty złożenia/decyzji oraz Status sprawy.</li>
+        <li>Zmiany w karcie zapisywane są automatycznie po wyborze wartości.</li>
+        <li>W razie potrzeby dodaj przypomnienia dla klienta w sekcji „Przypomnienia dla klienta” — wiadomość e‑mail zostanie wysłana w wybranym czasie.</li>
+      </ol>
+      <p style="margin-top:8px"><strong>Dokumenty w sprawie (checklista):</strong></p>
+      <ul>
+        <li>Rozwiń sprawę i przejdź do „Lista złożonych dokumentów”.</li>
+        <li>Odhaczaj dokumenty, które zostały już złożone.</li>
+        <li>Aby dołączyć pliki, kliknij „Prześlij” przy dokumencie i wybierz pliki — pojawią się jako etykiety i będą dostępne do podglądu.</li>
+        <li>Jeśli potrzebny jest inny typ dokumentu, kliknij „Dodaj dokument”, wpisz nazwę i w razie potrzeby prześlij pliki.</li>
+        <li>Niepotrzebny wiersz możesz usunąć krzyżykiem.</li>
+      </ul>
+    </div>`
+        },
+        {
+          anchor: 'tasks-usage',
+          q: 'Jak działają zadania (tworzenie, uprawnienia, statusy)?',
+          a: `<ul>
+      <li><strong>Gdzie utworzyć:</strong> sekcje „Kalendarz” i „Zadania” — przycisk „Utwórz zadanie”.</li>
+      <li><strong>Co można zmieniać:</strong> tytuł, daty, klienta, status, odpowiedzialnego.</li>
+      <li><strong>Przypisywanie:</strong> Kierownik może przypisywać zadania menedżerowi i innym użytkownikom firmy.</li>
+      <li><strong>Statusy:</strong> Zaplanowano, Wykonano, Anulowano. Na stronie głównej jest przycisk „Gotowe” do szybkiego zamykania zadań.</li>
+      <li><strong>Uprawnienia do zadań:</strong> zadania i kalendarz są dostępne dla wszystkich ról. Kierownik — widzi wszystkie zadania firmy; Menedżer — widzi tylko zadania, gdzie jest odpowiedzialnym; Prawnik/Konsultant i Asystent — widzą wszystkie zadania.</li>
+      <li><strong>Powiadomienia:</strong> przychodzące alerty widoczne są w sekcji „Powiadomienia”; można je oznaczać jako przeczytane.</li>
+    </ul>`
+        },
+        {
+          anchor: 'notifications-how',
+          q: 'Jak działają powiadomienia?',
+          a: `<ul>
+      <li><strong>Co przychodzi:</strong> powiadomienia o przypisanych zadaniach oraz o fakcie wysłania przypomnienia do klienta.</li>
+      <li><strong>Przypomnienia dla klienta:</strong> tworzysz przypomnienie w karcie klienta; w wybranym dniu i (jeśli podano) czasie system automatycznie wyśle wiadomość na e‑mail klienta. Po wysyłce w systemie pojawia się wewnętrzne powiadomienie dla odpowiedzialnego pracownika z adnotacją „wysłano” (lub „błąd wysyłki”, jeśli wiadomość nie została dostarczona).</li>
+      <li><strong>Gdzie trafia:</strong> wiadomość — na e‑mail z karty klienta; wewnętrzne powiadomienie — do widżetu i sekcji „Powiadomienia”.</li>
+      <li><strong>Gdzie sprawdzić:</strong> widżet „Powiadomienia” na stronie głównej oraz sekcja „Powiadomienia” w panelu. W pasku bocznym wyświetlany jest licznik nieprzeczytanych.</li>
+      <li><strong>Jak czytać:</strong> kliknięcie powiadomienia otwiera kartę klienta, jeśli został wskazany w zadaniu lub przypomnieniu. Można oznaczyć jedno lub wszystkie powiadomienia jako przeczytane.</li>
+      <li><strong>Etykiety:</strong> w powiadomieniu widoczni są klient, użytkownik, typ przypomnienia i źródło (Przypomnienie/System).</li>
+    </ul>`
+        }
+      ]
+    }
+    ,help: {
+      title: 'Potrzebujesz pomocy?',
+      subtitle: 'Odpowiedzi na najczęstsze pytania i krótkie wskazówki dotyczące pracy z systemem.',
+      openFaq: 'Otwórz FAQ',
+      contactSupport: 'Napisz do wsparcia'
+    }
+    ,billing: {
+      title: 'Mój plan',
+      error: 'Błąd',
+      usageLimits: 'Wykorzystanie i limity',
+      resource: 'Zasób',
+      current: 'Bieżące',
+      limit: 'Limit',
+      rows: {
+        users: 'Użytkownicy',
+        clients: 'Klienci',
+        cases: 'Sprawy',
+        files: 'Pliki',
+        storageMb: 'Magazyn (MB)',
+        tasksMonth: 'Zadania / miesiąc',
+        remindersActive: 'Aktywne przypomnienia',
+        emailsMonth: 'Email / miesiąc'
+      },
+      trial: {
+        remaining: 'Pozostało {days} {dayWord} okresu Trial.',
+        until: 'Do: {date}',
+        expired: 'Okres wygasł — zaktualizuj plan, aby kontynuować bez ograniczeń.',
+        upgradeStarter: 'Przejdź na Starter'
+      },
+      upgrade: { toPro: 'Przejdź na Pro' },
+      plan: {
+        currentStarter: 'Plan Starter jest aktywny.',
+        proActive: 'Plan Pro aktywny. Maksymalne limity.',
+        active: 'Aktywny'
+      },
+      toast: {
+        upgradeSoon: 'Funkcja ulepszenia wkrótce będzie dostępna.',
+        upgraded: 'Plan został zaktualizowany do {plan}',
+        upgradeFailed: 'Nie udało się zaktualizować planu'
+      }
     }
   }
 }

@@ -25,7 +25,7 @@
         <div class="form-row">
           <label>{{ $t('tasks.start') }}</label>
           <input v-model="form.start" type="date" />
-          <small class="muted" v-if="!form.start">{{ $t('tasks.optional') || 'Необязательно: будет сейчас' }}</small>
+          <small class="muted" v-if="!form.start">{{ $t('tasks.optional') }}</small>
         </div>
 
         <div class="form-row">
@@ -346,7 +346,7 @@ export default {
           alert(msg)
         } else {
           console.error('Create task error', e)
-          alert(e.message || 'Ошибка создания задачи')
+          alert(this.$t('tasks.createError'))
         }
       } finally {
         this.submitting = false

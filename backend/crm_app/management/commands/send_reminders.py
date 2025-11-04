@@ -17,9 +17,7 @@ class Command(BaseCommand):
         sent = 0
         for rem in qs:
             client = rem.client
-            to_email = client.email
-            if not to_email:
-                continue
+            to_email = (getattr(client, 'email', '') or '').strip()
             # Проверяем время, если оно задано: отправляем только если наступило
             if rem.reminder_time and now.time() < rem.reminder_time:
                 continue
@@ -43,48 +41,76 @@ class Command(BaseCommand):
                 f"{rem.note or ''}\n\n"
                 f"Pozdrawiamy,\nCRM LegalFlow"
             )
-            email_ok = True
-            try:
-                self.stdout.write(f"Sending reminder #{rem.id} to client #{client.id} <{to_email}>")
-                send_mail(subject, message, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [to_email], fail_silently=False)
-            except Exception as e:
-                email_ok = False
-                self.stderr.write(f"Failed to send reminder #{rem.id} to {to_email}: {e}")
+            email_ok = False
+            send_error = None
+            if to_email:
+                try:
+                    self.stdout.write(f"Sending reminder #{rem.id} to client #{client.id} <{to_email}>")
+                    send_mail(subject, message, getattr(settings, 'DEFAULT_FROM_EMAIL', None), [to_email], fail_silently=False)
+                    email_ok = True
+                except Exception as e:
+                    send_error = str(e)
+                    self.stderr.write(f"Failed to send reminder #{rem.id} to {to_email}: {e}")
+            else:
+                send_error = 'no_client_email'
+                self.stderr.write(f"Reminder #{rem.id}: client #{client.id} has no email; creating staff notification only")
             # Создаём ОДНО уведомление ответственному сотруднику (без дубликатов для всей компании)
             try:
                 company = None
-                if getattr(client, 'created_by', None) and client.created_by.company_id:
+                if getattr(client, 'created_by', None) and getattr(client.created_by, 'company_id', None):
                     company = client.created_by.company
-                elif getattr(client, 'user', None) and client.user.company_id:
+                elif getattr(client, 'user', None) and getattr(client.user, 'company_id', None):
                     company = client.user.company
 
-                recipient = getattr(client, 'created_by', None)
-                if not recipient and company:
-                    recipient = getattr(company, 'owner', None)
-                if recipient:
-                    status_note = 'отправлено' if email_ok else 'ОШИБКА отправки email'
+                recipients = []
+                primary = getattr(client, 'created_by', None)
+                owner = getattr(company, 'owner', None) if company else None
+                if primary:
+                    recipients.append(primary)
+                if owner and (not primary or owner.id != primary.id):
+                    recipients.append(owner)
+                if not recipients and company:
+                    try:
+                        recipients = list(User.objects.filter(company_id=company.id, role__in=['ADMIN','LEAD','MANAGER','LAWYER','ASSISTANT']))
+                    except Exception:
+                        recipients = []
+
+                if recipients:
+                    if email_ok:
+                        status_note = 'отправлено'
+                    else:
+                        status_note = 'нет email у клиента' if send_error == 'no_client_email' else 'ОШИБКА отправки email'
                     title = f"Напоминание: {doc_name} ({status_note})"
                     msg_preview = f"Клиент: {client.first_name} {client.last_name} ({client.email})"
-                    scheduled_dt = timezone.make_aware(timezone.datetime.combine(rem.reminder_date, rem.reminder_time)) if rem.reminder_date else now
-                    Notification.objects.get_or_create(
-                        user=recipient,
-                        reminder=rem,
-                        defaults={
-                            'client': client,
-                            'title': title[:200],
-                            'message': msg_preview,
-                            'source': 'REMINDER',
-                            'visible_at': now if scheduled_dt <= now else scheduled_dt,
-                            'scheduled_for': scheduled_dt,
-                        }
-                    )
+                    try:
+                        base_time = rem.reminder_time or timezone.datetime.min.time()
+                        scheduled_dt = timezone.make_aware(
+                            timezone.datetime.combine(rem.reminder_date, base_time),
+                            timezone.get_current_timezone()
+                        ) if rem.reminder_date else now
+                    except Exception:
+                        scheduled_dt = now
+                    for r in recipients:
+                        try:
+                            Notification.objects.get_or_create(
+                                user=r,
+                                reminder=rem,
+                                defaults={
+                                    'client': client,
+                                    'title': title[:200],
+                                    'message': msg_preview,
+                                    'source': 'REMINDER',
+                                    'visible_at': now,  # показываем сразу
+                                    'scheduled_for': scheduled_dt,
+                                }
+                            )
+                        except Exception:
+                            continue
             except Exception:
-                self.stderr.write(f"Failed to create notification for reminder #{rem.id}")
-<<<<<<< HEAD
-            # sent_at already set when claimed
-=======
-            # sent_at уже установлено при бронировании (claimed)
->>>>>>> 1623a47c3a7bed48362f0f602275c27c15c6389c
+                self.stderr.write(f"Failed to create notification(s) for reminder #{rem.id}")
+            # Если отправка не удалась — вернём флаг sent_at обратно, чтобы повторить позже
             if email_ok:
                 sent += 1
+            else:
+                Reminder.objects.filter(pk=rem.pk).update(sent_at=None)
         self.stdout.write(self.style.SUCCESS(f'Sent reminders: {sent}'))

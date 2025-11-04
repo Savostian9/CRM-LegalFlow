@@ -1364,18 +1364,51 @@ class TaskListCreateView(APIView):
                 except Exception:
                     creator_name = getattr(creator, 'email', '') or getattr(creator, 'username', '') or 'Пользователь'
 
+                # Определяем язык из заголовков запроса
+                def _pref_lang(req):
+                    try:
+                        x = (req.META.get('HTTP_X_LOCALE') or '').lower()
+                        if x.startswith('pl'):
+                            return 'pl'
+                        if x.startswith('ru'):
+                            return 'ru'
+                        if x.startswith('en'):
+                            return 'en'
+                        al = (req.META.get('HTTP_ACCEPT_LANGUAGE') or '').lower()
+                        if 'pl' in al:
+                            return 'pl'
+                        if 'ru' in al:
+                            return 'ru'
+                        return 'en'
+                    except Exception:
+                        return 'en'
+
+                lang = _pref_lang(request)
+                if lang == 'pl':
+                    title_loc = 'Nowe zadanie'
+                    when_label = 'na'
+                    created_by_label = 'Utworzył'
+                elif lang == 'ru':
+                    title_loc = 'Новая задача'
+                    when_label = 'на'
+                    created_by_label = 'Поставил'
+                else:
+                    title_loc = 'New task'
+                    when_label = 'on'
+                    created_by_label = 'Created by'
+
                 for u in task.assignees.exclude(id=request.user.id):
-                    title = 'Новая задача'
+                    title = title_loc
                     msg_parts = []
                     if task.title:
                         msg_parts.append(task.title)
                     try:
                         when = task.start.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M')
-                        msg_parts.append(f"на {when}")
+                        msg_parts.append(f"{when_label} {when}")
                     except Exception:
                         pass
                     # Добавляем информацию о постановщике
-                    msg_parts.append(f"Поставил: {creator_name}")
+                    msg_parts.append(f"{created_by_label}: {creator_name}")
                     msg = ' · '.join([p for p in msg_parts if p])
                     Notification.objects.create(
                         user=u,
@@ -1458,18 +1491,51 @@ class TaskDetailView(APIView):
                     except Exception:
                         updater_name = getattr(updater, 'email', '') or getattr(updater, 'username', '') or 'Пользователь'
 
+                    # Определяем язык из заголовков запроса
+                    def _pref_lang(req):
+                        try:
+                            x = (req.META.get('HTTP_X_LOCALE') or '').lower()
+                            if x.startswith('pl'):
+                                return 'pl'
+                            if x.startswith('ru'):
+                                return 'ru'
+                            if x.startswith('en'):
+                                return 'en'
+                            al = (req.META.get('HTTP_ACCEPT_LANGUAGE') or '').lower()
+                            if 'pl' in al:
+                                return 'pl'
+                            if 'ru' in al:
+                                return 'ru'
+                            return 'en'
+                        except Exception:
+                            return 'en'
+
+                    lang = _pref_lang(request)
+                    if lang == 'pl':
+                        title_loc = 'Zadanie przypisane'
+                        when_label = 'na'
+                        assigned_by_label = 'Przypisał'
+                    elif lang == 'ru':
+                        title_loc = 'Задача назначена'
+                        when_label = 'на'
+                        assigned_by_label = 'Назначил'
+                    else:
+                        title_loc = 'Task assigned'
+                        when_label = 'on'
+                        assigned_by_label = 'Assigned by'
+
                     from .models import User as _User
                     for u in _User.objects.filter(id__in=added_ids):
-                        title = 'Задача назначена'
+                        title = title_loc
                         msg_parts = []
                         if task.title:
                             msg_parts.append(task.title)
                         try:
                             when = task.start.astimezone(timezone.get_current_timezone()).strftime('%Y-%m-%d %H:%M')
-                            msg_parts.append(f"на {when}")
+                            msg_parts.append(f"{when_label} {when}")
                         except Exception:
                             pass
-                        msg_parts.append(f"Назначил: {updater_name}")
+                        msg_parts.append(f"{assigned_by_label}: {updater_name}")
                         msg = ' · '.join([p for p in msg_parts if p])
                         Notification.objects.create(
                             user=u,
