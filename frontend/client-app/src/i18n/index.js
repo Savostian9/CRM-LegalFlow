@@ -469,7 +469,11 @@ const messages = {
       toasts: {
         saved: 'Сохранено!',
         saveError: 'Не удалось сохранить данные.',
-        loadError: 'Ошибка при загрузке данных клиента'
+        loadError: 'Ошибка при загрузке данных клиента',
+        reminderPast: 'Нельзя выбрать прошедшие дату/время.'
+      },
+      errors: {
+        reminderPast: 'Нельзя выбрать прошедшие дату/время.'
       },
       caseTypes: {
         '-': '-',
@@ -1136,7 +1140,11 @@ const messages = {
       toasts: {
         saved: 'Zapisano!',
         saveError: 'Nie udało się zapisać danych.',
-        loadError: 'Błąd podczas wczytywania danych klienta'
+        loadError: 'Błąd podczas wczytywania danych klienta',
+        reminderPast: 'Nie można wybrać przeszłej daty/czasu.'
+      },
+      errors: {
+        reminderPast: 'Nie można wybrać przeszłej daty/czasu.'
       },
       caseTypes: {
         '-': '-',

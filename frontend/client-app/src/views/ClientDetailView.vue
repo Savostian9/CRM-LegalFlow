@@ -48,21 +48,33 @@
       <section class="data-section">
   <h3>{{ $t('clientDetail.sections.reminders') }}</h3>
         <div class="data-grid">
-          <div class="data-item">
+          <div class="data-item" :class="{ 'has-error': reminderErrors.UMOWA_PRACA_ZLECENIA }">
             <label>{{ $t('clientDetail.reminders.UMOWA_PRACA_ZLECENIA') }}</label>
-            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.UMOWA_PRACA_ZLECENIA" @change="onReminderAtChange('UMOWA_PRACA_ZLECENIA')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.UMOWA_PRACA_ZLECENIA" @close="onReminderAtChange('UMOWA_PRACA_ZLECENIA')" @invalid="() => onReminderInvalid('UMOWA_PRACA_ZLECENIA')" />
+            <div class="field-msg">
+              <small v-show="reminderErrors.UMOWA_PRACA_ZLECENIA" class="field-error">{{ reminderErrors.UMOWA_PRACA_ZLECENIA }}</small>
+            </div>
           </div>
-          <div class="data-item">
+          <div class="data-item" :class="{ 'has-error': reminderErrors.UMOWA_NAJMU }">
             <label>{{ $t('clientDetail.reminders.UMOWA_NAJMU') }}</label>
-            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.UMOWA_NAJMU" @change="onReminderAtChange('UMOWA_NAJMU')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.UMOWA_NAJMU" @close="onReminderAtChange('UMOWA_NAJMU')" @invalid="() => onReminderInvalid('UMOWA_NAJMU')" />
+            <div class="field-msg">
+              <small v-show="reminderErrors.UMOWA_NAJMU" class="field-error">{{ reminderErrors.UMOWA_NAJMU }}</small>
+            </div>
           </div>
-          <div class="data-item">
+          <div class="data-item" :class="{ 'has-error': reminderErrors.ZUS_ZUA_ZZA }">
             <label>{{ $t('clientDetail.reminders.ZUS_ZUA_ZZA') }}</label>
-            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.ZUS_ZUA_ZZA" @change="onReminderAtChange('ZUS_ZUA_ZZA')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.ZUS_ZUA_ZZA" @close="onReminderAtChange('ZUS_ZUA_ZZA')" @invalid="() => onReminderInvalid('ZUS_ZUA_ZZA')" />
+            <div class="field-msg">
+              <small v-show="reminderErrors.ZUS_ZUA_ZZA" class="field-error">{{ reminderErrors.ZUS_ZUA_ZZA }}</small>
+            </div>
           </div>
-          <div class="data-item">
+          <div class="data-item" :class="{ 'has-error': reminderErrors.ZUS_RCA_DRA }">
             <label>{{ $t('clientDetail.reminders.ZUS_RCA_DRA') }}</label>
-            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.ZUS_RCA_DRA" @change="onReminderAtChange('ZUS_RCA_DRA')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.ZUS_RCA_DRA" @close="onReminderAtChange('ZUS_RCA_DRA')" @invalid="() => onReminderInvalid('ZUS_RCA_DRA')" />
+            <div class="field-msg">
+              <small v-show="reminderErrors.ZUS_RCA_DRA" class="field-error">{{ reminderErrors.ZUS_RCA_DRA }}</small>
+            </div>
           </div>
         </div>
       </section>
@@ -257,6 +269,8 @@ export default {
       client: null,
       editableClient: null,
   remindersAtMap: { UMOWA_PRACA_ZLECENIA: null, UMOWA_NAJMU: null, ZUS_ZUA_ZZA: null, ZUS_RCA_DRA: null },
+  reminderErrors: { UMOWA_PRACA_ZLECENIA: '', UMOWA_NAJMU: '', ZUS_ZUA_ZZA: '', ZUS_RCA_DRA: '' },
+  reminderInvalidJustNow: { UMOWA_PRACA_ZLECENIA: false, UMOWA_NAJMU: false, ZUS_ZUA_ZZA: false, ZUS_RCA_DRA: false },
   statusMap: { '-' : '-', 'PREPARATION': this.$t('clientDetail.caseStatus.PREPARATION'), 'SUBMITTED': this.$t('clientDetail.caseStatus.SUBMITTED'), 'IN_PROGRESS': this.$t('clientDetail.caseStatus.IN_PROGRESS'), 'DECISION_POSITIVE': this.$t('clientDetail.caseStatus.DECISION_POSITIVE'), 'DECISION_NEGATIVE': this.$t('clientDetail.caseStatus.DECISION_NEGATIVE'), 'CLOSED': this.$t('clientDetail.caseStatus.CLOSED') },
   caseTypeMap: { '-' : '-', 'CZASOWY_POBYT': this.$t('clientDetail.caseTypes.CZASOWY_POBYT'), 'STALY_POBYT': this.$t('clientDetail.caseTypes.STALY_POBYT'), 'REZydent_UE': this.$t('clientDetail.caseTypes.REZydent_UE'), 'OBYWATELSTWO': this.$t('clientDetail.caseTypes.OBYWATELSTWO') },
   docTypeMap: { 'ZALACZNIK_1': this.$t('clientDetail.docTypes.ZALACZNIK_1'), 'UMOWA_PRACA': this.$t('clientDetail.docTypes.UMOWA_PRACA'), 'UMOWA_NAJMU': this.$t('clientDetail.docTypes.UMOWA_NAJMU'), 'ZUS_ZUA_ZZA': this.$t('clientDetail.docTypes.ZUS_ZUA_ZZA'), 'ZUS_RCA_DRA': this.$t('clientDetail.docTypes.ZUS_RCA_DRA'), 'POLISA': this.$t('clientDetail.docTypes.POLISA'), 'ZASWIADCZENIE_US': this.$t('clientDetail.docTypes.ZASWIADCZENIE_US'), 'ZASWIADCZENIA_ZUS': this.$t('clientDetail.docTypes.ZASWIADCZENIA_ZUS'), 'PIT_37': this.$t('clientDetail.docTypes.PIT_37'), 'BADANIE_LEKARSKIE': this.$t('clientDetail.docTypes.BADANIE_LEKARSKIE'), 'BADANIE_MEDYCZNE': this.$t('clientDetail.docTypes.BADANIE_MEDYCZNE'), 'SWIADECTWO_KIEROWCY': this.$t('clientDetail.docTypes.SWIADECTWO_KIEROWCY') },
@@ -414,7 +428,36 @@ export default {
     onReminderAtChange(type) {
       if (!this.editableClient.reminders) this.editableClient.reminders = [];
       const idx = this.editableClient.reminders.findIndex(r => r.reminder_type === type);
-      const parsed = this.splitDateTime(this.remindersAtMap[type]);
+      const picked = this.remindersAtMap[type];
+      // Case 1: value became null
+      if (!picked) {
+        // If null right after invalid close, skip saving and consume the flag
+        if (this.reminderInvalidJustNow[type]) {
+          this.reminderInvalidJustNow[type] = false;
+          return;
+        }
+        // User cleared the value explicitly: remove reminder if exists
+        if (idx >= 0) {
+          this.editableClient.reminders.splice(idx, 1);
+          this.reminderErrors[type] = '';
+          this.saveAllChanges();
+        }
+        return;
+      }
+      // Case 2: non-null picked; block past datetimes (minute precision)
+      if (this.isPastDateTime(picked)) {
+        // Reset UI model and set inline error, do not save
+        this.remindersAtMap[type] = null;
+        const eKey = 'clientDetail.errors.reminderPast';
+        const eTr = this.$t(eKey);
+        this.reminderErrors[type] = (eTr === eKey ? 'Нельзя выбрать прошедшие дату/время.' : eTr);
+        this.reminderInvalidJustNow[type] = true;
+        return;
+      }
+      // Valid value: clear errors and save
+      if (this.reminderErrors[type]) this.reminderErrors[type] = '';
+      this.reminderInvalidJustNow[type] = false;
+      const parsed = this.splitDateTime(picked);
       const dateVal = parsed?.date || null;
       const timeVal = parsed?.time || null;
       if (idx >= 0) {
@@ -424,6 +467,24 @@ export default {
         this.editableClient.reminders.push({ reminder_type: type, reminder_date: dateVal, reminder_time: timeVal });
       }
       this.saveAllChanges();
+    },
+    onReminderInvalid(type) {
+      // Set inline error and mark invalid close; no toast so message persists under the field
+      const eKey = 'clientDetail.errors.reminderPast';
+      const eTr = this.$t(eKey);
+      this.reminderErrors[type] = (eTr === eKey ? 'Нельзя выбрать прошедшие дату/время.' : eTr);
+      this.reminderInvalidJustNow[type] = true;
+    },
+    isPastDateTime(dtLocal) {
+      try {
+        const [d, t = '00:00'] = String(dtLocal).split('T')
+        const [Y, M, D] = d.split('-').map(n => Number(n))
+        const [h, m] = t.split(':').map(n => Number(n))
+        const picked = new Date(Y, (M || 1) - 1, D || 1, h || 0, m || 0, 0, 0)
+        const now = new Date()
+        const roundedNow = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes(), 0, 0)
+        return picked < roundedNow
+      } catch { return false }
     },
     combineDateTime(dateStr, timeStr) {
       if (!dateStr) return null;
@@ -924,6 +985,21 @@ export default {
 .data-item.full-width {
   grid-column: 1 / -1;
 }
+
+/* Inline field error styling for reminder pickers */
+.data-item.has-error :deep(.mx-input) {
+  border-color: var(--danger-color, #dc2626) !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15) !important;
+}
+.field-error {
+  display: block;
+  /* no margin to avoid layout shift */
+  margin: 0;
+  color: var(--danger-color, #dc2626);
+  font-size: 12px;
+  line-height: 18px;
+}
+.field-msg { height: 18px; }
 
 .cases-container {
   display: flex;
