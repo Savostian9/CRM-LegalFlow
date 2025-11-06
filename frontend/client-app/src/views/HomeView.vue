@@ -5,8 +5,8 @@
         <router-link to="/">LegalFlow</router-link>
       </div>
       <nav class="auth-buttons">
-        <LangSwitcher />
-        <button class="button secondary" @click="scrollToPricing" type="button">Тарифы</button>
+  <LangSwitcher />
+  <button class="button secondary" @click="scrollToPricing" type="button">{{ $t('home.pricing') }}</button>
         <router-link to="/login" class="button secondary">{{ $t('home.login') }}</router-link>
         <router-link to="/register" class="button primary">{{ $t('home.getStarted') }}</router-link>
       </nav>
@@ -22,17 +22,51 @@
         </p>
         <router-link to="/register" class="button primary cta-button">{{ $t('home.cta') }}</router-link>
       </div>
-      <div class="hero-graphic">
-        <div class="graphic-element"></div>
-        <div class="graphic-element small"></div>
+      <div class="hero-graphic" aria-hidden="true">
+        <div class="docs-illustration">
+          <!-- Main document card -->
+          <div class="doc-card doc-main">
+            <div class="doc-bar"></div>
+            <div class="doc-line w-80"></div>
+            <div class="doc-line w-60"></div>
+            <div class="doc-sep"></div>
+            <div class="doc-row">
+              <span class="doc-check checked">✓</span>
+              <span class="doc-text w-75"></span>
+            </div>
+            <div class="doc-row">
+              <span class="doc-check checked">✓</span>
+              <span class="doc-text w-55"></span>
+            </div>
+            <div class="doc-row">
+              <span class="doc-check"></span>
+              <span class="doc-text w-65 light"></span>
+            </div>
+          </div>
+          <!-- Secondary document card -->
+          <div class="doc-card doc-side">
+            <div class="doc-bar small"></div>
+            <div class="doc-line w-70"></div>
+            <div class="doc-line w-50"></div>
+            <div class="doc-sep"></div>
+            <div class="doc-row">
+              <span class="doc-check checked">✓</span>
+              <span class="doc-text w-60"></span>
+            </div>
+            <div class="doc-row">
+              <span class="doc-check"></span>
+              <span class="doc-text w-50 light"></span>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
     <section id="pricing" class="pricing-section">
-      <h2 class="pricing-heading">Тарифы</h2>
-      <p class="pricing-sub">Выберите удобный план. Начните с бесплатного Trial на 14 дней.</p>
+      <h2 class="pricing-heading">{{ $t('pricing.title') }}</h2>
+      <p class="pricing-sub">{{ $t('pricing.subtitle') }}</p>
       <PricingPlans :show-trial="true" @select="onSelectPlan" />
       <div class="pricing-cta">
-        <router-link to="/register" class="button primary">Начать бесплатно</router-link>
+        <router-link to="/register" class="button primary">{{ $t('home.cta') }}</router-link>
       </div>
     </section>
     <footer class="footer">
@@ -132,11 +166,19 @@ export default {
   color: var(--white-color);
   box-shadow: 0 4px 15px rgba(74, 144, 226, 0.2);
 }
+/* Жёстко закрепляем белый цвет текста на синих кнопках-линках */
+.button.primary,
+.button.primary:link,
+.button.primary:visited,
+.button.primary:active {
+  color: #ffffff !important;
+}
 
 .button.primary:hover {
-  background-color: var(--primary-hover);
+  background-color: #ffffff; /* белый фон при наведении */
+  color: #000000 !important; /* чёрный текст при наведении */
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 .button.secondary {
@@ -199,28 +241,49 @@ export default {
   animation-fill-mode: backwards;
 }
 
-.graphic-element {
-  background: linear-gradient(45deg, var(--primary-color), #81c784);
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-  position: relative;
-}
-
-.graphic-element:not(.small) {
-  width: 300px;
-  height: 400px;
-  transform: rotate(-15deg);
-}
-
-.graphic-element.small {
-  width: 150px;
-  height: 250px;
+/* Documents illustration */
+.docs-illustration { position: relative; width: 440px; height: 460px; }
+.doc-card {
   position: absolute;
-  bottom: -40px;
-  right: 20px;
-  transform: rotate(10deg);
-  background: linear-gradient(45deg, #ffb74d, #f06292);
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0,0,0,.16);
+  border: 1px solid rgba(0,0,0,.06);
+  padding: 18px 18px 22px;
 }
+.doc-main { width: 320px; height: 420px; transform: rotate(-10deg); left: 40px; top: 10px; }
+.doc-side { width: 200px; height: 280px; transform: rotate(8deg); right: 10px; bottom: 20px; }
+
+.doc-bar { height: 16px; border-radius: 10px; margin-bottom: 14px; background: linear-gradient(90deg, var(--primary-color), #81c784); }
+.doc-bar.small { height: 12px; }
+
+.doc-line { height: 10px; background: #e9eef6; border-radius: 8px; margin: 8px 0; }
+.doc-line.w-80 { width: 80%; }
+.doc-line.w-70 { width: 70%; }
+.doc-line.w-65 { width: 65%; }
+.doc-line.w-60 { width: 60%; }
+.doc-line.w-55 { width: 55%; }
+.doc-line.w-50 { width: 50%; }
+
+.doc-sep { height: 1px; background: #e5e7eb; margin: 14px 0; }
+
+.doc-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
+.doc-check {
+  width: 18px; height: 18px; border-radius: 50%; border: 2px solid #d1d5db; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; line-height: 1; color: #10b981; background: #fff;
+}
+.doc-check.checked { border-color: #10b981; background: #ecfdf5; }
+.doc-text { height: 10px; background: #e9eef6; border-radius: 6px; display: inline-block; flex-shrink: 0; }
+.doc-text.light { background: #f1f5f9; }
+.doc-text.w-75 { width: 75%; }
+.doc-text.w-60 { width: 60%; }
+.doc-text.w-55 { width: 55%; }
+.doc-text.w-50 { width: 50%; }
+
+/* subtle floating */
+.doc-main { animation: floatA 6s ease-in-out infinite; }
+.doc-side { animation: floatB 6s ease-in-out infinite; animation-delay: .6s; }
+@keyframes floatA { 0%,100% { transform: translateY(0) rotate(-10deg); } 50% { transform: translateY(-6px) rotate(-10deg); } }
+@keyframes floatB { 0%,100% { transform: translateY(0) rotate(8deg); } 50% { transform: translateY(6px) rotate(8deg); } }
 
 /* --- НАЧАЛО АДАПТИВНОСТИ --- */
 

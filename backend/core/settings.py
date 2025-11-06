@@ -362,11 +362,14 @@ LOGGING = {
         "rotating_file": {
             "level": "DEBUG",
             "class": "logging.handlers.TimedRotatingFileHandler",
-            "filename": os.path.join(LOG_DIR, "legalflow.log"),
+            # Use per-process log files to avoid Windows file lock issues on rotate
+            "filename": os.path.join(LOG_DIR, f"legalflow.{os.getpid()}.log"),
             "when": "midnight",          # новый файл каждый день
             "backupCount": 7,            # хранить только 7 дней логов
             "encoding": "utf-8",
             "formatter": "verbose",
+            # Delay file opening until first write; helps with concurrent access
+            "delay": True,
         },
         "console": {
             "class": "logging.StreamHandler",

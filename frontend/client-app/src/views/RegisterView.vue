@@ -29,6 +29,7 @@
               autocapitalize="off"
               autocorrect="off"
               spellcheck="false"
+              @invalid="onFieldInvalid" @input="onFieldInput"
             />
           </div>
         </div>
@@ -48,6 +49,7 @@
                 autocapitalize="words"
                 autocorrect="off"
                 spellcheck="false"
+                @invalid="onFieldInvalid" @input="onFieldInput"
               />
             </div>
           </div>
@@ -66,6 +68,7 @@
                 autocapitalize="words"
                 autocorrect="off"
                 spellcheck="false"
+                @invalid="onFieldInvalid" @input="onFieldInput"
               />
             </div>
           </div>
@@ -87,6 +90,8 @@
               autocapitalize="off"
               autocorrect="off"
               spellcheck="false"
+              @invalid="onEmailInvalid"
+              @input="onEmailInput"
             />
           </div>
         </div>
@@ -106,6 +111,7 @@
               autocapitalize="off"
               autocorrect="off"
               spellcheck="false"
+              @invalid="onFieldInvalid" @input="onFieldInput"
             />
             <button type="button" @click="togglePasswordVisibility" class="password-toggle">
               <svg v-if="passwordFieldType === 'password'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /><path fill-rule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12 3.75c4.97 0 9.189 3.226 10.677 7.697a.75.75 0 0 1 0 .606C21.189 17.024 16.97 20.25 12 20.25c-4.97 0-9.189-3.226-10.677-7.697a.75.75 0 0 1 0-.606ZM12 19.5a8.25 8.25 0 0 0 7.824-5.991 8.25 8.25 0 0 0-15.648 0A8.25 8.25 0 0 0 12 19.5Z" clip-rule="evenodd" /></svg>
@@ -124,7 +130,8 @@
       </form>
       
       <div class="auth-links">
-  <router-link to="/login">{{ $t('auth.register.haveAccount') }}</router-link>
+        <router-link to="/login">{{ $t('auth.register.haveAccount') }}</router-link>
+        <router-link to="/">{{ $t('auth.common.goHome') }}</router-link>
       </div>
     </div>
   </div>
@@ -214,16 +221,18 @@ export default {
               this.$router.push({ name: 'verify-email', query: { email: (this.email || '').toLowerCase() } });
               return;
             } else if (data.email) {
-              this.error = this.$t('auth.errors.emailPrefix', { msg: data.email[0] });
+              const raw = Array.isArray(data.email) ? data.email[0] : String(data.email);
+              this.error = this.$t('auth.errors.emailPrefix', { msg: this.translateServerFieldMessage(raw, 'email') });
             } else if (data.company_name) {
               const msg = Array.isArray(data.company_name) ? data.company_name[0] : data.company_name;
-              this.error = msg || this.$t('auth.errors.register');
+              this.error = this.translateServerFieldMessage(msg, 'company_name') || this.$t('auth.errors.register');
             } else if (data.password) {
-              this.error = this.$t('auth.errors.passwordPrefix', { msg: data.password[0] });
+              const raw = Array.isArray(data.password) ? data.password[0] : String(data.password);
+              this.error = this.$t('auth.errors.passwordPrefix', { msg: this.translateServerFieldMessage(raw, 'password') });
             } else if (typeof data.error === 'string') {
-              this.error = data.error;
+              this.error = this.translateServerFieldMessage(data.error);
             } else if (typeof data.detail === 'string') {
-              this.error = data.detail;
+              this.error = this.translateServerFieldMessage(data.detail);
             } else {
               this.error = this.$t('auth.errors.register');
             }
@@ -238,6 +247,76 @@ export default {
     togglePasswordVisibility() {
       this.passwordFieldType = this.passwordFieldType === 'password' ? 'text' : 'password';
     },
+    onEmailInvalid(e){
+      try{
+        const t = e?.target;
+        if(!t) return;
+        if (t.validity && t.validity.valueMissing) {
+          t.setCustomValidity(this.$t('auth.validation.requiredEmail'));
+        } else {
+          t.setCustomValidity(this.$t('auth.validation.emailInvalid'));
+        }
+      }catch{/* noop */}
+    },
+    onEmailInput(e){
+      try{
+        const t = e?.target; if(!t) return;
+        // Сначала убираем старое пользовательское сообщение
+        t.setCustomValidity('');
+        const v = t.validity || {};
+        if (v.valueMissing) {
+          t.setCustomValidity(this.$t('auth.validation.requiredEmail'));
+        } else if (v.typeMismatch || v.patternMismatch) {
+          t.setCustomValidity(this.$t('auth.validation.emailInvalid'));
+        }
+      }catch{/* noop */}
+    },
+    onFieldInvalid(e){
+      try{
+        const t = e?.target; if(!t) return;
+        const v = t.validity || {};
+        if (v.valueMissing) {
+          const id = (t.id || t.name || '').toLowerCase();
+          if (id.includes('email')) t.setCustomValidity(this.$t('auth.validation.requiredEmail'));
+          else if (id.includes('password')) t.setCustomValidity(this.$t('auth.validation.requiredPassword'));
+          else if (id.includes('company')) t.setCustomValidity(this.$t('auth.validation.requiredCompany'));
+          else if (id.includes('first')) t.setCustomValidity(this.$t('auth.validation.requiredFirstName'));
+          else if (id.includes('last')) t.setCustomValidity(this.$t('auth.validation.requiredLastName'));
+          else t.setCustomValidity(this.$t('auth.validation.requiredField'));
+        } else if (v.typeMismatch) {
+          t.setCustomValidity(this.$t('auth.validation.emailInvalid'));
+        } else if (v.tooShort) {
+          t.setCustomValidity(this.$t('auth.validation.tooShort', { min: t.minLength }));
+        } else if (v.tooLong) {
+          t.setCustomValidity(this.$t('auth.validation.tooLong', { max: t.maxLength }));
+        } else if (v.patternMismatch) {
+          t.setCustomValidity(this.$t('auth.validation.pattern'));
+        } else if (v.badInput) {
+          t.setCustomValidity(this.$t('auth.validation.badInput'));
+        }
+      }catch{/* noop */}
+    },
+    onFieldInput(e){
+      try{ e?.target?.setCustomValidity(''); }catch{/* noop */}
+    },
+    translateServerFieldMessage(msg, field){
+      const m = String(msg || '').toLowerCase();
+      if (m.includes('valid email')) return this.$t('auth.validation.emailInvalid');
+      if (m.includes('enter a valid') && m.includes('email')) return this.$t('auth.validation.emailInvalid');
+      if (m.includes('this field is required')) {
+        if (field === 'company_name') return this.$t('auth.validation.requiredCompany');
+        if (field === 'password') return this.$t('auth.validation.requiredPassword');
+        return this.$t('auth.validation.requiredField');
+      }
+      if (field === 'password' && (m.includes('short') || m.includes('too short'))) {
+        return this.$t('auth.validation.tooShort', { min: 8 });
+      }
+      if (field === 'email' && (m.includes('exists') || m.includes('already'))) {
+        // sometimes backend may respond with duplication error
+        return this.$t('auth.register.userExists');
+      }
+      return msg; // fallback
+    }
   }
 }
 </script>
@@ -307,21 +386,14 @@ export default {
   text-align: center;
 }
 
-.auth-title {
-  color: var(--dark-blue);
-  font-size: 24px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.auth-subtitle {
-  color: var(--text-color);
-  margin-bottom: 30px;
-}
-
-.auth-form .form-group {
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 25px;
   margin-bottom: 20px;
 }
+.auth-links a { color: var(--primary-color); text-decoration: none; font-weight: 500; font-size: 14px; }
+.auth-links a:hover { text-decoration: underline; }
 
 .invite-banner {
   background: #e6fffa;
@@ -431,20 +503,6 @@ export default {
   margin-bottom: 20px;
 }
 
-.auth-links {
-  text-align: center;
-  margin-top: 25px;
-}
-
-.auth-links a {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 14px;
-}
-.auth-links a:hover {
-  text-decoration: underline;
-}
 
 /* Hidden autofill guard fields */
 .autofill-guard {

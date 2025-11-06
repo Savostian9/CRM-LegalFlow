@@ -4,6 +4,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from crm_app.models import Reminder, Notification, User
 from django.db import transaction
+from django.db.models import Q
 
 
 class Command(BaseCommand):
@@ -12,15 +13,22 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         now = timezone.localtime()
         today = now.date()
-        qs = Reminder.objects.select_related('client').filter(reminder_date=today, sent_at__isnull=True)
-        self.stdout.write(f'Due reminders (today) found: {qs.count()}')
+        qs = (
+            Reminder.objects.select_related('client')
+            .filter(sent_at__isnull=True)
+            .filter(
+                Q(reminder_date__lt=today)
+                | Q(reminder_date=today, reminder_time__isnull=True)
+                | Q(reminder_date=today, reminder_time__lte=now.time())
+            )
+        )
+        self.stdout.write(f'Due reminders (<= now) found: {qs.count()}')
         sent = 0
         for rem in qs:
             client = rem.client
             to_email = (getattr(client, 'email', '') or '').strip()
             # Проверяем время, если оно задано: отправляем только если наступило
-            if rem.reminder_time and now.time() < rem.reminder_time:
-                continue
+            # В выборке уже учтено время; дополнительная проверка не нужна
             # Идемпотентность: атомарно "забронируем" напоминание, чтобы в параллельных процессах не отправить дубликаты
             claimed = Reminder.objects.filter(pk=rem.pk, sent_at__isnull=True).update(sent_at=timezone.now())
             if not claimed:
@@ -54,7 +62,8 @@ class Command(BaseCommand):
             else:
                 send_error = 'no_client_email'
                 self.stderr.write(f"Reminder #{rem.id}: client #{client.id} has no email; creating staff notification only")
-            # Создаём ОДНО уведомление ответственному сотруднику (без дубликатов для всей компании)
+
+            # Создаём уведомления ТОЛЬКО ответственному менеджеру (client.created_by)
             try:
                 company = None
                 if getattr(client, 'created_by', None) and getattr(client.created_by, 'company_id', None):
@@ -64,16 +73,8 @@ class Command(BaseCommand):
 
                 recipients = []
                 primary = getattr(client, 'created_by', None)
-                owner = getattr(company, 'owner', None) if company else None
                 if primary:
-                    recipients.append(primary)
-                if owner and (not primary or owner.id != primary.id):
-                    recipients.append(owner)
-                if not recipients and company:
-                    try:
-                        recipients = list(User.objects.filter(company_id=company.id, role__in=['ADMIN','LEAD','MANAGER','LAWYER','ASSISTANT']))
-                    except Exception:
-                        recipients = []
+                    recipients = [primary]
 
                 if recipients:
                     if email_ok:
@@ -92,23 +93,22 @@ class Command(BaseCommand):
                         scheduled_dt = now
                     for r in recipients:
                         try:
-                            Notification.objects.get_or_create(
+                            Notification.objects.create(
                                 user=r,
                                 reminder=rem,
-                                defaults={
-                                    'client': client,
-                                    'title': title[:200],
-                                    'message': msg_preview,
-                                    'source': 'REMINDER',
-                                    'visible_at': now,  # показываем сразу
-                                    'scheduled_for': scheduled_dt,
-                                }
+                                client=client,
+                                title=title[:200],
+                                message=msg_preview,
+                                source='REMINDER',
+                                visible_at=now,
+                                scheduled_for=scheduled_dt,
                             )
                         except Exception:
                             continue
             except Exception:
                 self.stderr.write(f"Failed to create notification(s) for reminder #{rem.id}")
-            # Если отправка не удалась — вернём флаг sent_at обратно, чтобы повторить позже
+
+            # Если отправка не удалась — вернём sent_at, чтобы задача повторилась позже
             if email_ok:
                 sent += 1
             else:

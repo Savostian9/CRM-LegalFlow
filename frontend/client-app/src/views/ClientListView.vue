@@ -35,11 +35,11 @@
         <div v-if="showCustomDate" class="custom-range">
           <label class="date-label">
             {{ $t('clients.extra.from') }}
-            <input class="date-input" type="date" v-model="createdFrom" @change="reloadClients" />
+            <AltDateTimePicker mode="date" v-model="createdFrom" @change="reloadClients" />
           </label>
           <label class="date-label">
             {{ $t('clients.extra.to') }}
-            <input class="date-input" type="date" v-model="createdTo" @change="reloadClients" />
+            <AltDateTimePicker mode="date" v-model="createdTo" @change="reloadClients" />
           </label>
           <button class="clear-chip" v-if="createdFrom || createdTo" @click="clearCustomRange">{{ $t('clients.extra.reset') }}</button>
         </div>

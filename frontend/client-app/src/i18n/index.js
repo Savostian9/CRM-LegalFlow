@@ -81,6 +81,7 @@ const messages = {
         sending: 'Отправка...',
         saving: 'Сохранение...',
         backToLogin: 'Вернуться ко входу',
+        goHome: 'На главную',
         error: 'Произошла ошибка.',
         cannotConnect: 'Не удалось подключиться к серверу.',
         passwordsNoMatch: 'Пароли не совпадают.'
@@ -93,6 +94,19 @@ const messages = {
         emailPrefix: 'Email: {msg}',
         usernamePrefix: 'Имя пользователя: {msg}',
         passwordPrefix: 'Пароль: {msg}'
+      },
+      validation: {
+        requiredEmail: 'Укажите адрес электронной почты.',
+        emailInvalid: 'Введите корректный адрес электронной почты.',
+        requiredField: 'Заполните это поле.',
+        requiredPassword: 'Укажите пароль.',
+        requiredCompany: 'Укажите название компании.',
+        requiredFirstName: 'Укажите имя.',
+        requiredLastName: 'Укажите фамилию.',
+        tooShort: 'Минимальная длина — {min} символов.',
+        tooLong: 'Максимальная длина — {max} символов.',
+        pattern: 'Неверный формат.',
+        badInput: 'Неверное значение.'
       },
       login: {
         welcome: 'С возвращением!',
@@ -144,7 +158,10 @@ const messages = {
         sec: 'сек.',
         resend: 'Отправить код еще раз',
         resendError: 'Ошибка при повторной отправке.',
-        sentToast: 'Мы отправили код подтверждения на вашу почту'
+        sentToast: 'Мы отправили код подтверждения на вашу почту',
+        codeRequired: 'Введите 6‑значный код.',
+        codeInvalid: 'Код должен состоять из 6 цифр.',
+        invalidToken: 'Неверный код.'
       }
     },
     dashboard: {
@@ -334,9 +351,67 @@ const messages = {
     home: {
       login: 'Войти',
       getStarted: 'Начать работу',
+      pricing: 'Тарифы',
       headline: 'Автоматизируйте легализацию. Управляйте бизнесом легко.',
       subheadline: 'Наша CRM — это единая платформа для безупречной работы с клиентами по визам, TRC и картам побыту. Увеличьте продуктивность вашей команды уже сегодня.',
       cta: 'Попробовать бесплатно'
+    },
+    pricing: {
+      title: 'Тарифы',
+      subtitle: 'Выберите удобный план. Начните с бесплатного Trial на 14 дней.',
+      pricePeriod: { month: 'месяц', period: 'период' },
+      includesTitle: 'Что входит',
+      additionalTitle: 'Дополнительно',
+      fields: {
+        users: 'Пользователи', clients: 'Клиенты', cases: 'Дела', files: 'Файлы', storage: 'Хранилище',
+        tasksPerMonth: 'Задачи / месяц', remindersActive: 'Активные напоминания', emailsPerMonth: 'Email / месяц'
+      },
+      actions: { select: 'Выбрать', trialCta: 'Активируется при регистрации' },
+      plans: {
+        TRIAL: {
+          badge: '14 дней',
+          description: 'Пробный доступ ко всем основным функциям с ограниченными лимитами.',
+          features: [
+            'Все основные функции для теста',
+            'Быстрый старт без карты',
+            'Ограничения по лимитам',
+            'Переход на блокировку по окончании'
+          ]
+        },
+        STARTER: {
+          badge: 'Рекомендуем',
+          description: 'Расширенные лимиты и поддержка для растущей команды.',
+          features: [
+            'Расширенные лимиты',
+            'Приоритетные улучшения',
+            'Email поддержка',
+            'Базовые отчеты',
+            'Роли доступа (admin/staff/viewer)'
+          ]
+        },
+        PRO: {
+          badge: 'Максимум',
+          description: 'Максимальные лимиты, аналитика и расширенные интеграции.',
+          features: [
+            'Большие лимиты (до 3000 клиентов)',
+            'Приоритетная поддержка',
+            'Расширенные отчеты и аналитика (roadmap)',
+            'Custom fields (roadmap)',
+            'Webhooks & интеграции (roadmap)',
+            'Расширенный аудит действий'
+          ]
+        }
+      },
+      qual: {
+        labels: { support: 'Поддержка', export: 'Экспорт данных', reports: 'Отчеты', integrations: 'Интеграции', audit: 'Аудит' },
+        values: {
+          support: { TRIAL: 'Email (стандартное время ответа)', STARTER: 'Приоритет email', PRO: 'Высокий приоритет' },
+          export: { TRIAL: 'Базовые CSV (ограниченно)' },
+          reports: { STARTER: 'Базовые', PRO: 'Расширенные' },
+          integrations: { STARTER: 'Календарь (бета)', PRO: 'Webhooks / Slack (roadmap)' },
+          audit: { PRO: 'Полный журнал' }
+        }
+      }
     },
     clientDetail: {
   back: 'Назад',
@@ -673,6 +748,7 @@ const messages = {
         sending: 'Wysyłanie...',
         saving: 'Zapisywanie...',
         backToLogin: 'Powrót do logowania',
+        goHome: 'Powrót do strony głównej',
         error: 'Wystąpił błąd.',
         cannotConnect: 'Nie udało się połączyć z serwerem.',
         passwordsNoMatch: 'Hasła się nie zgadzają.'
@@ -685,6 +761,19 @@ const messages = {
         emailPrefix: 'Email: {msg}',
         usernamePrefix: 'Nazwa użytkownika: {msg}',
         passwordPrefix: 'Hasło: {msg}'
+      },
+      validation: {
+        requiredEmail: 'Podaj adres e‑mail.',
+        emailInvalid: 'Wpisz poprawny adres e‑mail.',
+        requiredField: 'Wypełnij to pole.',
+        requiredPassword: 'Podaj hasło.',
+        requiredCompany: 'Podaj nazwę firmy.',
+        requiredFirstName: 'Podaj imię.',
+        requiredLastName: 'Podaj nazwisko.',
+        tooShort: 'Minimalna długość — {min} znaków.',
+        tooLong: 'Maksymalna długość — {max} znaków.',
+        pattern: 'Niepoprawny format.',
+        badInput: 'Nieprawidłowa wartość.'
       },
       login: {
         welcome: 'Witamy ponownie!',
@@ -736,7 +825,10 @@ const messages = {
         sec: 'sek.',
         resend: 'Wyślij kod ponownie',
         resendError: 'Błąd przy ponownym wysyłaniu.',
-        sentToast: 'Wysłaliśmy kod potwierdzający na Twój e-mail'
+        sentToast: 'Wysłaliśmy kod potwierdzający na Twój e-mail',
+        codeRequired: 'Wpisz 6‑cyfrowy kod.',
+        codeInvalid: 'Kod musi składać się z 6 cyfr.',
+        invalidToken: 'Nieprawidłowy kod.'
       }
     },
     dashboard: {
@@ -926,9 +1018,67 @@ const messages = {
     home: {
       login: 'Zaloguj się',
       getStarted: 'Zacznij',
+      pricing: 'Cennik',
       headline: 'Zautomatyzuj legalizację. Zarządzaj biznesem z łatwością.',
       subheadline: 'Nasz CRM to jedna platforma do bezbłędnej pracy z klientami w zakresie wiz, TRC i kart pobytu. Zwiększ produktywność swojego zespołu już dziś.',
       cta: 'Wypróbuj za darmo'
+    },
+    pricing: {
+      title: 'Cennik',
+      subtitle: 'Wybierz wygodny plan. Zacznij od bezpłatnego okresu próbnego 14 dni.',
+      pricePeriod: { month: 'miesiąc', period: 'okres' },
+      includesTitle: 'Co zawiera',
+      additionalTitle: 'Dodatkowo',
+      fields: {
+        users: 'Użytkownicy', clients: 'Klienci', cases: 'Sprawy', files: 'Pliki', storage: 'Magazyn',
+        tasksPerMonth: 'Zadania / miesiąc', remindersActive: 'Aktywne przypomnienia', emailsPerMonth: 'Email / miesiąc'
+      },
+      actions: { select: 'Wybierz', trialCta: 'Aktywuje się przy rejestracji' },
+      plans: {
+        TRIAL: {
+          badge: '14 dni',
+          description: 'Dostęp próbny do wszystkich podstawowych funkcji z ograniczonymi limitami.',
+          features: [
+            'Wszystkie podstawowe funkcje do testów',
+            'Szybki start bez karty',
+            'Ograniczenia limitów',
+            'Blokada po zakończeniu okresu'
+          ]
+        },
+        STARTER: {
+          badge: 'Polecamy',
+          description: 'Rozszerzone limity i wsparcie dla rozwijającego się zespołu.',
+          features: [
+            'Rozszerzone limity',
+            'Priorytetowe usprawnienia',
+            'Wsparcie e-mail',
+            'Podstawowe raporty',
+            'Role dostępu (admin/staff/viewer)'
+          ]
+        },
+        PRO: {
+          badge: 'Maksimum',
+          description: 'Maksymalne limity, analityka i rozszerzone integracje.',
+          features: [
+            'Duże limity (do 3000 klientów)',
+            'Wsparcie priorytetowe',
+            'Zaawansowane raporty i analityka (roadmap)',
+            'Pola niestandardowe (roadmap)',
+            'Webhooks i integracje (roadmap)',
+            'Zaawansowany audyt działań'
+          ]
+        }
+      },
+      qual: {
+        labels: { support: 'Wsparcie', export: 'Eksport danych', reports: 'Raporty', integrations: 'Integracje', audit: 'Audyt' },
+        values: {
+          support: { TRIAL: 'Email (standardowy czas odpowiedzi)', STARTER: 'Priorytetowy e‑mail', PRO: 'Wysoki priorytet' },
+          export: { TRIAL: 'Podstawowe CSV (ograniczone)' },
+          reports: { STARTER: 'Podstawowe', PRO: 'Zaawansowane' },
+          integrations: { STARTER: 'Kalendarz (beta)', PRO: 'Webhooks / Slack (roadmap)' },
+          audit: { PRO: 'Pełny dziennik' }
+        }
+      }
     },
     clientDetail: {
       back: 'Wróć',

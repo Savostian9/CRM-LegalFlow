@@ -10,12 +10,14 @@
       <form @submit.prevent="handlePasswordConfirm" class="auth-form">
         <div class="form-group">
           <label for="password">{{ $t('auth.fields.newPassword') }}</label>
-          <input type="password" id="password" v-model="password" required placeholder="••••••••" />
+          <input type="password" id="password" v-model="password" required placeholder="••••••••"
+                 @invalid="onFieldInvalid" @input="onFieldInput" />
         </div>
         
         <div class="form-group">
           <label for="password-confirm">{{ $t('auth.fields.confirmPassword') }}</label>
-          <input type="password" id="password-confirm" v-model="passwordConfirm" required placeholder="••••••••" />
+          <input type="password" id="password-confirm" v-model="passwordConfirm" required placeholder="••••••••"
+                 @invalid="onFieldInvalid" @input="onFieldInput" />
         </div>
         
         <transition name="fade">
@@ -54,7 +56,7 @@ export default {
       this.successMessage = '';
 
       if (this.password !== this.passwordConfirm) {
-        this.errorMessage = 'Пароли не совпадают.';
+        this.errorMessage = this.$t('auth.common.passwordsNoMatch');
         this.isLoading = false;
         return;
       }
@@ -69,7 +71,7 @@ export default {
           password: this.password
         });
         
-        this.successMessage = response.data.message + ' Перенаправляем на страницу входа...';
+  this.successMessage = (response.data.message || '') + this.$t('auth.resetConfirm.redirecting');
 
         // Через 3 секунды перенаправляем на страницу входа
         setTimeout(() => {
@@ -77,10 +79,24 @@ export default {
         }, 3000);
 
       } catch (error) {
-        this.errorMessage = error.response?.data?.error || 'Произошла ошибка. Возможно, ссылка недействительна.';
+        const msg = error.response?.data?.error;
+        this.errorMessage = msg || this.$t('auth.common.error');
       } finally {
         this.isLoading = false;
       }
+    }
+    ,onFieldInvalid(e){
+      try{
+        const t = e?.target; if(!t) return;
+        const v = t.validity || {};
+        if (v.valueMissing) t.setCustomValidity(this.$t('auth.validation.requiredPassword'));
+        else if (v.tooShort) t.setCustomValidity(this.$t('auth.validation.tooShort', { min: t.minLength || 8 }));
+        else if (v.tooLong) t.setCustomValidity(this.$t('auth.validation.tooLong', { max: t.maxLength }));
+        else if (v.patternMismatch) t.setCustomValidity(this.$t('auth.validation.pattern'));
+      }catch{/* noop */}
+    }
+    ,onFieldInput(e){
+      try{ e?.target?.setCustomValidity(''); }catch{/* noop */}
     }
   }
 };

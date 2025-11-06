@@ -8,7 +8,7 @@
       <form @submit.prevent="submitForm" class="modal-form">
         <div class="form-group">
           <label for="submission_date">{{ $t('modals.addCase.submissionDate') }}</label>
-          <input type="date" id="submission_date" v-model="caseData.submission_date" required />
+          <AltDateTimePicker mode="date" v-model="caseData.submission_date" />
         </div>
         <div class="form-group">
           <label for="status">{{ $t('modals.addCase.status') }}</label>

@@ -9,6 +9,7 @@
           <div class="user-meta">
             <div class="company-name" :title="companyName || displayName">{{ companyName || displayName }}</div>
             <div class="person-name" :title="fullName">{{ personDisplay }}</div>
+            <div class="user-role" v-if="roleLabel" :title="roleLabel">{{ roleLabel }}</div>
           </div>
         </div>
       <nav class="nav-links">
@@ -232,6 +233,17 @@ export default {
       if (d === 1) return 'день';
       if (d >= 2 && d <= 4) return 'дня';
       return 'дней';
+    },
+    roleLabel() {
+      const r = String(this.role || '').toUpperCase();
+      switch (r) {
+        case 'ADMIN': return this.$t('roles.admin');
+        case 'LEAD': return this.$t('roles.lead');
+        case 'MANAGER': return this.$t('roles.manager');
+        case 'LAWYER': return this.$t('roles.lawyer');
+        case 'ASSISTANT': return this.$t('roles.assistant');
+        default: return r || '';
+      }
     }
   },
   methods: {
@@ -528,6 +540,11 @@ export default {
   word-break: break-word;
   overflow-wrap: anywhere;
   text-wrap: pretty;
+}
+
+.user-role {
+  font-size: 11px;
+  color: #6b7280; /* приглушённый серый */
 }
 
 .username {

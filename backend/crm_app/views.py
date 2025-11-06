@@ -1736,10 +1736,15 @@ class NotificationListCreateView(APIView):
 
         # Видимость: MANAGER видит только свои. ADMIN/LEAD/LAWYER/ASSISTANT видят все уведомления сотрудников своей компании.
         role = getattr(request.user, 'role', None)
-        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
-            qs = Notification.objects.filter(user__company_id=request.user.company_id)
-            # Never show notifications about tasks created by the current user.
-            # If the DB schema doesn't have task_id yet (no migration), skip the exclude gracefully.
+        company_id = getattr(request.user, 'company_id', None)
+        # ВАЖНО: уведомления по напоминаниям (source='REMINDER') видит только тот менеджер, к которому привязан клиент (user=request.user).
+        # Для остальных источников (SYSTEM) админские роли видят по компании, как и раньше.
+        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
+            qs = Notification.objects.filter(
+                (models.Q(source='REMINDER') & models.Q(user=request.user)) |
+                (~models.Q(source='REMINDER') & models.Q(user__company_id=company_id))
+            )
+            # Не показываем уведомления о задачах, поставленных текущим пользователем
             try:
                 from django.db import connection
                 with connection.cursor() as cur:
@@ -1826,8 +1831,53 @@ class NotificationListCreateView(APIView):
         qs = qs.order_by('-created_at')
         total = qs.count()
         sliced = qs[offset: offset + limit]
-        ser = NotificationSerializer(sliced, many=True)
-        return Response({'total': total, 'offset': offset, 'count': len(sliced), 'items': ser.data})
+        ser = NotificationSerializer(sliced, many=True, context={'request': request})
+        items = list(ser.data)
+        # Локализация заголовков/сообщений REMINDER для польского интерфейса
+        try:
+            # Определяем язык из заголовков
+            def _pref_lang(req):
+                try:
+                    x = (req.META.get('HTTP_X_LOCALE') or '').lower()
+                    if x.startswith('pl'):
+                        return 'pl'
+                    if x.startswith('ru'):
+                        return 'ru'
+                    if x.startswith('en'):
+                        return 'en'
+                    al = (req.META.get('HTTP_ACCEPT_LANGUAGE') or '').lower()
+                    if 'pl' in al:
+                        return 'pl'
+                    if 'ru' in al:
+                        return 'ru'
+                    return 'en'
+                except Exception:
+                    return 'en'
+            lang = _pref_lang(request)
+            if lang == 'pl':
+                def tr_title(t: str) -> str:
+                    if not isinstance(t, str):
+                        return t
+                    return (
+                        t.replace('Напоминание', 'Przypomnienie')
+                         .replace('отправлено', 'wysłano')
+                         .replace('ОШИБКА отправки email', 'BŁĄD wysyłki email')
+                         .replace('нет email у клиента', 'brak emailu klienta')
+                    )
+                def tr_msg(m: str) -> str:
+                    if not isinstance(m, str):
+                        return m
+                    return m.replace('Клиент:', 'Klient:')
+                for it in items:
+                    try:
+                        if it.get('source') == 'REMINDER':
+                            it['title'] = tr_title(it.get('title'))
+                            it['message'] = tr_msg(it.get('message'))
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+        return Response({'total': total, 'offset': offset, 'count': len(items), 'items': items})
 
     def post(self, request):
         # возможность вручную создавать системные уведомления (для теста / внутреннего польз.)
@@ -1848,12 +1898,16 @@ class NotificationMarkReadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        # Для ролей, которые видят все уведомления компании, разрешаем отмечать прочитанным
+        # Админские роли не могут помечать REMINDER для других пользователей
         role = getattr(request.user, 'role', None)
         company_id = getattr(request.user, 'company_id', None)
         try:
             if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
-                n = Notification.objects.get(pk=pk, user__company_id=company_id)
+                qs = Notification.objects.filter(
+                    (models.Q(source='REMINDER') & models.Q(user=request.user)) |
+                    (~models.Q(source='REMINDER') & models.Q(user__company_id=company_id))
+                )
+                n = qs.get(pk=pk)
             else:
                 n = Notification.objects.get(pk=pk, user=request.user)
         except Notification.DoesNotExist:
@@ -1869,9 +1923,11 @@ class NotificationMarkAllReadView(APIView):
         role = getattr(request.user, 'role', None)
         company_id = getattr(request.user, 'company_id', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
-            # Отмечаем прочитанными ВСЕ уведомления компании (отражает то, что админ видит в списке),
-            # исключая уведомления о задачах, поставленных текущим пользователем.
-            qs = Notification.objects.filter(user__company_id=company_id, is_read=False)
+            # Отмечаем прочитанными только те уведомления, которые админ действительно видит (REMINDER только свои)
+            qs = Notification.objects.filter(is_read=False).filter(
+                (models.Q(source='REMINDER') & models.Q(user=request.user)) |
+                (~models.Q(source='REMINDER') & models.Q(user__company_id=company_id))
+            )
             try:
                 from django.db import connection
                 with connection.cursor() as cur:
@@ -1889,8 +1945,12 @@ class NotificationUnreadCountView(APIView):
 
     def get(self, request):
         role = getattr(request.user, 'role', None)
-        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
-            qs = Notification.objects.filter(user__company_id=request.user.company_id, is_read=False)
+        company_id = getattr(request.user, 'company_id', None)
+        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
+            qs = Notification.objects.filter(is_read=False).filter(
+                (models.Q(source='REMINDER') & models.Q(user=request.user)) |
+                (~models.Q(source='REMINDER') & models.Q(user__company_id=company_id))
+            )
             try:
                 from django.db import connection
                 with connection.cursor() as cur:
@@ -1911,7 +1971,11 @@ class NotificationDeleteView(APIView):
         company_id = getattr(request.user, 'company_id', None)
         try:
             if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
-                n = Notification.objects.get(pk=pk, user__company_id=company_id)
+                qs = Notification.objects.filter(
+                    (models.Q(source='REMINDER') & models.Q(user=request.user)) |
+                    (~models.Q(source='REMINDER') & models.Q(user__company_id=company_id))
+                )
+                n = qs.get(pk=pk)
             else:
                 n = Notification.objects.get(pk=pk, user=request.user)
         except Notification.DoesNotExist:
@@ -1938,7 +2002,10 @@ class NotificationBulkDeleteView(APIView):
         role = getattr(request.user, 'role', None)
         company_id = getattr(request.user, 'company_id', None)
         if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and company_id:
-            qs = Notification.objects.filter(user__company_id=company_id, id__in=clean_ids)
+            qs = Notification.objects.filter(id__in=clean_ids).filter(
+                (models.Q(source='REMINDER') & models.Q(user=request.user)) |
+                (~models.Q(source='REMINDER') & models.Q(user__company_id=company_id))
+            )
         else:
             qs = Notification.objects.filter(user=request.user, id__in=clean_ids)
         deleted = qs.count()

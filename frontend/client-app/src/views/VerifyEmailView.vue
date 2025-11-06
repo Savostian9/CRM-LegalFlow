@@ -9,7 +9,8 @@
       <form @submit.prevent="handleVerification" class="auth-form">
         <div class="form-group">
           <label for="token">{{ $t('auth.verify.codeLabel') }}</label>
-          <input type="text" id="token" v-model="token" required maxlength="6" pattern="\d{6}" placeholder="------" />
+          <input type="text" id="token" v-model="token" required maxlength="6" pattern="\d{6}" placeholder="------"
+                 @invalid="onCodeInvalid" @input="onCodeInput" />
         </div>
         
   <button type="submit" class="auth-button">{{ $t('auth.verify.confirm') }}</button>
@@ -18,8 +19,11 @@
       </form>
       
       <div class="resend-container">
-  <span v-if="timer > 0">{{ $t('auth.verify.resendIn') }} {{ timer }} {{ $t('auth.verify.sec') }}</span>
-  <button v-else @click="resendCode" class="resend-button">{{ $t('auth.verify.resend') }}</button>
+          <span v-if="timer > 0" class="resend-timer">{{ $t('auth.verify.resendIn') }} {{ timer }} {{ $t('auth.verify.sec') }}</span>
+    <button v-else type="button" @click="resendCode" class="resend-button" :aria-label="$t('auth.verify.resend')">
+            <svg class="resend-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 5a7 7 0 1 1-6.938 6H3a9 9 0 1 0 2.638-6.364V3.5a.5.5 0 0 0-.854-.353L1.5 6.432a.5.5 0 0 0 0 .707l3.284 3.285A.5.5 0 0 0 5.64 10V7.5A7 7 0 0 1 12 5Z"/></svg>
+            {{ $t('auth.verify.resend') }}
+          </button>
       </div>
     </div>
   </div>
@@ -84,7 +88,13 @@ export default {
 
       } catch (err) {
         this.isError = true;
-  this.message = err.response?.data?.error || this.$t('auth.common.error');
+        const raw = err.response?.data?.error || '';
+        const lower = String(raw).toLowerCase();
+        if (lower.includes('invalid') || lower.includes('неверн')) {
+          this.message = this.$t('auth.verify.invalidToken');
+        } else {
+          this.message = raw || this.$t('auth.common.error');
+        }
       }
     },
     async resendCode() {
@@ -93,15 +103,33 @@ export default {
         this.message = '';
         this.isError = false;
         try {
-      const response = await axios.post('/api/resend-verify-email/', {
+    await axios.post('/api/resend-verify-email/', {
                 email: this.email
             });
-            this.message = response.data.message;
+      // Покажем локализованное дружелюбное сообщение вместо серверной строки
+      this.message = this.$t('auth.verify.sentToast');
             this.startTimer(); // Перезапускаем таймер
         } catch (err) {
             this.isError = true;
             this.message = err.response?.data?.error || this.$t('auth.verify.resendError');
         }
+    }
+    ,onCodeInvalid(e){
+      try{
+        const t = e?.target; if(!t) return;
+        const v = t.validity || {};
+        if (v.valueMissing) t.setCustomValidity(this.$t('auth.verify.codeRequired'));
+        else if (v.patternMismatch) t.setCustomValidity(this.$t('auth.verify.codeInvalid'));
+      }catch{/* noop */}
+    }
+    ,onCodeInput(e){
+      try{
+        const t = e?.target; if(!t) return;
+        const v = t.validity || {};
+        if (v.valid) { t.setCustomValidity(''); return; }
+        if (v.valueMissing) t.setCustomValidity(this.$t('auth.verify.codeRequired'));
+        else if (v.patternMismatch) t.setCustomValidity(this.$t('auth.verify.codeInvalid'));
+      }catch{/* noop */}
     }
   }
 }
@@ -161,13 +189,28 @@ export default {
     margin-top: 25px;
     color: #666;
 }
+.resend-timer { color: #666; }
 .resend-button {
-    background: none;
-    border: none;
-    color: #007bff;
-    text-decoration: underline;
-    cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid #e3f2fd;
+  color: #1e88e5;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color .2s ease, box-shadow .2s ease, color .2s ease;
 }
+.resend-button:hover {
+  background: #e3f2fd;
+  box-shadow: 0 2px 8px rgba(30,136,229,.15);
+}
+.resend-button:active {
+  background: #d6ecff;
+}
+.resend-icon { width: 18px; height: 18px; }
 .error-message {
     color: #d93025;
     margin-top: 15px;

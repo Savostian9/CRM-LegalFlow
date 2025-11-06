@@ -12,7 +12,8 @@
           <label for="email">{{ $t('auth.fields.email') }}</label>
           <div class="input-wrapper">
             <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67Z" /><path d="M22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908Z" /></svg>
-            <input type="email" id="email" v-model="email" required placeholder="your@email.com" />
+       <input type="email" id="email" v-model.trim="email" required placeholder="your@email.com"
+         @invalid="onEmailInvalid" @input="onEmailInput" />
           </div>
         </div>
         
@@ -82,6 +83,31 @@ export default {
       } finally {
         this.isLoading = false;
       }
+    }
+    ,onEmailInvalid(e){
+      try{
+        const t = e?.target; if(!t) return;
+        const v = t.validity || {};
+        if (v.valueMissing) {
+          t.setCustomValidity(this.$t('auth.validation.requiredEmail'));
+        } else {
+          t.setCustomValidity(this.$t('auth.validation.emailInvalid'));
+        }
+      }catch{/* noop */}
+    }
+    ,onEmailInput(e){
+      try{
+        const t = e?.target; if(!t) return;
+        // Сначала очистим кастомную ошибку, иначе validity.valid всегда false
+        t.setCustomValidity('');
+        const v = t.validity || {};
+        // Перечитаем валидность после очистки
+        if (v.valueMissing) {
+          t.setCustomValidity(this.$t('auth.validation.requiredEmail'));
+        } else if (v.typeMismatch || v.patternMismatch) {
+          t.setCustomValidity(this.$t('auth.validation.emailInvalid'));
+        }
+      }catch{/* noop */}
     }
   }
 };

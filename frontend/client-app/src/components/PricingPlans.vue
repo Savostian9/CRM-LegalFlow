@@ -1,6 +1,6 @@
 <template>
   <div class="pricing-wrapper">
-    <h3 class="pricing-title">Тарифы</h3>
+    <h3 class="pricing-title">{{ $t('pricing.title') }}</h3>
     <div class="pricing-grid">
       <div
         v-for="plan in plans"
@@ -10,59 +10,59 @@
       >
         <div class="plan-head">
           <h4>{{ plan.name }}</h4>
-          <span v-if="plan.badge" class="badge" :class="{ primary: plan.highlight }">{{ plan.badge }}</span>
+          <span v-if="planBadge(plan)" class="badge" :class="{ primary: plan.highlight }">{{ planBadge(plan) }}</span>
         </div>
         <div class="price">
-          <template v-if="plan.price === 0">0 PLN <span>/ {{ plan.pricePeriod }}</span></template>
-          <template v-else>{{ plan.price }} PLN <span>/ {{ plan.pricePeriod }}</span></template>
+          <template v-if="plan.price === 0">0 PLN <span>/ {{ pricePeriodLabel(plan) }}</span></template>
+          <template v-else>{{ plan.price }} PLN <span>/ {{ pricePeriodLabel(plan) }}</span></template>
         </div>
-        <p class="desc">{{ plan.description }}</p>
+        <p class="desc">{{ $t(`pricing.plans.${plan.code}.description`) }}</p>
         <ul class="features">
-          <li v-for="f in plan.features" :key="f">{{ f }}</li>
+          <li v-for="(f, idx) in plan.features" :key="idx">{{ $t(`pricing.plans.${plan.code}.features.${idx}`) }}</li>
         </ul>
         <!-- Детали всегда показаны -->
         <div class="details">
-          <h5>Что входит</h5>
+          <h5>{{ $t('pricing.includesTitle') }}</h5>
           <table class="limits-table">
             <tbody>
               <tr>
-                <td>Пользователи</td>
+                <td>{{ $t('pricing.fields.users') }}</td>
                 <td>{{ plan.limits.users }}</td>
               </tr>
               <tr>
-                <td>Клиенты</td>
+                <td>{{ $t('pricing.fields.clients') }}</td>
                 <td>{{ plan.limits.clients }}</td>
               </tr>
               <tr>
-                <td>Дела</td>
+                <td>{{ $t('pricing.fields.cases') }}</td>
                 <td>{{ plan.limits.cases }}</td>
               </tr>
               <tr>
-                <td>Файлы</td>
+                <td>{{ $t('pricing.fields.files') }}</td>
                 <td>{{ plan.limits.files }}</td>
               </tr>
               <tr>
-                <td>Хранилище</td>
+                <td>{{ $t('pricing.fields.storage') }}</td>
                 <td>{{ formatStorage(plan.limits.files_storage_mb) }}</td>
               </tr>
               <tr>
-                <td>Задачи / месяц</td>
+                <td>{{ $t('pricing.fields.tasksPerMonth') }}</td>
                 <td>{{ plan.limits.tasks_per_month }}</td>
               </tr>
               <tr>
-                <td>Активные напоминания</td>
+                <td>{{ $t('pricing.fields.remindersActive') }}</td>
                 <td>{{ plan.limits.reminders_active }}</td>
               </tr>
               <tr>
-                <td>Email / месяц</td>
+                <td>{{ $t('pricing.fields.emailsPerMonth') }}</td>
                 <td>{{ plan.limits.emails_per_month }}</td>
               </tr>
             </tbody>
           </table>
           <div class="qualitative" v-if="plan.qualitative?.length">
-            <h5>Дополнительно</h5>
+            <h5>{{ $t('pricing.additionalTitle') }}</h5>
             <ul class="qual-list">
-              <li v-for="q in plan.qualitative" :key="q.key">{{ q.label }}: <strong>{{ q.value }}</strong></li>
+              <li v-for="q in plan.qualitative" :key="q.key">{{ $t(`pricing.qual.labels.${q.key}`) }}: <strong>{{ $t(`pricing.qual.values.${q.key}.${plan.code}`) }}</strong></li>
             </ul>
           </div>
         </div>
@@ -72,9 +72,9 @@
             class="upgrade-btn"
             @click="$emit('select', plan.code)"
           >
-            Выбрать
+            {{ $t('pricing.actions.select') }}
           </button>
-          <div v-else class="cta muted">Активируется при регистрации</div>
+          <div v-else class="cta muted">{{ $t('pricing.actions.trialCta') }}</div>
         </div>
       </div>
     </div>
@@ -93,7 +93,16 @@ export default {
     }
   },
   methods: {
-    formatStorage(mb) { return formatStorage(mb); }
+    formatStorage(mb) { return formatStorage(mb); },
+    pricePeriodLabel(plan){
+      const raw = (plan.pricePeriod || '').toLowerCase();
+      if (raw.includes('месяц') || raw.includes('month')) return this.$t('pricing.pricePeriod.month');
+      return this.$t('pricing.pricePeriod.period');
+    },
+    planBadge(plan){
+      const k = `pricing.plans.${plan.code}.badge`;
+      try { return this.$t(k); } catch(e){ return plan.badge; }
+    }
   }
 }
 </script>
@@ -109,7 +118,7 @@ export default {
 .plan-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .plan-head h4 { font-size:18px; margin:0; font-weight:600; }
 .badge { background:#e2e8f0; color:#334155; font-size:11px; padding:4px 8px; border-radius:20px; font-weight:500; }
-.badge.primary { background:#2563eb; color:#fff; }
+.badge.primary { background: var(--primary-color, #4A90E2); color:#fff; }
 .price { font-size:26px; font-weight:700; margin:10px 0 8px; }
 .price span { font-size:13px; font-weight:400; color:#64748b; }
 .desc { font-size:13px; color:#64748b; margin:0 0 12px; line-height:1.35; }
@@ -124,8 +133,23 @@ export default {
 .qualitative h5 { font-size:12px; margin:0 0 4px; text-transform:uppercase; letter-spacing:.5px; color:#475569; }
 .qual-list { list-style:none; padding:0; margin:0; font-size:12px; display:flex; flex-direction:column; gap:4px; }
 .actions { margin-top:auto; display:flex; flex-direction:column; gap:8px; }
-.upgrade-btn { background:linear-gradient(90deg,#2563eb,#1d4ed8); color:#fff; border:none; border-radius:8px; padding:10px 14px; font-weight:600; cursor:pointer; box-shadow:0 4px 12px rgba(37,99,235,0.35); transition:transform .2s, box-shadow .2s; }
-.upgrade-btn:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(37,99,235,0.45); }
-.upgrade-btn:active { transform:translateY(0); }
+.upgrade-btn {
+  background: var(--primary-color, #4A90E2);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(74, 144, 226, 0.2);
+  transition: all 0.2s ease;
+}
+.upgrade-btn:hover {
+  background: #ffffff;
+  color: #000000 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+.upgrade-btn:active { transform: translateY(0); }
 .cta.muted { text-align:center; font-size:13px; color:#475569; }
 </style>

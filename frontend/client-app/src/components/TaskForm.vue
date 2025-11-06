@@ -20,7 +20,7 @@
           </label>
           <label>
             {{ $t('tasks.start') }}
-            <input type="date" v-model="form.start" />
+            <AltDateTimePicker mode="date" v-model="form.start" />
             <small class="muted" v-if="!form.start">{{ $t('tasks.optional') || 'Необязательно: по умолчанию сейчас' }}</small>
           </label>
           <label>
@@ -129,23 +129,70 @@ export default {
     form: { deep: true, handler() { this.dirty = true; } }
   },
   methods: {
+    getCompanyName(u){
+      try {
+        if (!u) return ''
+        const cand = [
+          'company_name', 'companyName', 'company_title', 'organization', 'org_name', 'business_name', 'firm', 'company'
+        ]
+        for (const k of cand){
+          const v = u[k]
+          if (!v) continue
+          if (typeof v === 'string' && v.trim()) return v.trim()
+          if (typeof v === 'object'){
+            const inner = v.name || v.title || v.company_name || v.companyName
+            if (inner && String(inner).trim()) return String(inner).trim()
+          }
+        }
+      } catch {/* ignore */}
+      return ''
+    },
+    assigneeLabel(u){
+      const full = `${u?.first_name || ''} ${u?.last_name || ''}`.trim()
+      if (full) return full
+      const company = this.getCompanyName(u)
+      if (company) return company
+      return (u?.email || u?.username || (u?.id != null ? ('ID ' + u.id) : ''))
+    },
     async loadUsers(){
       const token = localStorage.getItem('user-token')
       if(!token) return
       try {
         const resp = await axios.get('http://127.0.0.1:8000/api/company/users/', { headers:{ Authorization:`Token ${token}` } })
-        this.users = resp.data
+        this.users = Array.isArray(resp.data) ? resp.data : []
+        // Merge current user's Settings so first/last/company from settings are reflected in the options
+        try {
+          const me = await axios.get('http://127.0.0.1:8000/api/user-info/', { headers:{ Authorization:`Token ${token}` } })
+          if (me && me.data && me.data.id != null){
+            const idx = this.users.findIndex(u => Number(u.id) === Number(me.data.id))
+            const enriched = {
+              id: me.data.id,
+              username: me.data.username || (idx !== -1 ? this.users[idx].username : ''),
+              email: me.data.email || (idx !== -1 ? this.users[idx].email : ''),
+              first_name: me.data.first_name || (idx !== -1 ? this.users[idx].first_name : ''),
+              last_name: me.data.last_name || (idx !== -1 ? this.users[idx].last_name : ''),
+              company_name: me.data.company_name || (idx !== -1 ? this.users[idx].company_name : undefined),
+              company: (idx !== -1 ? this.users[idx].company : undefined)
+            }
+            if (idx !== -1) this.users.splice(idx, 1, { ...this.users[idx], ...enriched })
+            else this.users.push(enriched)
+          }
+        } catch { /* ignore settings merge errors */ }
       } catch(e){
         this.usersFallback = true
         try {
           const me = await axios.get('http://127.0.0.1:8000/api/user-info/', { headers:{ Authorization:`Token ${token}` } })
-          this.users = [{ id: me.data.id, username: me.data.username }]
+          this.users = [{
+            id: me.data.id,
+            username: me.data.username,
+            email: me.data.email || '',
+            first_name: me.data.first_name || '',
+            last_name: me.data.last_name || '',
+            company_name: me.data.company_name || ''
+          }]
         } catch { /* ignore */ }
       } finally {
-        this.usersMap = Object.fromEntries(this.users.map(u => {
-          const full = `${u.first_name || ''} ${u.last_name || ''}`.trim()
-          return [u.id, full || u.username || u.email || ('ID '+u.id)]
-        }))
+        this.usersMap = Object.fromEntries(this.users.map(u => [u.id, this.assigneeLabel(u)]))
       }
     },
     tryClose() {
@@ -241,10 +288,7 @@ export default {
     assigneeOptions(){
       return [
         { value: '', label: this.$t('tasks.unassigned') },
-        ...this.users.map(u => ({
-          value: u.id,
-            label: ((u.first_name || '') + (u.last_name ? (' ' + u.last_name) : (u.first_name ? '' : '')) || u.username || u.email)
-        }))
+        ...this.users.map(u => ({ value: String(u.id), label: this.assigneeLabel(u) }))
       ]
     }
   }

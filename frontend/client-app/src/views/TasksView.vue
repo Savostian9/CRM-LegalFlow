@@ -24,7 +24,7 @@
 
         <div class="form-row">
           <label>{{ $t('tasks.start') }}</label>
-          <input v-model="form.start" type="date" />
+          <AltDateTimePicker mode="date" v-model="form.start" />
           <small class="muted" v-if="!form.start">{{ $t('tasks.optional') }}</small>
         </div>
 
@@ -124,7 +124,7 @@
             </label>
             <label>
               {{ $t('tasks.start') }}
-              <input type="date" v-model="editForm.start" />
+              <AltDateTimePicker mode="date" v-model="editForm.start" />
             </label>
             <label>
               {{ $t('tasks.table.status') }}

@@ -39,9 +39,9 @@
           <div class="data-item full-width"><label>{{ $t('clientDetail.fields.address') }}</label><textarea v-model="editableClient.address" @change="saveAllChanges" class="address-textarea"></textarea></div>
 
           <div class="data-item"><label>{{ $t('clientDetail.fields.passportNumber') }}</label><input type="text" v-model="editableClient.passport_number" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.passportExpiry') }}</label><input type="date" v-model="editableClient.passport_expiry_date" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.passportExpiry') }}</label><AltDateTimePicker mode="date" v-model="editableClient.passport_expiry_date" @change="saveAllChanges" /></div>
           <div class="data-item"><label>{{ $t('clientDetail.fields.visaType') }}</label><input type="text" v-model="editableClient.visa_type" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.visaExpiry') }}</label><input type="date" v-model="editableClient.visa_expiry_date" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.visaExpiry') }}</label><AltDateTimePicker mode="date" v-model="editableClient.visa_expiry_date" @change="saveAllChanges" /></div>
         </div>
       </section>
 
@@ -50,19 +50,19 @@
         <div class="data-grid">
           <div class="data-item">
             <label>{{ $t('clientDetail.reminders.UMOWA_PRACA_ZLECENIA') }}</label>
-            <input type="datetime-local" v-model="remindersAtMap.UMOWA_PRACA_ZLECENIA" @change="onReminderAtChange('UMOWA_PRACA_ZLECENIA')" />
+            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.UMOWA_PRACA_ZLECENIA" @change="onReminderAtChange('UMOWA_PRACA_ZLECENIA')" />
           </div>
           <div class="data-item">
             <label>{{ $t('clientDetail.reminders.UMOWA_NAJMU') }}</label>
-            <input type="datetime-local" v-model="remindersAtMap.UMOWA_NAJMU" @change="onReminderAtChange('UMOWA_NAJMU')" />
+            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.UMOWA_NAJMU" @change="onReminderAtChange('UMOWA_NAJMU')" />
           </div>
           <div class="data-item">
             <label>{{ $t('clientDetail.reminders.ZUS_ZUA_ZZA') }}</label>
-            <input type="datetime-local" v-model="remindersAtMap.ZUS_ZUA_ZZA" @change="onReminderAtChange('ZUS_ZUA_ZZA')" />
+            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.ZUS_ZUA_ZZA" @change="onReminderAtChange('ZUS_ZUA_ZZA')" />
           </div>
           <div class="data-item">
             <label>{{ $t('clientDetail.reminders.ZUS_RCA_DRA') }}</label>
-            <input type="datetime-local" v-model="remindersAtMap.ZUS_RCA_DRA" @change="onReminderAtChange('ZUS_RCA_DRA')" />
+            <AltDateTimePicker mode="datetime" v-model="remindersAtMap.ZUS_RCA_DRA" @change="onReminderAtChange('ZUS_RCA_DRA')" />
           </div>
         </div>
       </section>
@@ -145,8 +145,8 @@
                     <option value="OBYWATELSTWO">{{ $t('clientDetail.caseTypes.OBYWATELSTWO') }}</option>
                   </select>
                 </div>
-                <div class="data-item"><label>{{ $t('clientDetail.cases.submissionDate') }}</label><input type="date" v-model="legalCase.submission_date" @change="saveAllChanges" /></div>
-                <div class="data-item"><label>{{ $t('clientDetail.cases.decisionDate') }}</label><input type="date" v-model="legalCase.decision_date" @change="saveAllChanges" /></div>
+                <div class="data-item"><label>{{ $t('clientDetail.cases.submissionDate') }}</label><AltDateTimePicker mode="date" v-model="legalCase.submission_date" @change="saveAllChanges" /></div>
+                <div class="data-item"><label>{{ $t('clientDetail.cases.decisionDate') }}</label><AltDateTimePicker mode="date" v-model="legalCase.decision_date" @change="saveAllChanges" /></div>
                 <div class="data-item full-width">
                   <label>{{ $t('clientDetail.cases.status') }}</label>
                   <select v-model="legalCase.status" @change="saveAllChanges">
