@@ -190,7 +190,16 @@
                         <button type="button" @click="removeUploadedFile(caseIndex, docIndex, file)" class="delete-file-btn">&times;</button>
                       </div>
                     </div>
-                    <button type="button" @click="triggerUpload(caseIndex, docIndex)" class="btn small upload-doc">{{ $t('clientDetail.cases.upload') }}</button>
+                    <div v-if="uploading && uploadingDocContext && uploadingDocContext.caseIndex === caseIndex && uploadingDocContext.docIndex === docIndex" class="uploading-wrapper">
+                      <div class="progress-bar" :aria-label="$t('common.loading')">
+                        <div class="progress-inner" :style="{ width: uploadProgress + '%' }"></div>
+                      </div>
+                      <span class="progress-text">{{ uploadProgress }}%</span>
+                      <button type="button" class="btn small cancel-upload-btn" @click="cancelUpload" :aria-label="$t('common.cancel')">
+                        {{ $t('common.cancel') === 'common.cancel' ? 'Cancel' : $t('common.cancel') }}
+                      </button>
+                    </div>
+                    <button v-else type="button" @click="triggerUpload(caseIndex, docIndex)" class="btn small upload-doc" :disabled="uploading">{{ uploading ? $t('common.loading') : $t('clientDetail.cases.upload') }}</button>
                     <button
                       type="button"
                       @click="removeDocument(caseIndex, docIndex)"
@@ -275,6 +284,8 @@ export default {
   caseTypeMap: { '-' : '-', 'CZASOWY_POBYT': this.$t('clientDetail.caseTypes.CZASOWY_POBYT'), 'STALY_POBYT': this.$t('clientDetail.caseTypes.STALY_POBYT'), 'REZydent_UE': this.$t('clientDetail.caseTypes.REZydent_UE'), 'OBYWATELSTWO': this.$t('clientDetail.caseTypes.OBYWATELSTWO') },
   docTypeMap: { 'ZALACZNIK_1': this.$t('clientDetail.docTypes.ZALACZNIK_1'), 'UMOWA_PRACA': this.$t('clientDetail.docTypes.UMOWA_PRACA'), 'UMOWA_NAJMU': this.$t('clientDetail.docTypes.UMOWA_NAJMU'), 'ZUS_ZUA_ZZA': this.$t('clientDetail.docTypes.ZUS_ZUA_ZZA'), 'ZUS_RCA_DRA': this.$t('clientDetail.docTypes.ZUS_RCA_DRA'), 'POLISA': this.$t('clientDetail.docTypes.POLISA'), 'ZASWIADCZENIE_US': this.$t('clientDetail.docTypes.ZASWIADCZENIE_US'), 'ZASWIADCZENIA_ZUS': this.$t('clientDetail.docTypes.ZASWIADCZENIA_ZUS'), 'PIT_37': this.$t('clientDetail.docTypes.PIT_37'), 'BADANIE_LEKARSKIE': this.$t('clientDetail.docTypes.BADANIE_LEKARSKIE'), 'BADANIE_MEDYCZNE': this.$t('clientDetail.docTypes.BADANIE_MEDYCZNE'), 'SWIADECTWO_KIEROWCY': this.$t('clientDetail.docTypes.SWIADECTWO_KIEROWCY') },
       uploadingDocContext: null,
+    uploading: false,
+    uploadProgress: 0,
       showConfirmDialog: false,
       confirmDialogMessage: '',
       confirmCallback: null,
@@ -283,6 +294,7 @@ export default {
       notificationType: 'success',
       isSaving: false,
       pendingDelete: false,
+      uploadAbortController: null,
     };
   },
   computed: {
@@ -602,9 +614,9 @@ export default {
       if (!files.length || !this.uploadingDocContext) return;
 
       const { caseIndex, docIndex } = this.uploadingDocContext;
-      const currentCase = this.editableClient?.legal_cases?.[caseIndex];
+      let currentCase = this.editableClient?.legal_cases?.[caseIndex];
       if (!currentCase) { console.error('Case not found'); return; }
-      const currentDoc = currentCase.documents?.[docIndex];
+      let currentDoc = currentCase.documents?.[docIndex];
       if (!currentDoc) { console.error('Document not found'); return; }
 
       try {
@@ -612,12 +624,10 @@ export default {
         let docId = currentDoc.id;
         if (!docId) {
           await this.saveAllChanges();
-          await this.fetchClientData();
-          const refreshedCase = this.editableClient?.legal_cases?.[caseIndex];
-          const match = refreshedCase?.documents?.find(d => d.document_type === currentDoc.document_type);
-          if (match && match.id) {
-            docId = match.id;
-          }
+          // обновим указатели после сохранения, чтобы взять id из editableClient
+          currentCase = this.editableClient?.legal_cases?.[caseIndex];
+          currentDoc = currentCase?.documents?.[docIndex];
+          docId = currentDoc?.id;
         }
         if (!docId) {
           this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
@@ -628,9 +638,19 @@ export default {
         const token = localStorage.getItem('user-token');
         const fd = new FormData();
         for (const f of files) fd.append('files', f);
+        this.uploading = true;
+        this.uploadProgress = 0;
         try {
+          // AbortController для возможности отмены загрузки
+          this.uploadAbortController = new AbortController();
           const res = await axios.post(`http://127.0.0.1:8000/api/documents/${docId}/files/`, fd, {
-            headers: { Authorization: `Token ${token}`, 'Content-Type': 'multipart/form-data' }
+            headers: { Authorization: `Token ${token}`, 'Content-Type': 'multipart/form-data' },
+            onUploadProgress: (e) => {
+              if (e && e.total) {
+                this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+              }
+            },
+            signal: this.uploadAbortController.signal
           });
           const payload = res?.data;
           const uploaded = Array.isArray(payload) ? payload : (payload ? [payload] : []);
@@ -639,13 +659,30 @@ export default {
           if (uploaded.length > 0) currentDoc.status = 'SUBMITTED';
           this.showToast(this.$t('clientDetail.toasts.saved'), 'success', 1200);
         } catch (e) {
-          console.error('Upload failed', e.response?.data || e);
-          this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+          const msg = String(e?.message || '').toLowerCase();
+          if (e?.code === 'ERR_CANCELED' || msg.includes('abort') || msg.includes('canceled')) {
+            const k = 'common.canceled';
+            const tr = this.$t(k);
+            this.showToast(tr === k ? 'Загрузка отменена' : tr, 'error', 1200);
+          } else {
+            console.error('Upload failed', e.response?.data || e);
+            this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+          }
         }
       } finally {
+        this.uploading = false;
+        this.uploadProgress = 0;
+        this.uploadAbortController = null;
         this.uploadingDocContext = null;
         if (event && event.target) event.target.value = '';
       }
+    },
+    cancelUpload() {
+      try {
+        if (this.uploadAbortController) {
+          this.uploadAbortController.abort();
+        }
+      } catch (e) { /* noop */ }
     },
     viewFile(file) {
       const url = this.getFileUrl(file);
@@ -716,7 +753,22 @@ export default {
             });
             
             this.client = response.data;
-            
+            // Синхронизируем присвоенные сервером ID по делам и документам обратно в editableClient
+            try {
+              const serverCases = Array.isArray(this.client?.legal_cases) ? this.client.legal_cases : [];
+              (this.editableClient?.legal_cases || []).forEach((lc, idx) => {
+                const sc = serverCases[idx];
+                if (sc) {
+                  if (sc.id) lc.id = sc.id;
+                  const sdMap = new Map((sc.documents || []).map(d => [d.document_type, d]));
+                  (lc.documents || []).forEach(doc => {
+                    const sd = sdMap.get(doc.document_type);
+                    if (sd && sd.id) doc.id = sd.id;
+                  });
+                }
+              });
+            } catch(e) { /* noop */ }
+
             if (this.editableClient.legal_cases) {
                 this.editableClient.legal_cases.forEach((legalCase, index) => {
                     const key = legalCase.id || `new_${index}`;
@@ -1196,6 +1248,12 @@ export default {
 .delete-file-btn:hover {
   background: #a8d8b6;
 }
+
+/* Upload progress UI */
+.uploading-wrapper { display:flex; align-items:center; gap:10px; min-width:160px; }
+.progress-bar { position:relative; flex:1; height:8px; background:#e2e8f0; border-radius:6px; overflow:hidden; }
+.progress-inner { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,#4A90E2,#3b7fc9); transition:width .2s ease; }
+.progress-text { font-size:12px; font-weight:600; color:#4b5563; width:40px; text-align:right; }
 
 
 .empty-state, .loader {
