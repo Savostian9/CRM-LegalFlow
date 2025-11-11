@@ -340,6 +340,67 @@ if os.environ.get('CORS_ALLOW_ALL', '').strip().lower() in {'1','true','yes','on
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# --- Optional S3/OVH object storage integration ---
+# Enable by setting USE_S3=1 in .env.local and providing required AWS_* vars.
+# Falls back silently to local media if any critical value is missing.
+USE_S3 = _get_bool('USE_S3', False)
+if USE_S3:
+    _required_s3 = [
+        'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_STORAGE_BUCKET_NAME', 'AWS_S3_ENDPOINT_URL'
+    ]
+    if all(os.environ.get(k) for k in _required_s3):
+        try:
+            # Ensure storages app present (and installed in this interpreter)
+            try:
+                import importlib  # type: ignore
+                importlib.import_module('storages')
+                if 'storages' not in INSTALLED_APPS:
+                    INSTALLED_APPS.append('storages')
+            except Exception as _no_st:
+                # storages not installed in this environment -> fallback to local
+                if DEBUG:
+                    print('[storage] storages package missing in current env; falling back to local:', _no_st)
+                raise RuntimeError('storages-missing')
+
+            AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+            AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+            AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+            AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL')
+            AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME') or None
+            AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN') or ''
+
+            AWS_DEFAULT_ACL = None  # let bucket policy control access
+            # Allow override from env; default to unsigned public URLs
+            AWS_QUERYSTRING_AUTH = _get_bool('AWS_QUERYSTRING_AUTH', False)
+            try:
+                AWS_QUERYSTRING_EXPIRE = int(os.environ.get('AWS_QUERYSTRING_EXPIRE', '3600'))
+            except Exception:
+                AWS_QUERYSTRING_EXPIRE = 3600
+            _sigv = os.environ.get('AWS_S3_SIGNATURE_VERSION')
+            if _sigv:
+                AWS_S3_SIGNATURE_VERSION = _sigv
+            AWS_S3_FILE_OVERWRITE = False
+            AWS_S3_ADDRESSING_STYLE = 'virtual'
+            AWS_S3_OBJECT_PARAMETERS = { 'CacheControl': 'max-age=86400' }
+
+            # Derive MEDIA_URL
+            if AWS_S3_CUSTOM_DOMAIN:
+                MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN.rstrip('/')}/"
+            else:
+                # Path style fallback (should still work with OVH virtual hosted endpoint)
+                MEDIA_URL = f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_STORAGE_BUCKET_NAME}/"
+
+            DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+            if DEBUG:
+                print('[storage] Using S3 storage MEDIA_URL=', MEDIA_URL)
+        except Exception as _s3_err:
+            if DEBUG:
+                print('[storage] Failed to configure S3, falling back to local:', _s3_err)
+            # Leave MEDIA_URL / MEDIA_ROOT as local
+    else:
+        if DEBUG:
+            print('[storage] USE_S3=1 but missing required vars; using local media')
+
 
 # Универсальный путь: работает и локально, и в Docker
 LOG_DIR = "/app/logs" if os.path.exists("/app") else os.path.join(BASE_DIR, "logs")
