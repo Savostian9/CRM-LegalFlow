@@ -369,7 +369,7 @@ if USE_S3:
             AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME') or None
             AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN') or ''
 
-            AWS_DEFAULT_ACL = None  # let bucket policy control access
+            AWS_DEFAULT_ACL = os.environ.get('AWS_DEFAULT_ACL')  # let bucket policy control access by default
             # Allow override from env; default to unsigned public URLs
             AWS_QUERYSTRING_AUTH = _get_bool('AWS_QUERYSTRING_AUTH', False)
             try:
@@ -390,9 +390,13 @@ if USE_S3:
                 # Path style fallback (should still work with OVH virtual hosted endpoint)
                 MEDIA_URL = f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_STORAGE_BUCKET_NAME}/"
 
-            DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+            _safe_no_delete = _get_bool('SAFE_STORAGE_NO_DELETE', False)
+            if _safe_no_delete:
+                DEFAULT_FILE_STORAGE = 'crm_app.storage.SafeS3Boto3Storage'
+            else:
+                DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
             if DEBUG:
-                print('[storage] Using S3 storage MEDIA_URL=', MEDIA_URL)
+                print('[storage] Using S3 storage MEDIA_URL=', MEDIA_URL, 'safe_no_delete=', _safe_no_delete)
         except Exception as _s3_err:
             if DEBUG:
                 print('[storage] Failed to configure S3, falling back to local:', _s3_err)

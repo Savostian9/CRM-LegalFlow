@@ -150,7 +150,13 @@ const routes = [
 
 const router = createRouter({
   history: createWebHistory(process.env.BASE_URL),
-  routes
+  routes,
+  // Глобально возвращаем страницу к началу при каждой навигации
+  // (Vue Router v4 использует left/top; savedPosition восстанавливает историю браузера)
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    return { left: 0, top: 0 }
+  }
 })
 
 // Навигационный гвард для проверки авторизации и ролей

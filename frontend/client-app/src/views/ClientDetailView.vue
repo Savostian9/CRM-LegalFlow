@@ -130,7 +130,12 @@
       </div>
 
       <div v-else class="cases-container">
-        <div v-for="(legalCase, caseIndex) in editableClient.legal_cases" :key="legalCase.id || caseIndex" class="case-wrapper">
+        <div
+          v-for="(legalCase, caseIndex) in editableClient.legal_cases"
+          :key="legalCase.id || caseIndex"
+          class="case-wrapper"
+          ref="caseItems"
+        >
           <div class="case-header" @click="toggleCase(caseIndex)">
             <div class="case-header-title">
               <svg class="toggle-icon" :class="{ 'is-expanded': legalCase._isExpanded }" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -141,6 +146,15 @@
             <div class="case-status" :class="getCaseStatusClass(legalCase)">
               {{ getStatusDisplay(legalCase.status) }}
             </div>
+            <button
+              type="button"
+              class="btn danger small icon-only delete-case-inline"
+              :title="$t('clientDetail.cases.deleteCase')"
+              :aria-label="$t('clientDetail.cases.deleteCase')"
+              @click.stop="removeCase(caseIndex)"
+            >
+              ×
+            </button>
           </div>
 
           <div v-if="legalCase._isExpanded" class="case-details">
@@ -515,7 +529,7 @@ export default {
     startNewCase() {
       const newCase = {
         case_type: '-',
-        submission_date: new Date().toISOString().slice(0, 10),
+        submission_date: null, // не заполняем автоматически
         decision_date: null,
         status: '-',
         documents: Object.keys(this.docTypeMap).map(key => ({
@@ -523,11 +537,29 @@ export default {
           status: 'NOT_SUBMITTED',
           files: []
         })),
-        _isExpanded: false,
+        _isExpanded: true,
         isNew: true
       };
       
       this.editableClient.legal_cases.push(newCase);
+      // После добавления — раскрыть и прокрутить к началу нового дела
+      this.$nextTick(() => {
+        const items = this.$refs.caseItems;
+        const el = Array.isArray(items) ? items[items.length - 1] : items;
+        if (el) {
+          const offset = 50; // поднимем чуть выше заголовка дела (~50px)
+          try {
+            const rect = el.getBoundingClientRect();
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+            const target = Math.max((rect.top + scrollTop) - offset, 0);
+            window.scrollTo({ top: target, behavior: 'smooth' });
+          } catch (e) {
+            if (typeof el.scrollIntoView === 'function') {
+              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        }
+      });
       this.saveAllChanges();
     },
     addDocument(caseIndex) {
@@ -1076,6 +1108,27 @@ export default {
   padding: 15px 20px;
   background-color: var(--background-color);
   cursor: pointer;
+}
+
+.delete-case-inline {
+  margin-left: 12px;
+  background: rgba(255,82,82,0.12);
+  border:1px solid rgba(255,82,82,0.45);
+  color:#c53030 !important;
+  font-weight:700;
+  width:30px;
+  height:30px;
+  line-height:1;
+  border-radius:8px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  transition: background .25s, border-color .25s, color .25s;
+}
+.delete-case-inline:hover {
+  background:rgba(255,82,82,0.20);
+  border-color:rgba(255,82,82,0.6);
+  color:#a61b1b !important;
 }
 
 .case-header-title {
