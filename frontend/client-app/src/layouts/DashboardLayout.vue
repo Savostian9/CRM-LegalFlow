@@ -324,6 +324,11 @@ export default {
       this.isSuperuser = !!response.data.is_superuser;
       try { localStorage.setItem('user-role', this.role); } catch (e) { void 0; }
       try { localStorage.setItem('is-superuser', this.isSuperuser ? '1' : '0'); } catch (e) { void 0; }
+      // Load user permissions
+      try {
+        const perms = await axios.get('/api/profile/permissions/', { headers: { Authorization: `Token ${token}` } });
+        localStorage.setItem('user-permissions', JSON.stringify(perms.data));
+      } catch (e) { console.error('Error loading permissions:', e); }
       // Load company name for sidebar display
       try {
         const cs = await axios.get('/api/company/settings/', { headers: { Authorization: `Token ${token}` } });

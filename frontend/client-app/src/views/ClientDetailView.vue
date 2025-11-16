@@ -13,6 +13,7 @@
       </div>
       <div class="header-actions">
         <button
+          v-if="canDeleteClient"
           type="button"
           class="btn danger delete-client-btn"
           :disabled="pendingDelete"
@@ -32,16 +33,16 @@
       <section class="data-section">
         <h3>{{ $t('clientDetail.sections.personal') }}</h3>
         <div class="data-grid">
-          <div class="data-item"><label>{{ $t('clientDetail.fields.firstName') }}</label><input type="text" v-model="editableClient.first_name" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.lastName') }}</label><input type="text" v-model="editableClient.last_name" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.phone') }}</label><vue-tel-input v-model="editableClient.phone_number" mode="international" @blur="saveAllChanges"></vue-tel-input></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.email') }}</label><input type="email" v-model="editableClient.email" @change="saveAllChanges" /></div>
-          <div class="data-item full-width"><label>{{ $t('clientDetail.fields.address') }}</label><textarea v-model="editableClient.address" @change="saveAllChanges" class="address-textarea"></textarea></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.firstName') }}</label><input type="text" v-model="editableClient.first_name" @change="saveAllChanges" :disabled="!canEditClient" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.lastName') }}</label><input type="text" v-model="editableClient.last_name" @change="saveAllChanges" :disabled="!canEditClient" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.phone') }}</label><vue-tel-input v-model="editableClient.phone_number" mode="international" @blur="saveAllChanges" :disabled="!canEditClient"></vue-tel-input></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.email') }}</label><input type="email" v-model="editableClient.email" @change="saveAllChanges" :disabled="!canEditClient" /></div>
+          <div class="data-item full-width"><label>{{ $t('clientDetail.fields.address') }}</label><textarea v-model="editableClient.address" @change="saveAllChanges" class="address-textarea" :disabled="!canEditClient"></textarea></div>
 
-          <div class="data-item"><label>{{ $t('clientDetail.fields.passportNumber') }}</label><input type="text" v-model="editableClient.passport_number" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.passportExpiry') }}</label><AltDateTimePicker mode="date" v-model="editableClient.passport_expiry_date" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.visaType') }}</label><input type="text" v-model="editableClient.visa_type" @change="saveAllChanges" /></div>
-          <div class="data-item"><label>{{ $t('clientDetail.fields.visaExpiry') }}</label><AltDateTimePicker mode="date" v-model="editableClient.visa_expiry_date" @change="saveAllChanges" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.passportNumber') }}</label><input type="text" v-model="editableClient.passport_number" @change="saveAllChanges" :disabled="!canEditClient" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.passportExpiry') }}</label><AltDateTimePicker mode="date" v-model="editableClient.passport_expiry_date" @change="saveAllChanges" :disabled="!canEditClient" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.visaType') }}</label><input type="text" v-model="editableClient.visa_type" @change="saveAllChanges" :disabled="!canEditClient" /></div>
+          <div class="data-item"><label>{{ $t('clientDetail.fields.visaExpiry') }}</label><AltDateTimePicker mode="date" v-model="editableClient.visa_expiry_date" @change="saveAllChanges" :disabled="!canEditClient" /></div>
         </div>
       </section>
 
@@ -50,28 +51,28 @@
         <div class="data-grid">
           <div class="data-item" :class="{ 'has-error': reminderErrors.UMOWA_PRACA_ZLECENIA }">
             <label>{{ $t('clientDetail.reminders.UMOWA_PRACA_ZLECENIA') }}</label>
-            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.UMOWA_PRACA_ZLECENIA" @close="onReminderAtChange('UMOWA_PRACA_ZLECENIA')" @invalid="() => onReminderInvalid('UMOWA_PRACA_ZLECENIA')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.UMOWA_PRACA_ZLECENIA" @close="onReminderAtChange('UMOWA_PRACA_ZLECENIA')" @invalid="() => onReminderInvalid('UMOWA_PRACA_ZLECENIA')" :disabled="!canEditClient" />
             <div class="field-msg">
               <small v-show="reminderErrors.UMOWA_PRACA_ZLECENIA" class="field-error">{{ reminderErrors.UMOWA_PRACA_ZLECENIA }}</small>
             </div>
           </div>
           <div class="data-item" :class="{ 'has-error': reminderErrors.UMOWA_NAJMU }">
             <label>{{ $t('clientDetail.reminders.UMOWA_NAJMU') }}</label>
-            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.UMOWA_NAJMU" @close="onReminderAtChange('UMOWA_NAJMU')" @invalid="() => onReminderInvalid('UMOWA_NAJMU')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.UMOWA_NAJMU" @close="onReminderAtChange('UMOWA_NAJMU')" @invalid="() => onReminderInvalid('UMOWA_NAJMU')" :disabled="!canEditClient" />
             <div class="field-msg">
               <small v-show="reminderErrors.UMOWA_NAJMU" class="field-error">{{ reminderErrors.UMOWA_NAJMU }}</small>
             </div>
           </div>
           <div class="data-item" :class="{ 'has-error': reminderErrors.ZUS_ZUA_ZZA }">
             <label>{{ $t('clientDetail.reminders.ZUS_ZUA_ZZA') }}</label>
-            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.ZUS_ZUA_ZZA" @close="onReminderAtChange('ZUS_ZUA_ZZA')" @invalid="() => onReminderInvalid('ZUS_ZUA_ZZA')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.ZUS_ZUA_ZZA" @close="onReminderAtChange('ZUS_ZUA_ZZA')" @invalid="() => onReminderInvalid('ZUS_ZUA_ZZA')" :disabled="!canEditClient" />
             <div class="field-msg">
               <small v-show="reminderErrors.ZUS_ZUA_ZZA" class="field-error">{{ reminderErrors.ZUS_ZUA_ZZA }}</small>
             </div>
           </div>
           <div class="data-item" :class="{ 'has-error': reminderErrors.ZUS_RCA_DRA }">
             <label>{{ $t('clientDetail.reminders.ZUS_RCA_DRA') }}</label>
-            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.ZUS_RCA_DRA" @close="onReminderAtChange('ZUS_RCA_DRA')" @invalid="() => onReminderInvalid('ZUS_RCA_DRA')" />
+            <AltDateTimePicker mode="datetime" :min-now="true" v-model="remindersAtMap.ZUS_RCA_DRA" @close="onReminderAtChange('ZUS_RCA_DRA')" @invalid="() => onReminderInvalid('ZUS_RCA_DRA')" :disabled="!canEditClient" />
             <div class="field-msg">
               <small v-show="reminderErrors.ZUS_RCA_DRA" class="field-error">{{ reminderErrors.ZUS_RCA_DRA }}</small>
             </div>
@@ -87,6 +88,7 @@
             class="notes-area"
             :placeholder="$t('clientDetail.notesPlaceholder')"
             @change="saveAllChanges"
+            :disabled="!canEditClient"
           ></textarea>
         </div>
       </section>
@@ -104,6 +106,7 @@
               placeholder="0,00"
               @focus="clearIfZero('service_cost')"
               @blur="normalizeMoney('service_cost')"
+              :disabled="!canEditClient"
             />
           </div>
           <div class="data-item">
@@ -116,6 +119,7 @@
               placeholder="0,00"
               @focus="clearIfZero('amount_paid')"
               @blur="normalizeMoney('amount_paid')"
+              :disabled="!canEditClient"
             />
           </div>
           <div class="data-item">
@@ -147,6 +151,7 @@
               {{ getStatusDisplay(legalCase.status) }}
             </div>
             <button
+              v-if="canDeleteCase"
               type="button"
               class="btn danger small icon-only delete-case-inline"
               :title="$t('clientDetail.cases.deleteCase')"
@@ -163,7 +168,7 @@
               <div class="data-grid">
                 <div class="data-item full-width">
                   <label>{{ $t('clientDetail.cases.type') }}</label>
-                  <select v-model="legalCase.case_type" @change="saveAllChanges">
+                  <select v-model="legalCase.case_type" @change="saveAllChanges" :disabled="!canEditCase">
                     <option value="-">-</option>
                     <option value="CZASOWY_POBYT">{{ $t('clientDetail.caseTypes.CZASOWY_POBYT') }}</option>
                     <option value="STALY_POBYT">{{ $t('clientDetail.caseTypes.STALY_POBYT') }}</option>
@@ -171,11 +176,11 @@
                     <option value="OBYWATELSTWO">{{ $t('clientDetail.caseTypes.OBYWATELSTWO') }}</option>
                   </select>
                 </div>
-                <div class="data-item"><label>{{ $t('clientDetail.cases.submissionDate') }}</label><AltDateTimePicker mode="date" v-model="legalCase.submission_date" @change="saveAllChanges" /></div>
-                <div class="data-item"><label>{{ $t('clientDetail.cases.decisionDate') }}</label><AltDateTimePicker mode="date" v-model="legalCase.decision_date" @change="saveAllChanges" /></div>
+                <div class="data-item"><label>{{ $t('clientDetail.cases.submissionDate') }}</label><AltDateTimePicker mode="date" v-model="legalCase.submission_date" @change="saveAllChanges" :disabled="!canEditCase" /></div>
+                <div class="data-item"><label>{{ $t('clientDetail.cases.decisionDate') }}</label><AltDateTimePicker mode="date" v-model="legalCase.decision_date" @change="saveAllChanges" :disabled="!canEditCase" /></div>
                 <div class="data-item full-width">
                   <label>{{ $t('clientDetail.cases.status') }}</label>
-                  <select v-model="legalCase.status" @change="saveAllChanges">
+                  <select v-model="legalCase.status" @change="saveAllChanges" :disabled="!canEditCase">
                     <option value="-">-</option>
                     <option value="PREPARATION">{{ $t('clientDetail.caseStatus.PREPARATION') }}</option>
                     <option value="SUBMITTED">{{ $t('clientDetail.caseStatus.SUBMITTED') }}</option>
@@ -191,17 +196,21 @@
             <section class="data-section">
               <h3>{{ $t('clientDetail.sections.checklist') }}</h3>
               <ul class="document-checklist">
-                <li v-for="(doc, docIndex) in legalCase.documents" :key="doc.id || docIndex" class="document-item">
+                <li v-for="(doc, docIndex) in legalCase.documents" :key="doc.id || `${doc.document_type}-${doc.name || ''}-${docIndex}`" class="document-item">
                   <div class="doc-info">
-                    <input type="checkbox" v-model="doc.status" true-value="SUBMITTED" false-value="NOT_SUBMITTED" @change="saveAllChanges">
-                    <input v-if="doc.isNew" type="text" v-model="doc.document_type" :placeholder="$t('clientDetail.cases.addDoc')" class="other-doc-input" @change="saveAllChanges">
-                    <span v-else class="doc-name">{{ getDocumentTypeDisplay(doc.document_type) }}</span>
+                    <input type="checkbox" v-model="doc.status" true-value="SUBMITTED" false-value="NOT_SUBMITTED" @change="saveAllChanges" :disabled="!canEditCase">
+                    <template v-if="doc.document_type === 'INNE'">
+                      <input type="text" v-model="doc.name" :placeholder="$t('clientDetail.cases.docNamePH')" class="other-doc-input" @change="saveAllChanges" :disabled="!canEditCase">
+                    </template>
+                    <template v-else>
+                      <span class="doc-name">{{ getDocumentLabel(doc) }}</span>
+                    </template>
                   </div>
                   <div class="doc-actions">
                     <div v-if="doc.files && doc.files.length > 0" class="uploaded-files">
                       <div v-for="(file, fileIndex) in doc.files" :key="file.id || fileIndex" class="file-chip">
                         <span @click="viewFile(file)" class="file-name">{{ getFileDisplayName(file) }}</span>
-                        <button type="button" @click="removeUploadedFile(caseIndex, docIndex, file)" class="delete-file-btn">&times;</button>
+                        <button v-if="canUploadFiles" type="button" @click="removeUploadedFile(caseIndex, docIndex, file)" class="delete-file-btn">&times;</button>
                       </div>
                     </div>
                     <div v-if="uploading && uploadingDocContext && uploadingDocContext.caseIndex === caseIndex && uploadingDocContext.docIndex === docIndex" class="uploading-wrapper">
@@ -213,8 +222,9 @@
                         {{ $t('common.cancel') === 'common.cancel' ? 'Cancel' : $t('common.cancel') }}
                       </button>
                     </div>
-                    <button v-else type="button" @click="triggerUpload(caseIndex, docIndex)" class="btn small upload-doc" :disabled="uploading">{{ uploading ? $t('common.loading') : $t('clientDetail.cases.upload') }}</button>
+                    <button v-else-if="canUploadFiles" type="button" @click="triggerUpload(caseIndex, docIndex)" class="btn small upload-doc" :disabled="uploading">{{ uploading ? $t('common.loading') : $t('clientDetail.cases.upload') }}</button>
                     <button
+                      v-if="canEditCase"
                       type="button"
                       @click="removeDocument(caseIndex, docIndex)"
                       class="btn danger small delete-doc icon-only"
@@ -226,12 +236,12 @@
                   </div>
                 </li>
               </ul>
-              <button type="button" @click="addDocument(caseIndex)" class="btn add-other-btn">{{ $t('clientDetail.cases.addDoc') }}</button>
+              <button v-if="canEditCase" type="button" @click="addDocument(caseIndex)" class="btn add-other-btn">{{ $t('clientDetail.cases.addDoc') }}</button>
               <input type="file" ref="fileInput" @change="handleFileUpload" style="display: none;" multiple />
             </section>
 
             <footer class="case-footer">
-              <button type="button" @click="removeCase(caseIndex)" class="btn danger small">{{ $t('clientDetail.cases.deleteCase') }}</button>
+              <button v-if="canDeleteCase" type="button" @click="removeCase(caseIndex)" class="btn danger small">{{ $t('clientDetail.cases.deleteCase') }}</button>
             </footer>
           </div>
         </div>
@@ -240,6 +250,7 @@
       <footer class="card-footer">
         <div class="card-footer-left">
           <button
+            v-if="canDeleteClient"
             type="button"
             class="btn danger delete-client-btn"
             :disabled="pendingDelete"
@@ -254,7 +265,7 @@
           </button>
         </div>
         <div class="card-footer-right">
-          <button type="button" @click="startNewCase" class="btn">{{ $t('clientDetail.cases.addNew') }}</button>
+          <button v-if="canCreateCase" type="button" @click="startNewCase" class="btn">{{ $t('clientDetail.cases.addNew') }}</button>
         </div>
       </footer>
     </form>
@@ -296,7 +307,7 @@ export default {
   reminderInvalidJustNow: { UMOWA_PRACA_ZLECENIA: false, UMOWA_NAJMU: false, ZUS_ZUA_ZZA: false, ZUS_RCA_DRA: false },
   statusMap: { '-' : '-', 'PREPARATION': this.$t('clientDetail.caseStatus.PREPARATION'), 'SUBMITTED': this.$t('clientDetail.caseStatus.SUBMITTED'), 'IN_PROGRESS': this.$t('clientDetail.caseStatus.IN_PROGRESS'), 'DECISION_POSITIVE': this.$t('clientDetail.caseStatus.DECISION_POSITIVE'), 'DECISION_NEGATIVE': this.$t('clientDetail.caseStatus.DECISION_NEGATIVE'), 'CLOSED': this.$t('clientDetail.caseStatus.CLOSED') },
   caseTypeMap: { '-' : '-', 'CZASOWY_POBYT': this.$t('clientDetail.caseTypes.CZASOWY_POBYT'), 'STALY_POBYT': this.$t('clientDetail.caseTypes.STALY_POBYT'), 'REZydent_UE': this.$t('clientDetail.caseTypes.REZydent_UE'), 'OBYWATELSTWO': this.$t('clientDetail.caseTypes.OBYWATELSTWO') },
-  docTypeMap: { 'ZALACZNIK_1': this.$t('clientDetail.docTypes.ZALACZNIK_1'), 'UMOWA_PRACA': this.$t('clientDetail.docTypes.UMOWA_PRACA'), 'UMOWA_NAJMU': this.$t('clientDetail.docTypes.UMOWA_NAJMU'), 'ZUS_ZUA_ZZA': this.$t('clientDetail.docTypes.ZUS_ZUA_ZZA'), 'ZUS_RCA_DRA': this.$t('clientDetail.docTypes.ZUS_RCA_DRA'), 'POLISA': this.$t('clientDetail.docTypes.POLISA'), 'ZASWIADCZENIE_US': this.$t('clientDetail.docTypes.ZASWIADCZENIE_US'), 'ZASWIADCZENIA_ZUS': this.$t('clientDetail.docTypes.ZASWIADCZENIA_ZUS'), 'PIT_37': this.$t('clientDetail.docTypes.PIT_37'), 'BADANIE_LEKARSKIE': this.$t('clientDetail.docTypes.BADANIE_LEKARSKIE'), 'BADANIE_MEDYCZNE': this.$t('clientDetail.docTypes.BADANIE_MEDYCZNE'), 'SWIADECTWO_KIEROWCY': this.$t('clientDetail.docTypes.SWIADECTWO_KIEROWCY') },
+  docTypeMap: { 'ZALACZNIK_1': this.$t('clientDetail.docTypes.ZALACZNIK_1'), 'UMOWA_PRACA': this.$t('clientDetail.docTypes.UMOWA_PRACA'), 'UMOWA_NAJMU': this.$t('clientDetail.docTypes.UMOWA_NAJMU'), 'ZUS_ZUA_ZZA': this.$t('clientDetail.docTypes.ZUS_ZUA_ZZA'), 'ZUS_RCA_DRA': this.$t('clientDetail.docTypes.ZUS_RCA_DRA'), 'POLISA': this.$t('clientDetail.docTypes.POLISA'), 'ZASWIADCZENIE_US': this.$t('clientDetail.docTypes.ZASWIADCZENIE_US'), 'ZASWIADCZENIA_ZUS': this.$t('clientDetail.docTypes.ZASWIADCZENIA_ZUS'), 'PIT_37': this.$t('clientDetail.docTypes.PIT_37'), 'BADANIE_LEKARSKIE': this.$t('clientDetail.docTypes.BADANIE_LEKARSKIE'), 'BADANIE_MEDYCZNE': this.$t('clientDetail.docTypes.BADANIE_MEDYCZNE'), 'SWIADECTWO_KIEROWCY': this.$t('clientDetail.docTypes.SWIADECTWO_KIEROWCY'), 'PRAWO_JAZDY': this.$t('clientDetail.docTypes.PRAWO_JAZDY') },
       uploadingDocContext: null,
     uploading: false,
     uploadProgress: 0,
@@ -326,6 +337,54 @@ export default {
       const key = 'common.processing'
       const tr = this.$t(key)
         return tr === key ? 'Processing…' : tr
+    },
+    canEditClient() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_edit_client;
+      } catch (e) { return true; }
+    },
+    canDeleteClient() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_delete_client;
+      } catch (e) { return true; }
+    },
+    canCreateCase() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_create_case;
+      } catch (e) { return true; }
+    },
+    canUploadFiles() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_upload_files;
+      } catch (e) { return true; }
+    },
+    canEditCase() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_edit_case;
+      } catch (e) { return true; }
+    },
+    canDeleteCase() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_delete_case;
+      } catch (e) { return true; }
     }
   },
   created() {
@@ -406,14 +465,15 @@ export default {
             const existingDocsMap = new Map();
             
             legalCase.documents.forEach(doc => {
-                existingDocsMap.set(doc.document_type, doc);
+              const key = doc.document_type === 'INNE' ? `INNE:${(doc.name || '').trim()}` : doc.document_type;
+              existingDocsMap.set(key, doc);
                 if (!doc.files) doc.files = [];
             });
 
             const finalDocs = [];
             allDocTypes.forEach(docType => {
-                if (existingDocsMap.has(docType)) {
-                    finalDocs.push(existingDocsMap.get(docType));
+              if (existingDocsMap.has(docType)) {
+                finalDocs.push(existingDocsMap.get(docType));
                 } else {
                     finalDocs.push({
                         document_type: docType,
@@ -424,8 +484,14 @@ export default {
             });
 
             legalCase.documents.forEach(doc => {
-                if (!allDocTypes.includes(doc.document_type) && !finalDocs.find(d => d.document_type === doc.document_type)) {
+                if (!allDocTypes.includes(doc.document_type)) {
+                  if (doc.id) {
+                    const existsById = finalDocs.some(d => d.id && d.id === doc.id);
+                    if (!existsById) finalDocs.push(doc);
+                  } else {
+                    // For unsaved custom docs allow duplicates
                     finalDocs.push(doc);
+                  }
                 }
             });
 
@@ -564,7 +630,8 @@ export default {
     },
     addDocument(caseIndex) {
       this.editableClient.legal_cases[caseIndex].documents.push({
-        document_type: '',
+        document_type: 'INNE',
+        name: '',
         status: 'NOT_SUBMITTED',
         files: [],
         isNew: true
@@ -579,12 +646,16 @@ export default {
       this.showConfirmDialog = true;
     },
     removeCase(caseIndex) {
-  this.confirmDialogMessage = this.$t('clientDetail.confirm.deleteCase');
-        this.confirmCallback = () => {
-            this.editableClient.legal_cases.splice(caseIndex, 1);
-            this.saveAllChanges();
-        };
-        this.showConfirmDialog = true;
+      if(!this.canDeleteCase){
+        const k='clientDetail.toasts.deleteForbidden';
+        const tr=this.$t(k); this.showToast(tr===k?'Нет прав на удаление дела':tr,'error',1400); return;
+      }
+      this.confirmDialogMessage = this.$t('clientDetail.confirm.deleteCase');
+      this.confirmCallback = () => {
+        this.editableClient.legal_cases.splice(caseIndex, 1);
+        this.saveAllChanges();
+      };
+      this.showConfirmDialog = true;
     },
     confirmAction() {
       if (this.confirmCallback) {
@@ -599,6 +670,10 @@ export default {
     },
     async removeUploadedFile(caseIndex, docIndex, file) {
       if (!file) return;
+      if(!this.canUploadFiles){
+        const k='clientDetail.toasts.deleteFileForbidden';
+        const tr=this.$t(k); this.showToast(tr===k?'Нет прав на удаление файлов':tr,'error',1400); return;
+      }
       // Серверный файл
       if (file.id) {
         const token = localStorage.getItem('user-token');
@@ -757,11 +832,14 @@ export default {
             delete caseData.isNew;
             
             caseData.documents = caseData.documents
-                .filter(doc => !(doc.isNew && !doc.document_type))
                 .map(doc => {
                     const docData = { ...doc };
                     delete docData.isNew;
                     delete docData.files;
+                    if (docData.document_type === 'INNE') {
+                      const n = (docData.name || '').trim();
+                      docData.name = n || null; // allow empty -> null
+                    }
                     return docData;
                 });
             
@@ -836,7 +914,12 @@ export default {
         return this.caseTypeMap[caseTypeKey] || caseTypeKey || 'Новое дело';
     },
     getDocumentTypeDisplay(docKey) {
-        return this.docTypeMap[docKey] || docKey;
+      return this.docTypeMap[docKey] || docKey;
+    },
+    getDocumentLabel(doc){
+      if(!doc) return ''
+      if(doc.document_type === 'INNE' && doc.name){ return doc.name }
+      return this.getDocumentTypeDisplay(doc.document_type)
     },
     promptDeleteClient() {
       const key = 'clientDetail.confirm.deleteClient'

@@ -457,6 +457,7 @@ const messages = {
         deleteCase: 'Удалить дело',
         deleteRow: 'Удалить строку',
         addDoc: 'Добавить документ',
+        docNamePH: 'Название документа',
         upload: 'Загрузить'
       },
       confirm: {
@@ -503,7 +504,8 @@ const messages = {
         PIT_37: 'PIT 37',
         BADANIE_LEKARSKIE: 'Badanie lekarskie',
         BADANIE_MEDYCZNE: 'Badanie medyczne',
-        SWIADECTWO_KIEROWCY: 'Świadectwo kierowcy'
+        SWIADECTWO_KIEROWCY: 'Świadectwo kierowcy',
+        PRAWO_JAZDY: 'Prawo jazdy'
       }
     },
     lang: { label: 'Язык', ru: 'Русский', pl: 'Polski' }
@@ -1128,6 +1130,7 @@ const messages = {
         deleteCase: 'Usuń sprawę',
         deleteRow: 'Usuń wiersz',
         addDoc: 'Dodaj dokument',
+        docNamePH: 'Nazwa dokumentu',
         upload: 'Prześlij'
       },
       confirm: {
@@ -1174,7 +1177,8 @@ const messages = {
         PIT_37: 'PIT 37',
         BADANIE_LEKARSKIE: 'Badanie lekarskie',
         BADANIE_MEDYCZNE: 'Badanie medyczne',
-        SWIADECTWO_KIEROWCY: 'Świadectwo kierowcy'
+        SWIADECTWO_KIEROWCY: 'Świadectwo kierowcy',
+        PRAWO_JAZDY: 'Prawo jazdy'
       }
     },
     lang: { label: 'Język', ru: 'Rosyjski', pl: 'Polski' }

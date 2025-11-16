@@ -91,6 +91,8 @@ export default {
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  /* Разрешаем вложенным выпадающим спискам выходить за пределы overlay */
+  overflow: visible;
 }
 .modal-card {
   background: var(--card-bg);
@@ -98,7 +100,8 @@ export default {
   box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   width: 100%;
   max-width: 600px;
-  overflow: hidden;
+  /* Нужно, чтобы список стран (vue-tel-input) не обрезался */
+  overflow: visible;
 }
 .modal-header {
   display: flex;
@@ -151,6 +154,17 @@ export default {
 /* Country dropdown separator subtle */
 :deep(.vue-tel-input .vti__dropdown) { border:none; border-right:1px solid var(--form-border,#e2e8f0); background:transparent; }
 :deep(.vue-tel-input .vti__dropdown.open) { background:#f1f5f9; }
+/* Список стран поверх модалки */
+:deep(.vue-tel-input .vti__dropdown-list) {
+  z-index: 1101;
+  max-height: 300px;
+  overflow: auto;
+  margin-top: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  border-radius: 8px;
+  border: 1px solid var(--form-border,#e2e8f0);
+  background: var(--form-bg,#fff);
+}
 .hint { display: block; color: #6b7280; font-size: 12px; margin-top: 6px; }
 .modal-footer {
   display: flex;

@@ -54,8 +54,8 @@
       </div>
     </div>
 
-    <TaskForm v-if="showForm" :task="editingTask" :initialDate="creationDate" @close="showForm=false" @saved="onSaved" />
-    <TaskCard v-if="showCard" :task="viewTask" @close="closeCard" @edit="openEditFromCard" @updated="onSaved" />
+    <TaskForm v-if="showForm" :task="editingTask" :initialDate="creationDate" @close="showForm=false" @saved="onSaved" @back="onBackFromEdit" />
+    <TaskCard v-if="showCard" :task="viewTask" @close="closeCard" @edit="openEditFromCard" @status-updated="onCardStatusUpdated" @updated="onSaved" />
     <div v-if="dayPopover" class="day-popover" :style="popoverStyle" @click.stop>
       <div class="dp-header">
         <strong>{{ formatDate(dayPopover.date) }}</strong>
@@ -123,7 +123,11 @@ export default {
     periodLabel() {
       const loc = (this.$i18n && this.$i18n.locale) || 'ru';
       const map = { ru: 'ru-RU', pl: 'pl-PL' };
-      return new Intl.DateTimeFormat(map[loc] || 'ru-RU', { month: 'long', year: 'numeric' }).format(this.cursor);
+      const raw = new Intl.DateTimeFormat(map[loc] || 'ru-RU', { month: 'long', year: 'numeric' }).format(this.cursor);
+      try {
+        if (!raw) return '';
+        return raw.charAt(0).toUpperCase() + raw.slice(1);
+      } catch { return raw }
     },
     cursorIsToday(){
       const now = new Date();
@@ -170,6 +174,14 @@ export default {
         top: this.popoverPos.y + 'px',
         left: this.popoverPos.x + 'px'
       };
+    },
+    canCreateTask() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_create_task;
+      } catch (e) { return true; }
     }
   },
   methods: {
@@ -236,12 +248,25 @@ export default {
       if(s==='cancelled') return '#dc2626';
       return '#4A90E2'; // scheduled / default
     },
-    assigneeName(e){ if(!e.assignees || !e.assignees.length) return ''; const id=e.assignees[0]; return this.usersMap[id] || ('ID '+id); },
+    assigneeName(e){
+      try{
+        if (Array.isArray(e?.assignees_display) && e.assignees_display.length) {
+          const name = String(e.assignees_display[0] || '').trim()
+          if (name) return name
+        }
+        if(!e.assignees || !e.assignees.length) return ''
+        const id = e.assignees[0]
+        return this.usersMap[id] || ('ID '+id)
+      } catch { return '' }
+    },
     assigneeInitials(e){ const name=this.assigneeName(e); if(!name) return ''; const parts=name.split(/\s+/).filter(Boolean).slice(0,2); return parts.map(p=>p[0]).join('').toUpperCase(); },
     shortTaskTitle(e){ const base = e.title || '—'; return base.length>14 ? base.slice(0,12)+'…' : base; },
     fullTaskTitle(e){ return e.title || '—'; },
     statusLabel(s){ if(s==='DONE') return this.$t('tasks.status.DONE'); if(s==='CANCELLED') return this.$t('tasks.status.CANCELLED'); return this.$t('tasks.status.SCHEDULED'); },
-    openCreateOn(day){ this.editingTask=null; const d=new Date(day.date); d.setHours(9,0,0,0); this.creationDate=d; this.showForm=true; },
+    openCreateOn(day){ 
+      if (!this.canCreateTask) return;
+      this.editingTask=null; const d=new Date(day.date); d.setHours(9,0,0,0); this.creationDate=d; this.showForm=true; 
+    },
     openEdit(task){ this.editingTask=task; this.creationDate=null; this.showForm=true; this.showCard=false; },
     openCard(task){
       // Ensure any open day list popover is closed so it doesn't overlap the card
@@ -251,6 +276,22 @@ export default {
     },
     openEditFromCard(task){ this.openEdit(task); },
     closeCard(){ this.showCard=false; this.viewTask=null; },
+    onBackFromEdit(){
+      const t = this.editingTask
+      this.showForm = false
+      if (t) this.openCard(t)
+    },
+    async onCardStatusUpdated(status){
+      try{
+        if(this.viewTask) this.viewTask.status = status
+        const id = this.viewTask && this.viewTask.id
+        await this.load()
+        if(id){
+          const updated = this.events.find(e => e.id === id)
+          if(updated) this.viewTask = updated
+        }
+      }catch{/* ignore refresh issues; keep card open */}
+    },
     openDayPopover(day, evt){
       const anchorEl = evt.currentTarget.closest('.day-cell');
       // Pre-sort items so count matches final content

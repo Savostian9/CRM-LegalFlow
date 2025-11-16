@@ -3,10 +3,33 @@ from django.dispatch import receiver
 from django.utils import timezone
 from datetime import datetime, time as dtime
 
-from .models import Reminder, Notification, User, Company, UploadedFile
+from .models import Reminder, Notification, User, Company, UploadedFile, UserPermissionSet
 from django.core.files.storage import default_storage
 
 INTERNAL_NOTIFY_ROLES = ['ADMIN', 'LEAD', 'LAWYER', 'MANAGER', 'ASSISTANT']
+
+
+@receiver(post_save, sender=User)
+def create_user_permission_set(sender, instance: User, created: bool, **kwargs):
+    """Automatically create UserPermissionSet for new users with all permissions enabled by default."""
+    if created:
+        # Check if UserPermissionSet already exists (shouldn't happen, but safe check)
+        if not hasattr(instance, 'permset') or not UserPermissionSet.objects.filter(user=instance).exists():
+            UserPermissionSet.objects.create(
+                user=instance,
+                can_create_client=True,
+                can_edit_client=True,
+                can_delete_client=True,
+                can_create_case=True,
+                can_edit_case=True,
+                can_delete_case=True,
+                can_create_task=True,
+                can_edit_task=True,
+                can_delete_task=True,
+                can_upload_files=True,
+                can_invite_users=True,
+                can_manage_users=True,
+            )
 
 
 @receiver(post_save, sender=Reminder)

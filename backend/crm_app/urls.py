@@ -9,6 +9,7 @@ from .views import (
     PasswordResetConfirmView,
     UserInfoView,
     ProfileView,
+    ProfilePermissionsView,
     ChangePasswordView,
     DeleteAccountView,
     ResendVerificationEmailView,
@@ -23,7 +24,9 @@ from .views import (
     UsersAdminView,
     UserDetailAdminView,
     InviteCreateView,
-    InviteAcceptView    
+    InviteAcceptView,   
+    UserPermissionsAdminView,
+    UserPermissionsBulkAdminView    
 )
 from .views import AdminStatsView
 from .views import NotificationListCreateView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView, NotificationDeleteView, NotificationBulkDeleteView, BillingUsageView, BillingUpgradeView, DocumentFileUploadView, UploadedFileDeleteView
@@ -37,6 +40,7 @@ urlpatterns = [
     path('user-info/', UserInfoView.as_view(), name='user-info'),
         path('admin/stats/', AdminStatsView.as_view(), name='admin-stats'),
     path('profile/', ProfileView.as_view(), name='profile'),
+    path('profile/permissions/', ProfilePermissionsView.as_view(), name='profile-permissions'),
     path('profile/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('profile/delete-account/', DeleteAccountView.as_view(), name='delete-account'),
     path('resend-verify-email/', ResendVerificationEmailView.as_view(), name='resend-verify-email'),
@@ -44,6 +48,8 @@ urlpatterns = [
     path('company/settings/', CompanySettingsView.as_view(), name='company-settings'),
     path('company/users/', UsersAdminView.as_view(), name='company-users'),
     path('company/users/<int:pk>/', UserDetailAdminView.as_view(), name='company-user-detail'),
+    path('company/users/<int:pk>/permissions/', UserPermissionsAdminView.as_view(), name='company-user-permissions'),
+    path('company/users/permissions/bulk/', UserPermissionsBulkAdminView.as_view(), name='company-user-permissions-bulk'),
     path('company/invites/', InviteCreateView.as_view(), name='invite-create'),
     path('company/invites/accept/', InviteAcceptView.as_view(), name='invite-accept'),
     path('clients/', ClientListView.as_view(), name='client-list'),

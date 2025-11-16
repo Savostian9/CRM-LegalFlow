@@ -27,13 +27,36 @@ from django.core.mail import send_mail # Если его еще нет
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
-from .models import Client, LegalCase, Document, Task, Reminder, Company, Invite, Notification, UploadedFile
+from .models import Client, LegalCase, Document, Task, Reminder, Company, Invite, Notification, UploadedFile, UserPermissionSet
 from .billing.plans import get_plan_limits, format_usage
 from django.db.models import Sum
 from .serializers import ClientListSerializer, ClientSerializer, LegalCaseSerializer, TaskSerializer, TaskListSerializer, \
-    ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer, UploadedFileSerializer
+    ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer, UploadedFileSerializer, UserPermissionSetSerializer
 from urllib.parse import urlparse
 from django.db.utils import OperationalError
+
+def _check_user_permission(user, permission_flag: str) -> bool:
+    """
+    Check if user has a specific permission flag.
+    ADMIN and LEAD roles have all permissions by default.
+    Other roles check their UserPermissionSet.
+    Returns True if permission is granted, False otherwise.
+    """
+    try:
+        role = getattr(user, 'role', None)
+        # ADMIN and LEAD always have full permissions
+        if role in ('ADMIN', 'LEAD'):
+            return True
+        # Check UserPermissionSet for other roles
+        try:
+            permset = user.permset
+            return getattr(permset, permission_flag, True)  # default True if field missing
+        except UserPermissionSet.DoesNotExist:
+            # No permission set means all permissions granted (backward compatibility)
+            return True
+    except Exception:
+        # On any error, default to True to avoid breaking existing functionality
+        return True
 
 def _create_notification(user, title, message='', client=None, reminder=None, source='SYSTEM'):
     """
@@ -616,6 +639,64 @@ class ProfileView(APIView):
             return Response(ser.data)
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class ProfilePermissionsView(APIView):
+    """Get current user's permissions for frontend."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        role = getattr(user, 'role', None)
+        # ADMIN and LEAD have all permissions
+        if role in ('ADMIN', 'LEAD'):
+            perms = {
+                'can_create_client': True,
+                'can_edit_client': True,
+                'can_delete_client': True,
+                'can_create_case': True,
+                'can_edit_case': True,
+                'can_delete_case': True,
+                'can_create_task': True,
+                'can_edit_task': True,
+                'can_delete_task': True,
+                'can_upload_files': True,
+                'can_invite_users': True,
+                'can_manage_users': True,
+            }
+        else:
+            try:
+                permset = user.permset
+                perms = {
+                    'can_create_client': permset.can_create_client,
+                    'can_edit_client': permset.can_edit_client,
+                    'can_delete_client': permset.can_delete_client,
+                    'can_create_case': permset.can_create_case,
+                    'can_edit_case': permset.can_edit_case,
+                    'can_delete_case': permset.can_delete_case,
+                    'can_create_task': permset.can_create_task,
+                    'can_edit_task': permset.can_edit_task,
+                    'can_delete_task': permset.can_delete_task,
+                    'can_upload_files': permset.can_upload_files,
+                    'can_invite_users': permset.can_invite_users,
+                    'can_manage_users': permset.can_manage_users,
+                }
+            except UserPermissionSet.DoesNotExist:
+                # Default to all permissions if no permission set exists
+                perms = {
+                    'can_create_client': True,
+                    'can_edit_client': True,
+                    'can_delete_client': True,
+                    'can_create_case': True,
+                    'can_edit_case': True,
+                    'can_delete_case': True,
+                    'can_create_task': True,
+                    'can_edit_task': True,
+                    'can_delete_task': True,
+                    'can_upload_files': True,
+                    'can_invite_users': True,
+                    'can_manage_users': True,
+                }
+        return Response(perms)
+
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -719,6 +800,8 @@ class UsersAdminView(APIView):
 
     def post(self, request):
         # Создавать пользователей вручную могут только администратор и руководитель
+        if not _check_user_permission(request.user, 'can_manage_users'):
+            return Response({'detail': 'У вас нет прав для управления пользователями'}, status=status.HTTP_403_FORBIDDEN)
         if request.user.role not in ('ADMIN', 'LEAD'):
             return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
         data = request.data.copy()
@@ -732,6 +815,163 @@ class UsersAdminView(APIView):
             user.save()
             return Response(UserAdminSerializer(user).data, status=status.HTTP_201_CREATED)
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserPermissionsAdminView(APIView):
+    """Получение / обновление индивидуальных прав конкретного пользователя компании.
+    GET: вернуть права (создаёт набор если отсутствует).
+    PUT: обновить права (нельзя менять права владельца компании).
+    Доступ: ADMIN / LEAD своей компании.
+    """
+    permission_classes = [IsAuthenticated]
+
+    _flag_fields = [
+        'can_create_client','can_edit_client','can_delete_client',
+        'can_create_case','can_edit_case','can_delete_case',
+        'can_create_task','can_edit_task','can_delete_task',
+        'can_upload_files','can_invite_users','can_manage_users'
+    ]
+
+    def _ensure_permset(self, user: User) -> UserPermissionSet:
+        ps, _ = UserPermissionSet.objects.get_or_create(user=user)
+        return ps
+
+    def get(self, request, pk):
+        if request.user.role not in ('ADMIN','LEAD'):
+            return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+        company = getattr(request.user, 'company', None)
+        if not company:
+            return Response({'detail': 'Нет компании у текущего пользователя'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target = company.users.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'detail': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception:
+            # Любая неожиданная ошибка — безопасный ответ
+            try:
+                import logging
+                logging.getLogger(__name__).exception('UserPermissionsAdminView.get unexpected error')
+            except Exception:
+                pass
+            from django.conf import settings as dj_settings
+            if getattr(dj_settings, 'DEBUG', False):
+                import sys, traceback
+                et, ev, tb = sys.exc_info()
+                return Response({'detail': 'internal_error', 'error_type': str(et), 'error': repr(ev)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'detail': 'internal_error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            ps = self._ensure_permset(target)
+            data = UserPermissionSetSerializer(ps).data
+            data['user_id'] = target.id
+            data['is_owner'] = (getattr(target.company, 'owner_id', None) == target.id)
+            return Response(data)
+        except Exception:
+            try:
+                import logging
+                logging.getLogger(__name__).exception('UserPermissionsAdminView.get permset error')
+            except Exception:
+                pass
+            from django.conf import settings as dj_settings
+            if getattr(dj_settings, 'DEBUG', False):
+                import sys
+                et, ev, tb = sys.exc_info()
+                return Response({'detail': 'internal_error', 'error_type': str(et), 'error': repr(ev)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'detail': 'internal_error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, pk):
+        if request.user.role not in ('ADMIN','LEAD'):
+            return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            target = request.user.company.users.get(pk=pk)
+        except Exception:
+            return Response({'detail': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
+        # Защита владельца компании
+        if getattr(target.company, 'owner_id', None) == target.id:
+            return Response({'detail': 'Нельзя изменять права владельца'}, status=status.HTTP_400_BAD_REQUEST)
+
+        def _parse_bool(val):
+            # Корректно интерпретируем строки из JSON/формы
+            if isinstance(val, bool):
+                return val
+            if val is None:
+                return False
+            if isinstance(val, (int, float)):
+                return bool(val)
+            s = str(val).strip().lower()
+            if s in ('1','true','yes','y','on'): return True
+            if s in ('0','false','no','n','off','', 'null', 'none'): return False
+            return bool(val)
+        try:
+            ps = self._ensure_permset(target)
+            changed = False
+            for k in self._flag_fields:
+                if k in request.data:
+                    new_val = _parse_bool(request.data.get(k))
+                    if getattr(ps, k) != new_val:
+                        setattr(ps, k, new_val)
+                        changed = True
+            if changed:
+                ps.save()
+            data = UserPermissionSetSerializer(ps).data
+            data['updated'] = changed
+            return Response(data)
+        except Exception as e:
+            # Логируем и возвращаем управляемый ответ вместо 500 с HTML (особенно важно для фронта)
+            try:
+                import logging
+                logging.getLogger(__name__).exception('UserPermissionsAdminView.put unexpected error')
+            except Exception:
+                pass
+            from django.conf import settings as dj_settings
+            if getattr(dj_settings, 'DEBUG', False):
+                return Response({'detail': 'internal_error', 'error_type': str(type(e)), 'error': repr(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'detail': 'internal_error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UserPermissionsBulkAdminView(APIView):
+    """Массовое применение прав ко всем (или выбранным) пользователям компании.
+    POST body:
+      flags... (любой поднабор флагов)
+      user_ids: optional list[int] - ограничить набор.
+      exclude_owner: bool (default True)
+    Возвращает: {'updated': N, 'total': M}
+    """
+    permission_classes = [IsAuthenticated]
+
+    _flag_fields = UserPermissionsAdminView._flag_fields
+
+    def post(self, request):
+        if request.user.role not in ('ADMIN','LEAD'):
+            return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+        company = request.user.company
+        if not company:
+            return Response({'detail': 'Нет компании'}, status=status.HTTP_400_BAD_REQUEST)
+        user_ids = request.data.get('user_ids')
+        qs = company.users.all()
+        if isinstance(user_ids, list):
+            ints = [uid for uid in user_ids if isinstance(uid, int) or (isinstance(uid, str) and uid.isdigit())]
+            ints = [int(i) for i in ints]
+            if ints:
+                qs = qs.filter(id__in=ints)
+        exclude_owner = request.data.get('exclude_owner', True)
+        owner_id = getattr(company, 'owner_id', None)
+        if exclude_owner and owner_id:
+            qs = qs.exclude(id=owner_id)
+        flags = {k: bool(request.data.get(k)) for k in self._flag_fields if k in request.data}
+        if not flags:
+            return Response({'detail': 'Нет флагов для применения'}, status=status.HTTP_400_BAD_REQUEST)
+        updated = 0
+        for user in qs:
+            ps, _ = UserPermissionSet.objects.get_or_create(user=user)
+            changed = False
+            for k,v in flags.items():
+                if getattr(ps, k) != v:
+                    setattr(ps, k, v)
+                    changed = True
+            if changed:
+                ps.save()
+                updated += 1
+        return Response({'updated': updated, 'total': qs.count(), 'applied_flags': list(flags.keys())})
 
 class UserDetailAdminView(APIView):
     permission_classes = [IsAuthenticated]
@@ -792,6 +1032,9 @@ class InviteCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_invite_users'):
+            return Response({'detail': 'У вас нет прав для создания приглашений'}, status=status.HTTP_403_FORBIDDEN)
         if request.user.role not in ('ADMIN', 'LEAD'):
             return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
         if not request.user.company:
@@ -1073,6 +1316,9 @@ class ClientListView(APIView):
 
     # ДОБАВЛЯЕМ МЕТОД POST
     def post(self, request):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_create_client'):
+            return Response({'detail': 'У вас нет прав для создания клиентов'}, status=status.HTTP_403_FORBIDDEN)
         # Все аутентифицированные пользователи могут создавать клиентов.
         # Ответственный менеджер (created_by):
         #  - ADMIN/LEAD могут указать ответственного менеджера явным образом через responsible_manager_id
@@ -1142,6 +1388,9 @@ class ClientDetailView(APIView):
         return Response(serializer.data)
 
     def put(self, request, pk):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_edit_client'):
+            return Response({'detail': 'У вас нет прав для редактирования клиентов'}, status=status.HTTP_403_FORBIDDEN)
         try:
             client = Client.objects.get(pk=pk)
         except Client.DoesNotExist:
@@ -1174,6 +1423,9 @@ class ClientDetailView(APIView):
         - ADMIN / LEAD / LAWYER могут удалять клиента своей компании (по created_by.company или client.user.company)
         - MANAGER может удалить только своих клиентов (created_by == self)
         - ASSISTANT не может удалять
+        # Check permission
+        if not _check_user_permission(request.user, 'can_delete_client'):
+            return Response({'detail': 'У вас нет прав для удаления клиентов'}, status=status.HTTP_403_FORBIDDEN)
         При удалении чистим связанные объекты каскадно вручную (дела, документы, задачи, напоминания),
         чтобы избежать накопления "осиротевших" записей, затем удаляем сам клиент и связанного user (если он не использован где-то ещё).
         """
@@ -1228,6 +1480,9 @@ class CaseCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, client_pk):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_create_case'):
+            return Response({'detail': 'У вас нет прав для создания дел'}, status=status.HTTP_403_FORBIDDEN)
         try:
             client = Client.objects.get(pk=client_pk)
         except Client.DoesNotExist:
@@ -1322,6 +1577,9 @@ class TaskListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_create_task'):
+            return Response({'detail': 'У вас нет прав для создания задач'}, status=status.HTTP_403_FORBIDDEN)
         serializer = TaskSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             client = serializer.validated_data.get('client')
@@ -1426,7 +1684,47 @@ class TaskListCreateView(APIView):
 class TaskDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, pk):
+        """Return full task details for the provided id.
+        Visibility rules mirror update/delete: company-scoped for admin roles,
+        and creator/assignee-based for managers. This endpoint enables
+        dashboards to fetch complete fields (location/description, etc.).
+        """
+        try:
+            task = Task.objects.get(pk=pk)
+        except Task.DoesNotExist:
+            return Response({'error': 'Задача не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+        role = getattr(request.user, 'role', None)
+        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT'):
+            user_company_id = getattr(request.user, 'company_id', None)
+            owner_company_id = getattr(getattr(task.client, 'created_by', None), 'company_id', None) if task.client else None
+            client_user_company_id = getattr(getattr(task.client, 'user', None), 'company_id', None) if task.client else None
+            created_by_company_id = getattr(getattr(task, 'created_by', None), 'company_id', None)
+            if not (user_company_id and (owner_company_id == user_company_id or client_user_company_id == user_company_id or created_by_company_id == user_company_id)):
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            # MANAGER visibility: own tasks, tasks for own clients, or where listed as assignee
+            can = False
+            if not task.client:
+                can = (task.created_by_id == request.user.id)
+            else:
+                if task.client.created_by_id == request.user.id:
+                    can = True
+            try:
+                if not can and task.assignees.filter(id=request.user.id).exists():
+                    can = True
+            except Exception:
+                pass
+            if not can:
+                return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
+
+        return Response(TaskSerializer(task).data)
+
     def put(self, request, pk):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_edit_task'):
+            return Response({'detail': 'У вас нет прав для редактирования задач'}, status=status.HTTP_403_FORBIDDEN)
         try:
             task = Task.objects.get(pk=pk)
         except Task.DoesNotExist:
@@ -1552,6 +1850,9 @@ class TaskDetailView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_delete_task'):
+            return Response({'detail': 'У вас нет прав для удаления задач'}, status=status.HTTP_403_FORBIDDEN)
         try:
             task = Task.objects.get(pk=pk)
         except Task.DoesNotExist:
@@ -2026,6 +2327,10 @@ class DocumentFileUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, document_id):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_upload_files'):
+            return Response({'detail': 'У вас нет прав для загрузки файлов.'}, status=status.HTTP_403_FORBIDDEN)
+
         # Находим документ
         try:
             doc = Document.objects.select_related('legal_case__client__created_by', 'legal_case__client__user').get(pk=document_id)
@@ -2084,6 +2389,10 @@ class UploadedFileDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, pk):
+        # Check permission
+        if not _check_user_permission(request.user, 'can_upload_files'):
+            return Response({'detail': 'У вас нет прав для управления файлами.'}, status=status.HTTP_403_FORBIDDEN)
+
         try:
             uf = UploadedFile.objects.select_related('document__legal_case__client__created_by', 'document__legal_case__client__user').get(pk=pk)
         except UploadedFile.DoesNotExist:

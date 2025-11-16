@@ -225,7 +225,7 @@ export default {
 .btn:disabled { opacity:.55; cursor:not-allowed; }
 .btn.small { padding:6px 12px; font-size:12px; }
 .counter { font-size: 14px; color: var(--muted-text,#555); }
-.error { display:none; }
+.error-inline { padding: 16px; background: #fee; color: #c53030; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .item { background: var(--card-bg,#fff); border: 1px solid var(--card-border,#e2e8f0); border-radius: 10px; padding: 14px 16px; position: relative; }
 .item.unread { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(74,144,226,0.15); }

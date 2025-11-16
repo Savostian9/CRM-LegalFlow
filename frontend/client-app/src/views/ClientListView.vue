@@ -311,6 +311,14 @@ export default {
       if (this.currentUser.is_client) {
         return this.clients.length === 0;
       }
+      // Check permission from localStorage
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (permsJson) {
+          const perms = JSON.parse(permsJson);
+          if (!perms.can_create_client) return false;
+        }
+      } catch (e) { console.error('Permission check error:', e); }
       return true;
     },
     setPreset(p) {

@@ -6,6 +6,7 @@
       :format="displayFormat"
       :value-type="valueType"
       :disabled-date="disabledDate"
+      :disabled="disabled"
       :editable="false"
       :clearable="true"
       :placeholder="computedPlaceholder"
@@ -31,7 +32,8 @@ export default {
     mode: { type: String, default: 'date' }, // 'date' | 'datetime'
     placeholder: { type: String, default: '' },
     // When true, disallow selecting any past date/time (relative to now)
-    minNow: { type: Boolean, default: false }
+    minNow: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false }
   },
   setup(props, { emit }) {
     const inner = ref(props.modelValue || null)

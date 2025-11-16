@@ -41,21 +41,21 @@
         <div v-if="loading" class="widget-empty">{{ $t('common.loading') }}</div>
         <div v-else-if="items.length===0" class="widget-empty empty-modern">
           <div class="empty-title">{{ tr('dashboard.noTasks','Нет задач.') }}</div>
-          <div class="empty-sub">{{ tr('dashboard.noTasksHint','Создайте задачу — это поможет не упустить важное.') }}</div>
+          <div v-if="canCreateTask" class="empty-sub">{{ tr('dashboard.noTasksHint','Создайте задачу — это поможет не упустить важное.') }}</div>
           <div class="empty-actions">
-            <button class="btn" @click="openCreateModal">{{ tr('dashboard.createTask','Создать задачу') }}</button>
+            <button v-if="canCreateTask" class="btn" @click="openCreateModal">{{ tr('dashboard.createTask','Создать задачу') }}</button>
             <router-link class="btn outline" to="/dashboard/calendar">{{ tr('dashboard.openCalendar','Открыть календарь') }}</router-link>
           </div>
         </div>
-        <ul v-else class="task-list">
+          <ul v-else class="task-list">
           <li v-for="t in items"
               :key="t.id"
               class="task-row"
-              @click="openTask(t)"
+            @click="openCard(t)"
               role="button"
               tabindex="0"
-              @keydown.enter.prevent="openTask(t)"
-              @keydown.space.prevent="openTask(t)">
+            @keydown.enter.prevent="openCard(t)"
+            @keydown.space.prevent="openCard(t)">
             <span class="type" :class="statusDotClass(t.status)"></span>
             <span class="date">{{ formatDate(t.start) }}</span>
             <span class="client">{{ t.client_name || '—' }}</span>
@@ -67,11 +67,24 @@
             </div>
           </li>
         </ul>
-        <!-- Inline modal for a single task -->
+        <!-- View card like in Calendar -->
+        <TaskCard
+          v-if="showCard"
+          :task="viewTask"
+          @close="closeCard"
+          @edit="openEditFromCard"
+          @status-updated="onCardStatusUpdated"
+          @updated="onCardUpdated"
+        />
+
+        <!-- Inline modal for a single task (edit) -->
         <div v-if="showTaskModal" class="task-modal-overlay" @click.self="closeTaskModal">
           <div class="task-modal">
             <header class="tm-header">
-              <h3>{{ editForm.title || placeholderTitle }}</h3>
+              <div class="tm-left">
+                <button class="icon back" @click="backToCard" :title="tr('tasks.backToTask','Назад к задаче')">←</button>
+                <h3>{{ editForm.title || placeholderTitle }}</h3>
+              </div>
               <button class="icon" @click="closeTaskModal">×</button>
             </header>
             <div class="tm-body">
@@ -111,14 +124,32 @@
                   />
                   <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
                 </label>
+                <label class="full">
+                  {{ $t('tasks.form.location') }}
+                  <textarea
+                    v-model="editForm.location"
+                    rows="2"
+                    ref="editLocationRef"
+                    @input="autoGrow($event.target)"
+                  ></textarea>
+                </label>
+                <label class="full">
+                  {{ $t('tasks.form.description') }}
+                  <textarea
+                    v-model="editForm.description"
+                    rows="3"
+                    ref="editDescriptionRef"
+                    @input="autoGrow($event.target)"
+                  ></textarea>
+                </label>
               </div>
             </div>
             <footer class="tm-footer">
               <button v-if="activeClientId" class="btn outline" @click="goToClient" :disabled="updating">{{ $t('tasks.gotoClient') }}</button>
-              <button class="btn danger" @click="askDeleteTask" :disabled="updating">{{ $t('common.delete') }}</button>
+              <button v-if="canDeleteTask" class="btn danger" @click="askDeleteTask" :disabled="updating">{{ $t('common.delete') }}</button>
               <div class="spacer"></div>
-              <button class="btn outline" @click="closeTaskModal" :disabled="updating">{{ $t('common.cancel') }}</button>
-              <button class="btn" @click="updateTask" :disabled="updating">{{ updating ? (t('common.saving') || 'Сохранение...') : (t('common.save') || 'Сохранить') }}</button>
+              <button class="btn" @click="closeTaskModal" :disabled="updating">{{ $t('common.cancel') }}</button>
+              <button class="btn primary" @click="updateTask" :disabled="updating">{{ updating ? (t('common.saving') || 'Сохранение...') : (t('common.save') || 'Сохранить') }}</button>
             </footer>
           </div>
         </div>
@@ -133,11 +164,11 @@
           </div>
         </div>
         <!-- Quick create task modal -->
-        <div v-if="showCreateModal" class="task-modal-overlay" @click.self="closeCreateModal">
+        <div v-if="showCreateModal" class="task-modal-overlay" @click.self="onCreateOverlayClick">
           <div class="task-modal">
             <header class="tm-header">
               <h3>{{ tr('tasks.newTask','Новая задача') }}</h3>
-              <button class="icon" @click="closeCreateModal">×</button>
+              <button class="icon" @click="onCreateOverlayClick">×</button>
             </header>
             <div class="tm-body">
               <div class="tm-grid">
@@ -147,15 +178,16 @@
                     v-model="newSelectedClientId"
                     :placeholder="$t('tasks.chooseClient')"
                     @client-selected="(c)=>{ newSelectedClientId=c?.id||'' }"
+                    :disabled="!canCreateTask"
                   />
                 </label>
                 <label>
                   {{ $t('tasks.titleLabel') }}
-                  <input type="text" v-model="createForm.title" :placeholder="$t('tasks.titlePH')" />
+                  <input type="text" v-model="createForm.title" :placeholder="$t('tasks.titlePH')" :disabled="!canCreateTask" :readonly="!canCreateTask" />
                 </label>
                 <label>
                   {{ $t('tasks.start') }}
-                  <AltDateTimePicker mode="date" v-model="createForm.start" />
+                  <AltDateTimePicker mode="date" v-model="createForm.start" :disabled="!canCreateTask" />
                 </label>
                 <label>
                   {{ $t('tasks.table.status') }}
@@ -163,7 +195,7 @@
                     { value:'SCHEDULED', label: $t('tasks.status.SCHEDULED') },
                     { value:'DONE', label: $t('tasks.status.DONE') },
                     { value:'CANCELLED', label: $t('tasks.status.CANCELLED') }
-                  ]" aria-label="Status" />
+                  ]" aria-label="Status" :disabled="!canCreateTask" />
                 </label>
                 <label>
                   {{ $t('tasks.assignee') }}
@@ -172,18 +204,48 @@
                     :options="assigneeOptions"
                     :placeholder="$t('tasks.unassigned')"
                     aria-label="Assignee"
+                    :disabled="!canCreateTask"
                   />
                   <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
+                </label>
+                <label class="full">
+                  {{ $t('tasks.form.location') }}
+                  <textarea
+                    v-model="createForm.location"
+                    rows="2"
+                    :placeholder="$t('tasks.form.locationPH')"
+                    :disabled="!canCreateTask"
+                    @input="autoGrow($event.target)"
+                  ></textarea>
+                </label>
+                <label class="full">
+                  {{ $t('tasks.form.description') }}
+                  <textarea
+                    v-model="createForm.description"
+                    rows="3"
+                    :disabled="!canCreateTask"
+                    ref="createDescriptionRef"
+                    @input="autoGrow($event.target)"
+                  ></textarea>
                 </label>
               </div>
             </div>
             <footer class="tm-footer">
               <div class="spacer"></div>
-              <button class="btn outline" @click="closeCreateModal" :disabled="creating">{{ $t('common.cancel') }}</button>
-              <button class="btn" @click="createTask" :disabled="creating">{{ creating ? (t('common.saving') || 'Сохранение...') : tr('tasks.create','Создать') }}</button>
+              <button class="btn" @click="onCreateOverlayClick" :disabled="creating">{{ $t('common.cancel') }}</button>
+              <button class="btn primary" @click="createTask" :disabled="creating || !canCreateTask">{{ creating ? (t('common.saving') || 'Сохранение...') : tr('tasks.create','Создать') }}</button>
             </footer>
           </div>
         </div>
+        <!-- Unsaved changes confirm (shared ConfirmDialog) -->
+        <ConfirmDialog
+          v-model="showCreateUnsaved"
+          :title="tr('tasks.confirm.discardTitle','Несохранённые изменения')"
+          :message="tr('tasks.confirm.discardChanges','Есть несохранённые изменения. Закрыть без сохранения?')"
+          :confirm-text="($t('common.continue') && $t('common.continue')!=='common.continue') ? $t('common.continue') : 'Продолжить'"
+          :cancel-text="$t('common.cancel')"
+          @confirm="forceCloseCreateModal"
+        />
       </div>
       <!-- Notifications widget -->
       <div class="widget notifications">
@@ -242,6 +304,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import TaskCard from '../components/TaskCard.vue'
 // UiSelect and ClientAutocomplete are registered globally in main.js
 
 const tab = ref('today')
@@ -342,7 +406,7 @@ async function markDone(t){
 // --- Task inline modal logic ---
 const showTaskModal = ref(false)
 const activeTask = ref(null)
-const editForm = ref({ id:null, title:'', start:'', status:'SCHEDULED' })
+const editForm = ref({ id:null, title:'', start:'', status:'SCHEDULED', location:'', description:'' })
 const updating = ref(false)
 const showDeleteConfirm = ref(false)
 // derived client id for active task stored in a ref (avoids runtime issues with missing import)
@@ -353,7 +417,13 @@ let toastTimer = null
 // Refs used by updateTask for optional client/assignee override
 const selectedClientId = ref(null)
 const selectedAssignee = ref('')
+const editLocationRef = ref(null)
+const editDescriptionRef = ref(null)
 const clientInitialLabel = ref('')
+
+// View card state (like Calendar)
+const showCard = ref(false)
+const viewTask = ref(null)
 
 // Users for assignee select
 const users = ref([])
@@ -391,6 +461,8 @@ function openTask(t){
   editForm.value.title = (t && t.title) || ''
   editForm.value.status = t.status
   editForm.value.start = toDateInput(new Date(t.start))
+  editForm.value.location = t?.location || ''
+  editForm.value.description = t?.description || ''
   // derive client id once (null-safe)
   activeClientId.value = (t && (
     (t.client && typeof t.client === 'object' && t.client.id) ? t.client.id :
@@ -412,6 +484,75 @@ function openTask(t){
     selectedAssignee.value = String(t.assignee)
   } else { selectedAssignee.value = '' }
   showTaskModal.value = true
+  requestAnimationFrame(()=>{
+    if(editLocationRef.value) autoGrow(editLocationRef.value)
+    if(editDescriptionRef.value) autoGrow(editDescriptionRef.value)
+  })
+}
+
+async function openCard(t){
+  viewTask.value = { ...t }
+  showCard.value = true
+  // try to load full task details so card shows all fields like Calendar
+  try{
+    const token = localStorage.getItem('user-token')
+    const resp = await axios.get(`http://127.0.0.1:8000/api/tasks/${t.id}/`, { headers:{ Authorization:`Token ${token}` } })
+    let task = resp.data || {}
+    // Ensure client object exists (some endpoints return only id/name)
+    if(!task.client){
+      const cid = task.client_id ?? t.client_id ?? (typeof t.client==='number' ? t.client : (t.client && t.client.id))
+      if(cid!=null){
+        task.client = { id: cid, first_name: '', last_name: '', email: '' }
+        // try to fill name/email from list item fallbacks
+        if(t.client_name){ task.client.first_name = String(t.client_name) }
+        if(t.client && typeof t.client==='object' && (t.client.first_name || t.client.last_name || t.client.email)){
+          task.client.first_name = t.client.first_name || task.client.first_name
+          task.client.last_name = t.client.last_name || ''
+          task.client.email = t.client.email || ''
+        }
+      }
+    }
+    viewTask.value = task
+  }catch(e){
+    // fallback: synthesize minimal client if missing so card shows row
+    if(!viewTask.value.client){
+      const cid = t.client_id ?? (typeof t.client==='number' ? t.client : t?.client?.id)
+      if(cid!=null){
+        viewTask.value = { ...viewTask.value, client:{ id: cid, first_name: t.client_name || '', last_name:'', email: t?.client?.email || '' } }
+      }
+    }
+  }
+}
+function closeCard(){ showCard.value = false; viewTask.value = null }
+function onCardStatusUpdated(status){
+  try{
+    if(!viewTask.value) return
+    const id = viewTask.value.id
+    const idx = items.value.findIndex(x => x.id === id)
+    if(idx !== -1){ items.value[idx] = { ...items.value[idx], status } }
+    viewTask.value = { ...viewTask.value, status }
+  }catch{/* ignore */}
+}
+async function onCardUpdated(){
+  // Task was deleted or updated from card; refresh list and close card
+  await load()
+  closeCard()
+}
+
+function openEditFromCard(task){
+  closeCard()
+  openTask(task)
+}
+
+function backToCard(){
+  if (updating.value) return
+  const id = editForm.value?.id
+  const fromList = items.value.find(x => x.id === id)
+  // Close edit modal forcibly to avoid any blockers
+  closeTaskModal(true)
+  // Reopen TaskCard; openCard will fetch full details
+  if (fromList) openCard(fromList)
+  else if (id) openCard({ id })
 }
 
 function closeTaskModal(force=false){
@@ -458,7 +599,9 @@ async function updateTask(){
       status: editForm.value.status,
       all_day: true,
       ...(resolvedCid!=null && !Number.isNaN(resolvedCid) ? { client_id: resolvedCid } : {}),
-      assignees: resolvedAssignees
+      assignees: resolvedAssignees,
+      location: editForm.value.location || '',
+      description: editForm.value.description || ''
     }
     if (editForm.value.title && editForm.value.title.trim().length) {
       payload.title = editForm.value.title.trim()
@@ -495,6 +638,10 @@ async function updateTask(){
 }
 
 async function deleteTask(){
+  if(!canDeleteTask.value){
+    showToast('У вас нет прав для удаления задач')
+    return
+  }
   if(!editForm.value.id) return
   updating.value = true
   try {
@@ -524,6 +671,12 @@ function showToast(msg){
   toastTimer = setTimeout(()=>{ toast.value='' }, 2500)
 }
 
+function autoGrow(el){
+  if(!el) return
+  el.style.height = 'auto'
+  el.style.height = el.scrollHeight + 'px'
+}
+
 onMounted(() => {
   // Detect role from localStorage (set when fetching user-info in layout)
   isAssistant.value = (localStorage.getItem('user-role') === 'ASSISTANT')
@@ -538,22 +691,84 @@ onMounted(() => {
 // --- Quick create modal state & logic ---
 const showCreateModal = ref(false)
 const creating = ref(false)
-const createForm = ref({ title:'', start:'', status:'SCHEDULED' })
+const createForm = ref({ title:'', start:'', status:'SCHEDULED', location:'', description:'' })
+const createDescriptionRef = ref(null)
 const newSelectedClientId = ref('')
 const newSelectedAssignee = ref('')
+const showCreateUnsaved = ref(false)
+const createInitialSnapshot = ref('')
+
+// Check permission to create task
+const canCreateTask = computed(() => {
+  try {
+    const permsJson = localStorage.getItem('user-permissions');
+    if (!permsJson) return true;
+    const perms = JSON.parse(permsJson);
+    return !!perms.can_create_task;
+  } catch (e) { return true; }
+})
+
+// Check permission to delete task
+const canDeleteTask = computed(() => {
+  try {
+    const permsJson = localStorage.getItem('user-permissions');
+    if (!permsJson) return true;
+    const perms = JSON.parse(permsJson);
+    return !!perms.can_delete_task;
+  } catch (e) { return true; }
+})
 
 function openCreateModal(){
   // Default date = today
   const today = new Date()
   const pad = (n)=> String(n).padStart(2,'0')
-  createForm.value = { title:'', start:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`, status:'SCHEDULED' }
+  createForm.value = {
+    title:'',
+    start:`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`,
+    status:'SCHEDULED',
+    location:'',
+    description:''
+  }
   newSelectedClientId.value = ''
   newSelectedAssignee.value = ''
   showCreateModal.value = true
+  // take initial snapshot to detect unsaved edits
+  createInitialSnapshot.value = JSON.stringify({
+    ...createForm.value,
+    client: newSelectedClientId.value,
+    assignee: newSelectedAssignee.value
+  })
+  // reset textarea height on open
+  requestAnimationFrame(() => {
+    if (createDescriptionRef.value) autoGrow(createDescriptionRef.value)
+  })
 }
-function closeCreateModal(){ if(!creating.value) showCreateModal.value = false }
+function closeCreateModal(force=false){ if(force || !creating.value) showCreateModal.value = false }
+function isCreateDirty(){
+  try{
+    if(!showCreateModal.value) return false
+    const now = JSON.stringify({
+      ...createForm.value,
+      client: newSelectedClientId.value,
+      assignee: newSelectedAssignee.value
+    })
+    return createInitialSnapshot.value && now !== createInitialSnapshot.value
+  }catch{ return false }
+}
+function onCreateOverlayClick(){
+  if(isCreateDirty()) showCreateUnsaved.value = true
+  else closeCreateModal()
+}
+function forceCloseCreateModal(){
+  showCreateUnsaved.value = false
+  closeCreateModal(true)
+}
 
 async function createTask(){
+  if(!canCreateTask.value){
+    showToast('У вас нет прав для создания задач')
+    return
+  }
   if(!createForm.value.start){
     showToast(tr('tasks.validationDate','Укажите дату задачи'))
     return
@@ -569,6 +784,8 @@ async function createTask(){
       end: endDate.toISOString(),
       status: createForm.value.status,
       all_day: true,
+      location: createForm.value.location,
+      description: createForm.value.description,
       ...(newSelectedClientId.value ? { client_id: Number(newSelectedClientId.value) } : {}),
       ...(newSelectedAssignee.value ? { assignees: [Number(newSelectedAssignee.value)] } : { assignees: [] })
     }
@@ -708,14 +925,30 @@ async function loadUsers(){
 .task-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:3000; }
 .task-modal { background:var(--card-bg); border:1px solid var(--card-border); width:600px; max-width:95vw; border-radius:14px; box-shadow:0 10px 32px rgba(0,0,0,.18); display:flex; flex-direction:column; }
 .tm-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e5e7eb; }
+.tm-header .tm-left { display:flex; align-items:center; gap:8px; }
+.tm-header .icon.back { font-size:20px; line-height:1; background:none; border:none; cursor:pointer; color:#334155; padding:2px 6px; border-radius:8px; transition:background .18s ease, transform .18s ease; }
+.tm-header .icon.back:hover { background:#f1f5f9; transform:translateY(-1px); }
+.tm-header .icon.back:active { transform:translateY(0); }
 .tm-body { padding:16px 18px; }
 .tm-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .tm-grid label.full { grid-column: 1 / -1; }
 .tm-grid label { display:flex; flex-direction:column; gap:6px; font-size:14px; font-weight:500; color:#334155; }
 .tm-grid input, .tm-grid select { border:1px solid var(--form-border); border-radius:var(--form-radius,8px); padding:8px 10px; background:var(--form-bg,#fff); transition:border-color .18s ease, box-shadow .18s ease; }
 .tm-grid input:focus, .tm-grid select:focus { outline:none; border-color:var(--form-border-focus); box-shadow:var(--form-focus-ring); }
+.tm-grid textarea { resize:none; overflow:hidden; }
+.tm-grid input:disabled, .tm-grid input:read-only { background:#f1f5f9; color:#64748b; cursor:not-allowed; }
 .tm-footer { display:flex; align-items:center; gap:10px; padding:14px 18px; border-top:1px solid #e5e7eb; }
 .tm-footer .spacer { flex:1; }
+.tm-footer .btn { height:42px; padding:0 18px; border-radius:10px; font-weight:600; transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease; }
+/* Match TaskForm hover: only motion/shadow, no color swap to blue */
+.tm-footer .btn:not(.primary):not(.danger):not(.outline):hover { background:var(--btn-bg,#fff); border-color:var(--btn-border,#d0d7e2); color:var(--btn-text,#1e293b) !important; }
+.tm-footer .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -8px rgba(0,0,0,.22); }
+.tm-footer .btn:active { transform: translateY(0); box-shadow: 0 6px 12px -8px rgba(0,0,0,.20); }
+.btn.primary { background:var(--primary-color,#4A90E2); color:#fff !important; border-color:var(--primary-color,#4A90E2); }
+/* Match TaskForm danger (pink) button exactly */
+.tm-footer .btn.danger { background:#ffe5ea; border:1px solid #f5c3cd; color:#c53030 !important; }
+.tm-footer .btn.danger:hover { background:#ffdfe6; border-color:#efb5c1; color:#b12727 !important; }
+.tm-footer .btn.danger:disabled { opacity:.6; background:#ffe5ea; border-color:#f1c8d0; color:#c26a6a !important; box-shadow:none; transform:none; }
 .icon { background:none; border:none; font-size:20px; cursor:pointer; }
 .toast { position:fixed; bottom:28px; right:28px; background:linear-gradient(180deg,#4A90E2,#3b7fc9); color:#fff; padding:12px 20px; border-radius:10px; font-size:14px; font-weight:600; box-shadow:0 6px 24px -6px rgba(0,0,0,.4); letter-spacing:.3px; border:1px solid #3b7fc9; display:inline-flex; align-items:center; gap:8px; }
 .fade-toast-enter-active, .fade-toast-leave-active { transition: opacity .25s, transform .25s; }
@@ -802,6 +1035,9 @@ async function loadUsers(){
 .btn.danger:hover { background:rgba(255,82,82,0.20); border-color:rgba(255,82,82,0.6); color:#a61b1b !important; }
 .btn.danger:disabled { background:rgba(255,82,82,0.08); border-color:rgba(255,82,82,0.25); color:rgba(197,48,48,0.55) !important; }
 .task-list .actions .btn { padding:6px 12px; font-size:12px; box-shadow:none; }
+
+/* Force primary buttons in Dashboard modals to match calendar exactly */
+.tm-footer .btn.primary { background:var(--primary-color,#4A90E2) !important; border-color:var(--primary-color,#4A90E2) !important; color:#fff !important; box-shadow:none; }
 
 /* Toast unify */
 .toast { position:fixed; bottom:28px; right:28px; background:linear-gradient(180deg,#4A90E2,#3b7fc9); color:#fff; padding:12px 20px; border-radius:10px; font-size:14px; font-weight:600; box-shadow:0 6px 24px -6px rgba(0,0,0,.4); letter-spacing:.3px; border:1px solid #3b7fc9; display:inline-flex; align-items:center; gap:8px; }

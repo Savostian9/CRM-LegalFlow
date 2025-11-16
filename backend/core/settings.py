@@ -305,6 +305,16 @@ ADMINS = [
     ("LegalFlow Admin", "crmlegalflow@gmail.com"),
 ]
 
+# --- Disable error emails in local/dev mode ---------------------------------
+# If you don't want local server errors to spam admin email, we strip
+# the mail_admins handler & clear ADMINS when running in DEBUG or MODE=local
+if DEBUG or MODE == 'local' or os.environ.get('DISABLE_ERROR_EMAILS', '').strip().lower() in {'1','true','yes','on'}:
+    ADMINS = []
+    # Post-adjust LOGGING only after it's defined (will be below); we mark intent here
+    _DISABLE_ERROR_EMAILS = True
+else:
+    _DISABLE_ERROR_EMAILS = False
+
 # URL фронтенда (используется для генерации ссылок, например, сброс пароля)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
 
@@ -468,3 +478,19 @@ LOGGING = {
         "level": "INFO", 
     },
 }
+
+# Apply dynamic logging tweaks to suppress admin emails locally
+try:
+    if _DISABLE_ERROR_EMAILS:
+        # Remove mail_admins from any handler lists if present
+        for _logger_name, _logger_cfg in LOGGING.get('loggers', {}).items():
+            if isinstance(_logger_cfg, dict):
+                _handlers = _logger_cfg.get('handlers', [])
+                if 'mail_admins' in _handlers:
+                    _logger_cfg['handlers'] = [h for h in _handlers if h != 'mail_admins']
+        _root_handlers = LOGGING.get('root', {}).get('handlers', [])
+        if 'mail_admins' in _root_handlers:
+            LOGGING['root']['handlers'] = [h for h in _root_handlers if h != 'mail_admins']
+        # Keep handler definition (so Django won't error), but effectively unused
+except Exception:
+    pass

@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from django.db import models
 from django.contrib.auth import authenticate
-from .models import User, Client, LegalCase, Document, UploadedFile, Task, Reminder, Company, Invite, Notification
+from .models import User, Client, LegalCase, Document, UploadedFile, Task, Reminder, Company, Invite, Notification, UserPermissionSet
 
 # --- СЕРИАЛИЗАТОРЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ---
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -110,6 +110,19 @@ class UserAdminSerializer(serializers.ModelSerializer):
         except Exception:
             return False
 
+
+class UserPermissionSetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPermissionSet
+        fields = [
+            'can_create_client', 'can_edit_client', 'can_delete_client',
+            'can_create_case', 'can_edit_case', 'can_delete_case',
+            'can_create_task', 'can_edit_task', 'can_delete_task',
+            'can_upload_files', 'can_invite_users', 'can_manage_users',
+            'updated_at'
+        ]
+
+
 class InviteSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.name', read_only=True)
     class Meta:
@@ -167,7 +180,7 @@ class DocumentSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Document
-        fields = ['id', 'document_type', 'status', 'document_type_display', 'files']
+        fields = ['id', 'document_type', 'name', 'status', 'document_type_display', 'files']
 
 class ReminderSerializer(serializers.ModelSerializer):
     reminder_type_display = serializers.CharField(source='get_reminder_type_display', read_only=True)
@@ -321,6 +334,9 @@ class ClientSerializer(serializers.ModelSerializer):
                     
                     # Обновляем или создаем документы
                     for document_data in documents_data:
+                        # Normalize empty name to None to bypass unique collisions on blank strings
+                        if 'name' in document_data and not (document_data.get('name') or '').strip():
+                            document_data['name'] = None
                         doc_id = document_data.get('id')
                         if doc_id:
                             try:
@@ -449,6 +465,8 @@ class TaskSerializer(serializers.ModelSerializer):
     client_id = serializers.PrimaryKeyRelatedField(queryset=Client.objects.all(), source='client', write_only=True, required=False, allow_null=True)
     assignees = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), many=True, required=False)
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    # Человекочитаемые имена исполнителей для фронтенда (First Last -> username -> email)
+    assignees_display = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Task
@@ -456,7 +474,8 @@ class TaskSerializer(serializers.ModelSerializer):
             'id', 'title', 'task_type', 'start', 'end', 'all_day',
             'reminder_minutes', 'assignees', 'location', 'video_link',
             'description', 'color', 'status', 'recurrence', 'recurrence_days',
-            'client', 'client_id', 'created_by', 'created_at', 'updated_at'
+            'client', 'client_id', 'created_by', 'created_at', 'updated_at',
+            'assignees_display'
         ]
         extra_kwargs = {
             'task_type': {'required': False, 'allow_blank': True},
@@ -510,6 +529,27 @@ class TaskSerializer(serializers.ModelSerializer):
             if user and getattr(user, 'is_authenticated', False):
                 validated_data['created_by'] = user
         return super().create(validated_data)
+
+    def get_assignees_display(self, obj):
+        try:
+            names = []
+            for u in obj.assignees.all():
+                first = (getattr(u, 'first_name', '') or '').strip()
+                last = (getattr(u, 'last_name', '') or '').strip()
+                full = f"{first} {last}".strip()
+                if full:
+                    names.append(full)
+                    continue
+                username = (getattr(u, 'username', '') or '').strip()
+                # Если username не похож на email — используем его; иначе email
+                if username and '@' not in username:
+                    names.append(username)
+                else:
+                    email = (getattr(u, 'email', '') or '').strip()
+                    names.append(email or username)
+            return names
+        except Exception:
+            return []
 
 class TaskListSerializer(serializers.ModelSerializer):
     client_name = serializers.SerializerMethodField()

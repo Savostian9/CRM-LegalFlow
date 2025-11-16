@@ -10,6 +10,8 @@
       @keydown.up.prevent="openAndFocus(-1)"
       @keydown.enter.prevent="toggle"
       @keydown.space.prevent="toggle"
+      :disabled="disabled"
+      :class="{ disabled: disabled }"
     >
       <span class="ui-select__label">{{ labelForValue(modelValue) || placeholder }}</span>
       <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 10l5 5 5-5H7z"/></svg>
@@ -44,6 +46,7 @@ export default {
     options: { type: Array, default: () => [] }, // [{value, label}]
     placeholder: { type: String, default: '' },
     ariaLabel: { type: String, default: 'select' },
+    disabled: { type: Boolean, default: false },
   },
   emits: ['update:modelValue', 'change'],
   data(){
@@ -67,8 +70,9 @@ export default {
     updateRect(){
       try { const r = this.$refs.root.getBoundingClientRect(); this.rect = { top: r.top, left: r.left, width: r.width, height: r.height }; } catch(e){ /* ignore */ }
     },
-    toggle(){ this.open ? this.close() : this.openDropdown(); },
+    toggle(){ if(this.disabled) return; this.open ? this.close() : this.openDropdown(); },
     openDropdown(){
+      if(this.disabled) return;
       this.updateRect();
       this.open = true;
       this.$nextTick(()=>{
@@ -121,6 +125,7 @@ export default {
   transition:border-color .18s, box-shadow .18s, background-color .25s;
 }
 .ui-select__trigger:hover{ background:#f7f9fc; }
+.ui-select__trigger:disabled, .ui-select__trigger.disabled { background:#f1f5f9; color:#94a3b8; cursor:not-allowed; opacity:0.7; }
 .ui-select__trigger:focus{ outline:none; border-color:#4A9E80; box-shadow:0 0 0 2px rgba(74,158,128,.18); }
 .ui-select__label{ flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

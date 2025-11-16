@@ -1,7 +1,7 @@
 <template>
   <div class="client-autocomplete" ref="root">
     <label v-if="label" class="ca-label">{{ label }}</label>
-    <div class="ca-input-wrap" :class="{ open: open, invalid: required && !modelValue }">
+    <div class="ca-input-wrap" :class="{ open: open, invalid: required && !modelValue, disabled: disabled }">
       <input
         ref="inputEl"
         type="text"
@@ -16,8 +16,10 @@
         @keydown.esc.prevent="close"
         :aria-expanded="open ? 'true':'false'"
         autocomplete="off"
+        :disabled="disabled"
+        :readonly="disabled"
       />
-      <button v-if="inputValue" type="button" class="clear-btn" @click="clear" aria-label="Clear">×</button>
+      <button v-if="inputValue && !disabled" type="button" class="clear-btn" @click="clear" aria-label="Clear">×</button>
       <div class="spinner" v-if="loading"></div>
     </div>
     <transition name="fade">
@@ -42,7 +44,8 @@ export default {
     placeholder: { type: String, default: '' },
     label: String,
     required: { type: Boolean, default: false },
-    noResultsText: { type: String, default: 'Не найдено' }
+    noResultsText: { type: String, default: 'Не найдено' },
+    disabled: { type: Boolean, default: false }
   },
   emits: ['update:modelValue','client-selected'],
   data(){
@@ -51,8 +54,9 @@ export default {
   watch:{ initialLabel(v){ if(v && !this.inputValue) this.inputValue = v } },
   methods:{
     fullName(c){ return `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || ('ID '+c.id) },
-    onFocus(){ if(this.inputValue.length>=2) { this.fetch() } },
+    onFocus(){ if(this.disabled) return; if(this.inputValue.length>=2) { this.fetch() } },
     onInput(){
+      if(this.disabled) return;
       if(!this.inputValue){ this.$emit('update:modelValue', null); this.suggestions=[]; this.open=false; return }
       clearTimeout(this.searchTimer)
       if(this.inputValue.length < 2){ this.suggestions=[]; this.open=false; return }
@@ -101,6 +105,8 @@ export default {
 .ca-input-wrap { position:relative; display:flex; align-items:center; }
 .ca-input { width:100%; border:1px solid var(--form-border,#e2e8f0); border-radius:8px; padding:8px 34px 8px 12px; font:inherit; background:var(--form-bg,#fff); transition:border-color .18s, box-shadow .18s; }
 .ca-input:focus { outline:none; border-color:var(--form-border-focus,#4A9E80); box-shadow:var(--form-focus-ring,0 0 0 2px rgba(74,158,128,.18)); }
+.ca-input:disabled { background:#f1f5f9; color:#64748b; cursor:not-allowed; }
+.ca-input-wrap.disabled { opacity:0.7; pointer-events:none; }
 .ca-input-wrap.invalid .ca-input { border-color:#dc2626; }
 .clear-btn { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; font-size:18px; line-height:1; cursor:pointer; color:#94a3b8; padding:2px 4px; }
 .clear-btn:hover { color:#475569; }

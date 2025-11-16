@@ -157,10 +157,13 @@ class Document(models.Model):
 
     legal_case = models.ForeignKey(LegalCase, on_delete=models.CASCADE, related_name='documents')
     document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
+    # Optional custom name for 'INNE' or any additional labeling
+    name = models.CharField(max_length=255, blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NOT_SUBMITTED')
 
     class Meta:
-        unique_together = ('legal_case', 'document_type')
+        # Allow multiple custom documents of type INNE distinguished by name
+        unique_together = ('legal_case', 'document_type', 'name')
         
     def __str__(self):
         return f"{self.get_document_type_display()} для {self.legal_case.client}"
@@ -312,3 +315,28 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"[{self.source}] {self.title} -> {self.user}" 
+
+# --- Индивидуальные права пользователя ---
+class UserPermissionSet(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='permset')
+    can_create_client = models.BooleanField(default=True)
+    can_edit_client = models.BooleanField(default=True)
+    can_delete_client = models.BooleanField(default=True)
+    can_create_case = models.BooleanField(default=True)
+    can_edit_case = models.BooleanField(default=True)
+    can_delete_case = models.BooleanField(default=True)
+    can_create_task = models.BooleanField(default=True)
+    can_edit_task = models.BooleanField(default=True)
+    can_delete_task = models.BooleanField(default=True)
+    can_upload_files = models.BooleanField(default=True)
+    can_invite_users = models.BooleanField(default=True)
+    can_manage_users = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Набор прав пользователя'
+        verbose_name_plural = 'Наборы прав пользователей'
+
+    def __str__(self):
+        ident = getattr(self.user, 'email', None) or getattr(self.user, 'username', None) or self.user_id
+        return f"Perms for {ident}"

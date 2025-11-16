@@ -2,7 +2,7 @@
   <div class="page">
     <header class="header">
       <h1>{{ $t('tasks.title') }}</h1>
-      <button class="btn add-clone" @click="toggleForm">{{ showForm ? $t('tasks.cancel') : $t('tasks.add') }}</button>
+      <button v-if="canCreateTask" class="btn add-clone" @click="toggleForm">{{ showForm ? $t('tasks.cancel') : $t('tasks.add') }}</button>
     </header>
 
     <section v-if="showForm" class="card form-card">
@@ -22,21 +22,37 @@
           <input v-model="form.title" type="text" :placeholder="$t('tasks.titlePH')" />
         </div>
 
-        <div class="form-row">
-          <label>{{ $t('tasks.start') }}</label>
-          <AltDateTimePicker mode="date" v-model="form.start" />
-          <small class="muted" v-if="!form.start">{{ $t('tasks.optional') }}</small>
+        <div class="form-row two">
+          <div>
+            <label>{{ $t('tasks.start') }}</label>
+            <AltDateTimePicker mode="date" v-model="form.start" />
+            <small class="muted" v-if="!form.start">{{ $t('tasks.optional') }}</small>
+          </div>
+          <div>
+            <label>{{ $t('tasks.assignee') }}</label>
+            <UiSelect
+              v-model="form.assignee"
+              :options="assigneeOptions"
+              :placeholder="$t('tasks.unassigned')"
+              aria-label="Assignee"
+            />
+            <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
+          </div>
         </div>
 
         <div class="form-row">
-          <label>{{ $t('tasks.assignee') }}</label>
-          <UiSelect
-            v-model="form.assignee"
-            :options="assigneeOptions"
-            :placeholder="$t('tasks.unassigned')"
-            aria-label="Assignee"
-          />
-          <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
+          <label>{{ $t('tasks.form.location') }}</label>
+          <textarea
+            v-model="form.location"
+            rows="2"
+            :placeholder="$t('tasks.form.locationPH')"
+            @input="autoGrow($event.target)"
+          ></textarea>
+        </div>
+
+        <div class="form-row">
+          <label>{{ $t('tasks.form.description') }}</label>
+          <textarea v-model="form.description" rows="3" @input="autoGrow($event.target)"></textarea>
         </div>
 
         <div class="form-actions">
@@ -101,11 +117,11 @@
       </table>
     </section>
     <!-- Modal for viewing/editing a task -->
-    <div v-if="showTaskModal" class="task-modal-overlay" @click.self="closeTaskModal">
+    <div v-if="showTaskModal" class="task-modal-overlay" @click.self="attemptCloseTaskModal">
       <div class="task-modal">
         <header class="tm-header">
           <h3>{{ editForm.title || placeholderTitle }}</h3>
-          <button class="icon" @click="closeTaskModal">×</button>
+          <button class="icon" @click="attemptCloseTaskModal">×</button>
         </header>
         <div class="tm-body">
           <div class="tm-grid">
@@ -116,19 +132,20 @@
                 :initial-label="clientInitialLabelEdit"
                 :placeholder="$t('tasks.chooseClient')"
                 @client-selected="onClientSelectedEdit"
+                :disabled="!canEditTask"
               />
             </label>
             <label>
               {{ $t('tasks.titleLabel') }}
-              <input type="text" v-model="editForm.title" :placeholder="$t('tasks.titlePH')" />
+              <input type="text" v-model="editForm.title" :placeholder="$t('tasks.titlePH')" :disabled="!canEditTask" :readonly="!canEditTask" />
             </label>
             <label>
               {{ $t('tasks.start') }}
-              <AltDateTimePicker mode="date" v-model="editForm.start" />
+              <AltDateTimePicker mode="date" v-model="editForm.start" :disabled="!canEditTask" />
             </label>
             <label>
               {{ $t('tasks.table.status') }}
-              <UiSelect v-model="editForm.status" :options="statusSelectOptions" aria-label="Status" />
+              <UiSelect v-model="editForm.status" :options="statusSelectOptions" aria-label="Status" :disabled="!canEditTask" />
             </label>
             <label>
               {{ $t('tasks.assignee') }}
@@ -137,17 +154,32 @@
                 :options="[{ value:'', label: ($t('tasks.unassigned')||'— не назначен —') }, ...users.map(u => ({ value: String(u.id), label: userLabel(u) }))]"
                 :placeholder="$t('tasks.unassigned')"
                 aria-label="Assignee"
+                :disabled="!canEditTask"
               />
               <small class="muted" v-if="usersFallback">{{ $t('tasks.assigneeFallback') }}</small>
+            </label>
+            <label class="full">
+              {{ $t('tasks.form.location') }}
+              <textarea
+                v-model="editForm.location"
+                rows="2"
+                :placeholder="$t('tasks.form.locationPH')"
+                :disabled="!canEditTask"
+                @input="autoGrow($event.target)"
+              ></textarea>
+            </label>
+            <label class="full">
+              {{ $t('tasks.form.description') }}
+              <textarea v-model="editForm.description" rows="3" :disabled="!canEditTask" @input="autoGrow($event.target)"></textarea>
             </label>
           </div>
         </div>
         <footer class="tm-footer">
           <button v-if="activeTask && activeTask.client" class="btn" @click="goToClient" :disabled="updating">{{ $t('tasks.gotoClient') }}</button>
-          <button v-if="activeTask" class="btn danger" @click="showDeleteConfirm=true" :disabled="updating">{{ $t('common.delete') }}</button>
+          <button v-if="activeTask && canDeleteTask" class="btn danger" @click="showDeleteConfirm=true" :disabled="updating">{{ $t('common.delete') }}</button>
           <div class="spacer"></div>
-          <button class="btn" @click="closeTaskModal" :disabled="updating">{{ $t('common.cancel') }}</button>
-          <button class="btn primary" @click="updateTask" :disabled="updating">{{ $t('common.save') }}</button>
+          <button class="btn cancel" @click="attemptCloseTaskModal" :disabled="updating">{{ $t('common.cancel') }}</button>
+          <button v-if="canEditTask" class="btn primary" @click="updateTask" :disabled="updating">{{ $t('common.save') }}</button>
         </footer>
         <!-- Custom centered delete confirmation -->
         <div v-if="showDeleteConfirm" class="confirm-dialog-overlay" @click.self="showDeleteConfirm=false">
@@ -159,6 +191,16 @@
             </div>
           </div>
         </div>
+
+        <!-- Unsaved changes confirmation (calendar-style) -->
+        <ConfirmDialog
+          v-model="showUnsavedConfirm"
+          :title="$t('tasks.confirm.discardTitle') || 'Несохранённые изменения'"
+          :message="$t('tasks.confirm.discardChanges') || 'Есть несохранённые изменения. Закрыть без сохранения?'"
+          :confirm-text="($t('common.continue') && $t('common.continue')!=='common.continue') ? $t('common.continue') : 'Продолжить'"
+          :cancel-text="$t('common.cancel')"
+          @confirm="discardEdits"
+        />
       </div>
     </div>
   </div>
@@ -169,10 +211,11 @@
 import axios from 'axios'
 import ClientAutocomplete from '../components/ClientAutocomplete.vue'
 import UiSelect from '../components/UiSelect.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 export default {
   name: 'TasksView',
-  components:{ ClientAutocomplete, UiSelect },
+  components:{ ClientAutocomplete, UiSelect, ConfirmDialog },
   data(){
     return {
       tasks: [],
@@ -192,20 +235,24 @@ export default {
         client_id: '',
         title: '',
         start: '', // YYYY-MM-DD
-        assignee: ''
+        assignee: '',
+        location: '',
+        description: ''
       },
   clientQuery: '',
   clientSuggestions: [],
   clientSearchTimer: null,
     showTaskModal: false,
       activeTask: null,
-      editForm: { id:null, title:'', start:'', status:'SCHEDULED' },
+      editForm: { id:null, title:'', start:'', status:'SCHEDULED', location:'', description:'' },
     // Edit modal: client and assignee selections
     selectedClientIdEdit: null,
     clientInitialLabelEdit: '',
     selectedAssigneeEdit: '',
   updating: false,
   showDeleteConfirm: false,
+  showUnsavedConfirm: false,
+  initialEditSnapshot: null,
   placeholderTitle: '—'
     }
   },
@@ -330,6 +377,8 @@ export default {
           ...(endDate ? { end: endDate.toISOString() } : {}),
           all_day: true,
           status: 'SCHEDULED',
+          location: this.form.location,
+          description: this.form.description,
           assignees: assigneeNum && !Number.isNaN(assigneeNum) ? [assigneeNum] : []
         }
         await axios.post('http://127.0.0.1:8000/api/tasks/', payload, {
@@ -379,6 +428,8 @@ export default {
       this.editForm.title = t.title || ''
       this.editForm.status = t.status
   this.editForm.start = t.start ? this.toDateInput(new Date(t.start)) : ''
+      this.editForm.location = t.location || ''
+      this.editForm.description = t.description || ''
       // Prefill client & assignee fields
       const cid = (t && (
         (t.client && typeof t.client === 'object' && t.client.id) ? t.client.id :
@@ -401,6 +452,16 @@ export default {
       }
       this.showTaskModal = true
   this.showDeleteConfirm = false
+      // snapshot for unsaved-changes detection
+      this.initialEditSnapshot = {
+        title: this.editForm.title || '',
+        start: this.editForm.start || '',
+        status: this.editForm.status || '',
+        location: this.editForm.location || '',
+        description: this.editForm.description || '',
+        clientId: this.selectedClientIdEdit != null ? String(this.selectedClientIdEdit) : '',
+        assignee: this.selectedAssigneeEdit != null ? String(this.selectedAssigneeEdit) : ''
+      }
     },
     tryOpenFromRoute(){
       const id = Number(this.$route.query.task)
@@ -414,7 +475,60 @@ export default {
       this.activeTask = null
   this.showDeleteConfirm = false
     },
+    attemptCloseTaskModal(){
+      if(this.updating) return
+      if(this.canEditTask && this.isEditDirty()){
+        this.showUnsavedConfirm = true
+        return
+      }
+      this.closeTaskModal()
+    },
+    isEditDirty(){
+      try{
+        const snap = this.initialEditSnapshot || {}
+        const cur = {
+          title: this.editForm.title || '',
+          start: this.editForm.start || '',
+          status: this.editForm.status || '',
+          location: this.editForm.location || '',
+          description: this.editForm.description || '',
+          clientId: this.selectedClientIdEdit != null ? String(this.selectedClientIdEdit) : '',
+          assignee: this.selectedAssigneeEdit != null ? String(this.selectedAssigneeEdit) : ''
+        }
+        return (
+          snap.title !== cur.title ||
+          snap.start !== cur.start ||
+          snap.status !== cur.status ||
+          snap.location !== cur.location ||
+          snap.description !== cur.description ||
+          snap.clientId !== cur.clientId ||
+          snap.assignee !== cur.assignee
+        )
+      }catch{ return false }
+    },
+    async confirmUnsaved(action){
+      if(action === 'save'){
+        this.showUnsavedConfirm = false
+        await this.updateTask()
+        return
+      }
+      if(action === 'discard'){
+        this.showUnsavedConfirm = false
+        this.closeTaskModal()
+        return
+      }
+      // cancel
+      this.showUnsavedConfirm = false
+    },
+    discardEdits(){
+      this.showUnsavedConfirm = false
+      this.closeTaskModal()
+    },
     async updateTask(){
+      if(!this.canEditTask){
+        alert(this.tr('tasks.updateForbidden','Нет прав для редактирования этой задачи'))
+        return
+      }
       if(!this.editForm.id) return
       this.updating = true
       try {
@@ -447,6 +561,8 @@ export default {
           ...(endDate ? { end: endDate.toISOString() } : {}),
           status: this.editForm.status,
           all_day: true,
+          location: this.editForm.location,
+          description: this.editForm.description,
           ...(resolvedCid!=null && !Number.isNaN(resolvedCid) ? { client_id: resolvedCid } : {}),
           assignees: resolvedAssignees
         }
@@ -481,20 +597,37 @@ export default {
       }
       finally { this.updating = false }
     },
-    onClientSelectedEdit(c){
-      this.selectedClientIdEdit = c?.id || null
-      this.clientInitialLabelEdit = c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : ''
-    },
     async deleteTask(){
-      if(!this.editForm.id) return
+      if(!this.canDeleteTask){
+        alert(this.tr('tasks.deleteForbidden','Нет прав для удаления этой задачи'))
+        return
+      }
+      if(!this.activeTask || !this.activeTask.id) return
       this.updating = true
-      try {
-        await axios.delete(`http://127.0.0.1:8000/api/tasks/${this.editForm.id}/`, { headers:{ Authorization:'Token '+this.token() } })
+      try{
+        const id = Number(this.activeTask.id)
+        const url = `/api/tasks/${id}/`
+        await axios.delete(url, { headers: { Authorization:'Token '+this.token() } })
         this.showDeleteConfirm = false
         this.showTaskModal = false
         await this.loadTasks()
-      } catch(e){ console.error('Delete task error', e) }
-      finally { this.updating = false }
+      }catch(e){
+        const status = e?.response?.status
+        if(status === 403){
+          alert(this.tr('tasks.deleteForbidden','Нет прав для удаления этой задачи'))
+        } else {
+          const data = e?.response?.data
+          const msg = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : this.tr('tasks.deleteError','Не удалось удалить задачу')
+          alert(msg)
+        }
+        console.error('Delete task error', e)
+      } finally {
+        this.updating = false
+      }
+    },
+    onClientSelectedEdit(c){
+      this.selectedClientIdEdit = c?.id || null
+      this.clientInitialLabelEdit = c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : ''
     },
     goToClient(){
       if(!this.activeTask || !this.activeTask.client) return
@@ -512,9 +645,38 @@ export default {
     })(),
     tr(key, fallback){
       try{ const v = this.$t ? this.$t(key) : key; return (v === key) ? fallback : v } catch { return fallback }
+    },
+    autoGrow(el){
+      if(!el) return
+      el.style.height = 'auto'
+      el.style.height = el.scrollHeight + 'px'
     }
   }
   ,computed:{
+    canCreateTask() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_create_task;
+      } catch (e) { return true; }
+    },
+    canEditTask() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_edit_task;
+      } catch (e) { return true; }
+    },
+    canDeleteTask(){
+      try{
+        const permsJson = localStorage.getItem('user-permissions')
+        if(!permsJson) return true
+        const perms = JSON.parse(permsJson)
+        return !!perms.can_delete_task
+      }catch(e){ return true }
+    },
     disableAssigneeFilterForManager(){
       return (this.role || '').toUpperCase() === 'MANAGER'
     },
@@ -566,9 +728,11 @@ export default {
 .btn.danger:disabled { opacity:.55; cursor:not-allowed; background:rgba(255,82,82,0.12); }
 .card { background: var(--card-bg); border:1px solid var(--card-border); border-radius:12px; padding:16px; }
 .form-card { margin-bottom:16px; }
-.form-grid { display:grid; gap:12px; }
+.form-grid { display:grid; gap:14px; max-width:1100px; }
 .form-row { display:flex; flex-direction:column; gap:6px; }
-.form-row.two { grid-template-columns: 1fr 1fr; display:grid; gap:12px; }
+.form-row.two { display:grid; grid-template-columns: minmax(0,1.1fr) minmax(0,0.9fr); gap:16px; }
+.form-row.two > div { display:flex; flex-direction:column; gap:6px; }
+textarea { resize:none; overflow:hidden; }
 label { color:#334155; font-weight:600; }
 .checkbox { display:flex; align-items:center; gap:8px; font-weight:600; }
 .form-actions { display:flex; gap:10px; }
@@ -599,17 +763,25 @@ label { color:#334155; font-weight:600; }
 .tm-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
 .tm-grid label.full { grid-column: 1 / -1; }
 .tm-grid label { display:flex; flex-direction:column; gap:6px; font-size:14px; font-weight:500; color:#334155; }
+.tm-grid input:disabled, .tm-grid input:read-only { background:#f1f5f9; color:#64748b; cursor:not-allowed; }
 .tm-footer { display:flex; align-items:center; gap:10px; padding:14px 18px; border-top:1px solid #e5e7eb; }
 .tm-footer .spacer { flex:1; }
+.tm-footer .btn { transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease; }
+.tm-footer .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -8px rgba(0,0,0,.22); }
+.tm-footer .btn:active { transform: translateY(0); box-shadow: 0 6px 12px -8px rgba(0,0,0,.20); }
+/* Keep Cancel button hover neutral (no color swap), but retain motion */
+.tm-footer .btn.cancel:hover { background: var(--btn-bg); color: var(--btn-text); border-color: var(--btn-border); }
 .icon { background:none; border:none; font-size:20px; cursor:pointer; }
 .muted { color:#64748b; font-size:12px; }
 .confirm-dialog-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:2600; }
 .confirm-dialog { background:#fff; border-radius:14px; padding:24px 32px 22px; width:420px; max-width:92vw; box-shadow:0 8px 28px rgba(0,0,0,.20); border:1px solid #e5e7eb; font-family:'Inter',sans-serif; }
 .confirm-dialog .cd-text { margin:0 0 20px; font-size:16px; line-height:1.45; font-weight:500; color:#1f2937; text-align:center; }
 .confirm-dialog-actions { display:flex; gap:14px; justify-content:center; }
-.confirm-dialog-actions .btn { height:38px; padding:0 20px; border-radius:8px; font-weight:600; min-width:132px; }
+.confirm-dialog-actions .btn { height:38px; padding:0 20px; border-radius:8px; font-weight:600; min-width:132px; transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease; }
+.confirm-dialog-actions .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -8px rgba(0,0,0,.22); }
+.confirm-dialog-actions .btn:active { transform: translateY(0); box-shadow: 0 6px 12px -8px rgba(0,0,0,.20); }
 .btn.danger-pink { background:#ffe5ea; border:1px solid #f5c3cd; color:#c53030; }
-.btn.danger-pink:hover { background:#ffe5ea; border-color:#efb5c1; }
+.btn.danger-pink:hover { background:#ffdfe6; border-color:#efb5c1; }
 .confirm-dialog-actions .btn:not(.danger-pink) { background:#fff; border:1px solid #d7dee6; color:#1f2937; }
 .confirm-dialog-actions .btn:not(.danger-pink):hover { border-color:#c7d2dc; }
 </style>

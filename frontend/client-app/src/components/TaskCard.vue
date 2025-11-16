@@ -7,7 +7,7 @@
           <h3 class="title" :title="task.title || placeholderTitle">
             {{ task.title || placeholderTitle }}
           </h3>
-          <span class="status" :class="('st-' + (task.status || 'SCHEDULED').toLowerCase())">{{ statusLabel(task.status) }}</span>
+          <span class="status" :class="('st-' + effectiveStatus.toLowerCase())">{{ statusLabel(effectiveStatus) }}</span>
         </div>
         <button class="icon" @click="$emit('close')">×</button>
       </header>
@@ -44,11 +44,12 @@
       </section>
 
       <footer class="footer">
-        <button class="btn" @click="$emit('edit', task)">{{ $t('tasks.editTask') }}</button>
+        <button class="btn edit" @click="$emit('edit', task)">{{ $t('tasks.editTask') }}</button>
         <div class="spacer"></div>
-  <button class="btn state-done" @click="markDone" :disabled="task.status==='DONE'">{{ $t('dashboard.taskStatus.done') }}</button>
-  <button class="btn state-cancelled" @click="markCancelled" :disabled="task.status==='CANCELLED'">{{ $t('tasks.status.CANCELLED') }}</button>
-        <button class="btn danger" @click="showDeleteConfirm=true">{{ $t('common.delete') }}</button>
+          <button class="btn state-scheduled" @click="markScheduled" :disabled="effectiveStatus==='SCHEDULED'">{{ $t('tasks.status.SCHEDULED') }}</button>
+        <button class="btn state-done" @click="markDone" :disabled="effectiveStatus==='DONE'">{{ $t('dashboard.taskStatus.done') }}</button>
+        <button class="btn state-cancelled" @click="markCancelled" :disabled="effectiveStatus==='CANCELLED'">{{ $t('tasks.status.CANCELLED') }}</button>
+        <button v-if="canDeleteTask" class="btn danger" @click="showDeleteConfirm=true">{{ $t('common.delete') }}</button>
       </footer>
       <div v-if="showDeleteConfirm" class="confirm-dialog-overlay" @click.self="showDeleteConfirm=false">
         <div class="confirm-dialog">
@@ -71,15 +72,26 @@ export default {
   props: { task: { type: Object, required: true } },
   emits: ['close','edit','updated'],
   data(){
-    return { showDeleteConfirm:false, deleting:false, placeholderTitle: '—' }
+    return { showDeleteConfirm:false, deleting:false, placeholderTitle: '—', pendingStatus: null }
   },
   computed: {
+    effectiveStatus(){
+      return (this.pendingStatus || this.task?.status || 'SCHEDULED')
+    },
     typeColor(){
       // Map by status now (task_type deprecated)
-      const s = (this.task.status || '').toLowerCase()
+      const s = (this.effectiveStatus || '').toLowerCase()
       if(s==='done') return '#16a34a'
       if(s==='cancelled') return '#dc2626'
       return '#4A90E2'
+    },
+    canDeleteTask(){
+      try{
+        const permsJson = localStorage.getItem('user-permissions')
+        if(!permsJson) return true
+        const perms = JSON.parse(permsJson)
+        return !!perms.can_delete_task
+      }catch(e){ return true }
     }
   },
   methods: {
@@ -103,14 +115,21 @@ export default {
     },
     async markDone(){ await this.updateStatus('DONE') },
     async markCancelled(){ await this.updateStatus('CANCELLED') },
+    async markScheduled(){ await this.updateStatus('SCHEDULED') },
     async updateStatus(s){
       const token = localStorage.getItem('user-token')
       try{
         await axios.put(`http://127.0.0.1:8000/api/tasks/${this.task.id}/`, { status: s }, { headers:{ Authorization:`Token ${token}` } })
-        this.$emit('updated')
+        // keep card open; mirror new status locally without mutating props
+        this.pendingStatus = s
+        this.$emit('status-updated', s)
       }catch(e){ console.error('Task status update error', e); alert(this.$t('tasks.toasts.saveError') || 'Failed to update'); }
     },
     async performDelete(){
+      if(!this.canDeleteTask){
+        alert(this.$t('tasks.deleteForbidden') || 'Нет прав для удаления этой задачи')
+        return
+      }
       if(this.deleting) return
       this.deleting = true
       const token = localStorage.getItem('user-token')
@@ -155,17 +174,22 @@ export default {
 .footer { display:flex; align-items:center; gap:8px; padding: 12px 16px; border-top:1px solid #eee; }
 .footer .spacer { flex:1; }
 .btn { height:36px; padding:0 12px; border:1px solid var(--btn-border); border-radius:8px; background:var(--btn-bg); color:var(--btn-text); cursor:pointer; }
+.btn.edit { transition: background-color .22s ease, border-color .22s ease, color .22s ease, transform .22s ease, box-shadow .22s ease; }
+.btn.edit:hover { transform:translateY(-2px); box-shadow:0 4px 10px rgba(0,0,0,.08); background:#f8fafc; border-color:#cfd8e3; }
+.btn.edit:active { transform:translateY(0); box-shadow:0 2px 5px rgba(0,0,0,.06); }
 .btn.warn { border-color:#fde68a; background:#fffbeb; }
 /* New state buttons */
 .btn.state-done { background:#ecfdf5; border:1px solid #a7f3d0; color:#036956; }
 .btn.state-done:hover:not(:disabled) { background:#d1fae5; border-color:#6ee7b7; color:#035246; }
+.btn.state-scheduled { background:#f0f7ff; border:1px solid #cfe0ff; color:#1e40af; }
+.btn.state-scheduled:hover:not(:disabled) { background:#e5f0ff; border-color:#b9d4ff; color:#1d4ed8; }
 .btn.state-cancelled { background:#fff8e6; border:1px solid #fde68a; color:#925c12; }
 .btn.state-cancelled:hover:not(:disabled) { background:#fef3c7; border-color:#fcd34d; color:#7a4708; }
 /* Shared animated interactions */
-.btn.state-done, .btn.state-cancelled, .btn.danger { transition: background-color .22s ease, border-color .22s ease, color .22s ease, transform .22s ease, box-shadow .22s ease; }
-.btn.state-done:hover:not(:disabled), .btn.state-cancelled:hover:not(:disabled), .btn.danger:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 4px 10px rgba(0,0,0,.08); }
-.btn.state-done:active:not(:disabled), .btn.state-cancelled:active:not(:disabled), .btn.danger:active:not(:disabled) { transform:translateY(0); box-shadow:0 2px 5px rgba(0,0,0,.06); }
-.btn.state-done:disabled, .btn.state-cancelled:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+.btn.state-done, .btn.state-scheduled, .btn.state-cancelled, .btn.danger { transition: background-color .22s ease, border-color .22s ease, color .22s ease, transform .22s ease, box-shadow .22s ease; }
+.btn.state-done:hover:not(:disabled), .btn.state-scheduled:hover:not(:disabled), .btn.state-cancelled:hover:not(:disabled), .btn.danger:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 4px 10px rgba(0,0,0,.08); }
+.btn.state-done:active:not(:disabled), .btn.state-scheduled:active:not(:disabled), .btn.state-cancelled:active:not(:disabled), .btn.danger:active:not(:disabled) { transform:translateY(0); box-shadow:0 2px 5px rgba(0,0,0,.06); }
+.btn.state-done:disabled, .btn.state-scheduled:disabled, .btn.state-cancelled:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
 .btn.danger { background:#ffe5ea; border:1px solid #f5c3cd; color:#c53030; }
 .btn.danger:hover { background:#ffe5ea; border-color:#efb5c1; color:#a61b1b; }
 .icon { background:none; border:none; font-size:20px; cursor:pointer; }

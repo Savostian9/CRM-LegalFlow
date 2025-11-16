@@ -18,7 +18,7 @@
     <button :class="['tab', {active: activeTab==='profile'}]" @click="activeTab='profile'">{{ $t('settings.tabs.profile') }}</button>
   <button :class="['tab', {active: activeTab==='company'}]" @click="activeTab='company'" v-if="isOwner">{{ $t('settings.tabs.company') }}</button>
   <button :class="['tab', {active: activeTab==='users'}]" @click="activeTab='users'" v-if="isAdminOrLead">{{ $t('settings.tabs.users') }}</button>
-  <button :class="['tab', {active: activeTab==='invites'}]" @click="activeTab='invites'" v-if="isAdminOrLead">{{ $t('settings.tabs.invites') }}</button>
+  <button :class="['tab', {active: activeTab==='invites'}]" @click="activeTab='invites'" v-if="isAdminOrLead && canInviteUsers">{{ $t('settings.tabs.invites') }}</button>
       </div>
 
       <!-- Profile -->
@@ -116,6 +116,10 @@
         </div>
       </section>
 
+      <div v-if="activeTab==='users' && isAdminOrLead" style="margin-top:-28px; margin-bottom:12px; display:flex; justify-content:flex-end; gap:8px;">
+        <button class="button secondary" @click="openBulkPermissions">Права для всех</button>
+      </div>
+
       <!-- Company -->
   <section v-if="activeTab==='company' && isOwner" class="data-section">
   <h3>{{ $t('settings.company.title') }}</h3>
@@ -145,6 +149,7 @@
                 <th>{{ $t('settings.users.name') }}</th>
                 <th>{{ $t('settings.users.email') }}</th>
                 <th>{{ $t('settings.users.role') }}</th>
+                <th>Права</th>
                 <th></th>
               </tr>
             </thead>
@@ -167,6 +172,9 @@
                   </template>
                 </td>
                 <td>
+                  <button class="button secondary" style="margin-right:6px;" @click="openPermissions(u)">Доступ</button>
+                </td>
+                <td>
                   <button class="button danger" @click="removeUser(u)">{{ $t('common.delete') }}</button>
                 </td>
               </tr>
@@ -176,7 +184,7 @@
       </section>
 
       <!-- Invites -->
-  <section v-if="activeTab==='invites' && isAdminOrLead" class="data-section">
+  <section v-if="activeTab==='invites' && isAdminOrLead && canInviteUsers" class="data-section">
   <h3>{{ $t('settings.invites.title') }}</h3>
         <div class="invite-form">
           <select v-model="inviteRole" :aria-label="$t('settings.invites.roleAria')">
@@ -226,6 +234,85 @@
     <transition name="toast-fade">
       <div v-if="toast.show" :class="['toast-notification', toast.type]">{{ toast.message }}</div>
     </transition>
+    <!-- Модалка прав пользователя -->
+    <div v-if="showPermModal" class="confirm-dialog-overlay">
+      <div class="confirm-dialog" style="max-width:640px;">
+        <h3 style="margin-top:0;">Доступ пользователя</h3>
+        <p style="margin-top:0; font-size:14px; margin-bottom: 18px;">Отметьте действия, которые этому сотруднику разрешено выполнять.</p>
+        <p v-if="permUser" style="margin-top:0; font-size:14px; font-weight: 600;">{{ permUser.first_name }} {{ permUser.last_name }} — {{ permUser.email }}</p>
+        <div class="perm-grid">
+          <div class="perm-col perm-card">
+            <h4>Клиенты</h4>
+            <label><input type="checkbox" v-model="permForm.can_create_client"> Создание клиентов</label>
+            <label><input type="checkbox" v-model="permForm.can_edit_client"> Редактирование клиентов</label>
+            <label><input type="checkbox" v-model="permForm.can_delete_client"> Удаление клиентов</label>
+          </div>
+          <div class="perm-col perm-card">
+            <h4>Дела и файлы</h4>
+            <label><input type="checkbox" v-model="permForm.can_create_case"> Создание дел</label>
+            <label><input type="checkbox" v-model="permForm.can_edit_case"> Редактирование дел</label>
+            <label><input type="checkbox" v-model="permForm.can_delete_case"> Удаление дел</label>
+            <label><input type="checkbox" v-model="permForm.can_upload_files"> Загрузка и удаление файлов</label>
+          </div>
+          <div class="perm-col perm-card">
+            <h4>Задачи</h4>
+            <label><input type="checkbox" v-model="permForm.can_create_task"> Создание задач</label>
+            <label><input type="checkbox" v-model="permForm.can_edit_task"> Редактирование задач</label>
+            <label><input type="checkbox" v-model="permForm.can_delete_task"> Удаление задач</label>
+          </div>
+          <div class="perm-col perm-card">
+            <h4>Администрирование</h4>
+            <label><input type="checkbox" v-model="permForm.can_invite_users"> Создание приглашений</label>
+            <label><input type="checkbox" v-model="permForm.can_manage_users"> Управление пользователями</label>
+          </div>
+        </div>
+        <p v-if="permUser && permUser.is_owner" style="color:#b91c1c; font-size:12px; margin-top:8px;">Владельца нельзя менять.</p>
+        <div class="confirm-dialog-actions" style="margin-top:24px;">
+          <button class="button primary" :disabled="permUser && permUser.is_owner" @click="savePermissions">Сохранить</button>
+          <button class="button secondary" @click="closePerms">Отмена</button>
+        </div>
+      </div>
+    </div>
+    <!-- Модалка массовых прав -->
+    <div v-if="showBulkPermModal" class="confirm-dialog-overlay">
+      <div class="confirm-dialog" style="max-width:640px;">
+        <h3 style="margin-top:0;">Массовое применение прав</h3>
+        <p style="margin-top:0; font-size:13px;">Отметьте права, которые нужно применить ко всем сотрудникам компании (владельца можно включить ниже).</p>
+        <div class="perm-grid">
+          <div class="perm-col perm-card">
+            <h4>Клиенты</h4>
+            <label><input type="checkbox" v-model="bulkPermForm.can_create_client"> Создание клиентов</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_edit_client"> Редактирование клиентов</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_delete_client"> Удаление клиентов</label>
+          </div>
+          <div class="perm-col perm-card">
+            <h4>Дела и файлы</h4>
+            <label><input type="checkbox" v-model="bulkPermForm.can_create_case"> Создание дел</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_edit_case"> Редактирование дел</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_delete_case"> Удаление дел</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_upload_files"> Загрузка и удаление файлов</label>
+          </div>
+          <div class="perm-col perm-card">
+            <h4>Задачи</h4>
+            <label><input type="checkbox" v-model="bulkPermForm.can_create_task"> Создание задач</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_edit_task"> Редактирование задач</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_delete_task"> Удаление задач</label>
+          </div>
+          <div class="perm-col perm-card">
+            <h4>Администрирование</h4>
+            <label><input type="checkbox" v-model="bulkPermForm.can_invite_users"> Создание приглашений</label>
+            <label><input type="checkbox" v-model="bulkPermForm.can_manage_users"> Управление пользователями</label>
+          </div>
+        </div>
+        <label style="display:block; margin:16px 0 4px; font-size:13px; font-weight:500;">
+          <input type="checkbox" v-model="bulkIncludeOwner" style="margin-right:6px;"> Включить владельца
+        </label>
+        <div class="confirm-dialog-actions" style="margin-top:16px;">
+          <button class="button primary" @click="applyBulkPermissions">Применить</button>
+          <button class="button secondary" @click="closeBulkPerms">Отмена</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -241,6 +328,23 @@ export default {
       password: { old: '', new: '' },
       company: { name: '', address: '', legal_details: '', invite_code: '' },
       users: [],
+      // --- Права ---
+      showPermModal: false,
+      permUser: null,
+      permForm: {
+        can_create_client: true, can_edit_client: true, can_delete_client: true,
+        can_create_case: true, can_edit_case: true, can_delete_case: true,
+        can_create_task: true, can_edit_task: true, can_delete_task: true,
+        can_upload_files: true, can_invite_users: true, can_manage_users: true,
+      },
+      showBulkPermModal: false,
+      bulkPermForm: {
+        can_create_client: true, can_edit_client: true, can_delete_client: true,
+        can_create_case: true, can_edit_case: true, can_delete_case: true,
+        can_create_task: true, can_edit_task: true, can_delete_task: true,
+        can_upload_files: true, can_invite_users: true, can_manage_users: true,
+      },
+      bulkIncludeOwner: false,
       invites: [],
       inviteRole: 'MANAGER',
       deletePassword: '',
@@ -252,6 +356,22 @@ export default {
     }
   },
   computed: {
+    canInviteUsers() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_invite_users;
+      } catch (e) { return true; }
+    },
+    canManageUsers() {
+      try {
+        const permsJson = localStorage.getItem('user-permissions');
+        if (!permsJson) return true;
+        const perms = JSON.parse(permsJson);
+        return !!perms.can_manage_users;
+      } catch (e) { return true; }
+    },
     isAdmin(){ return this.me.role === 'ADMIN' },
     isAdminOrLead(){ return this.me.role === 'ADMIN' || this.me.role === 'LEAD' },
     isManager(){ return this.me.role === 'MANAGER' },
@@ -465,6 +585,35 @@ export default {
         /* ignore */
       }
     },
+    // ---- Permissions ----
+    async openPermissions(u){
+      this.permUser = u; this.showPermModal = true;
+      try{
+        const token = localStorage.getItem('user-token');
+        const res = await axios.get(`/api/company/users/${u.id}/permissions/`, { headers:{ Authorization:`Token ${token}` }});
+        const d = res.data || {}; Object.keys(this.permForm).forEach(k=>{ if(k in d) this.permForm[k]=!!d[k]; });
+        if('is_owner' in d) this.permUser.is_owner = d.is_owner;
+      }catch(e){ this.notify('Ошибка загрузки прав','error'); }
+    },
+    closePerms(){ this.showPermModal=false; this.permUser=null; },
+    async savePermissions(){
+      if(!this.permUser) return; if(this.permUser.is_owner) return;
+      try{
+        const token = localStorage.getItem('user-token');
+        await axios.put(`/api/company/users/${this.permUser.id}/permissions/`, this.permForm, { headers:{ Authorization:`Token ${token}` }});
+        this.notify('Права сохранены'); this.closePerms();
+      }catch(e){ this.notify('Ошибка сохранения','error'); }
+    },
+    openBulkPermissions(){ this.showBulkPermModal=true; },
+    closeBulkPerms(){ this.showBulkPermModal=false; },
+    async applyBulkPermissions(){
+      try{
+        const token = localStorage.getItem('user-token');
+        const payload = { ...this.bulkPermForm, exclude_owner: !this.bulkIncludeOwner };
+        await axios.post('/api/company/users/permissions/bulk/', payload, { headers:{ Authorization:`Token ${token}` }});
+        this.notify('Массовые права применены'); this.closeBulkPerms();
+      }catch(e){ this.notify('Ошибка применения','error'); }
+    },
   }
 }
 </script>
@@ -596,4 +745,15 @@ export default {
 .confirm-dialog { background: #fff; padding: 24px 28px; border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.25); max-width: 420px; width: 92vw; }
 .confirm-dialog p { margin: 0 0 16px 0; font-size: 16px; color: var(--dark-blue); font-weight: 500; }
 .confirm-dialog-actions { display: flex; gap: 12px; justify-content: flex-end; }
+.perm-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap: 18px; margin-top:6px; }
+.perm-col { padding:0; }
+.perm-card { background:#f9fafb; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+.perm-col h4 { margin:0 0 10px 0; font-size:15px; font-weight:600; letter-spacing:.2px; }
+.perm-col label { display:flex; align-items: center; font-size:13px; margin-bottom:6px; cursor:pointer; line-height:18px; }
+.perm-col input[type="checkbox"] { margin-right: 8px; width: 16px; height: 16px; accent-color:#3B82F6; }
+/* Fallback for browsers without accent-color: make blue when checked */
+.perm-col input[type="checkbox"]:checked { background-color:#3B82F6; border-color:#3B82F6; }
+.perm-card { transition: border-color .18s, box-shadow .18s, background-color .25s; }
+.perm-card:hover { border-color:#3B82F6; box-shadow:0 0 0 1px rgba(59,130,246,.35), 0 2px 6px rgba(0,0,0,.08); }
+.perm-card:focus-within { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.35); }
 </style>
