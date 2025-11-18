@@ -131,6 +131,7 @@
       
       <div class="auth-links">
         <router-link to="/login">{{ $t('auth.register.haveAccount') }}</router-link>
+        <span class="sep">•</span>
         <router-link to="/">{{ $t('auth.common.goHome') }}</router-link>
       </div>
     </div>
@@ -386,14 +387,10 @@ export default {
   text-align: center;
 }
 
-.auth-links {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 25px;
-  margin-bottom: 20px;
-}
-.auth-links a { color: var(--primary-color); text-decoration: none; font-weight: 500; font-size: 14px; }
-.auth-links a:hover { text-decoration: underline; }
+.auth-links { display:flex; justify-content:center; align-items:center; gap:10px; margin-top:22px; margin-bottom:0; }
+.auth-links a { color:#2563eb; text-decoration:none; font-weight:600; font-size:14px; text-shadow:0 1px 0 rgba(0,0,0,.05); }
+.auth-links a:hover { text-decoration:underline; }
+.auth-links .sep { color:#cbd5e1; user-select:none; }
 
 .invite-banner {
   background: #e6fffa;

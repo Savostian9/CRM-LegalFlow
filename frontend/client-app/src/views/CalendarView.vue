@@ -185,6 +185,28 @@ export default {
     }
   },
   methods: {
+    async resumeEditFromRoute(){
+      try{
+        const q = this.$route && this.$route.query ? this.$route.query : {}
+        if(q.resume === 'edit' && q.taskId){
+          const id = Number(q.taskId)
+          if(!Number.isNaN(id)){
+            const token = localStorage.getItem('user-token')
+            try{
+              const resp = await axios.get(`http://127.0.0.1:8000/api/tasks/${id}/`, { headers:{ Authorization:`Token ${token}` } })
+              const task = resp.data || null
+              if(task){ this.openEdit(task) }
+            }catch{
+              // Fallback: try to find task in current month list after load
+              const found = this.events.find(e => Number(e.id) === id)
+              if(found) this.openEdit(found)
+            }
+          }
+          // Clear query so it doesn't reopen again on further nav
+          try { this.$router.replace({ query: {} }) } catch {/* ignore */}
+        }
+      }catch{/* ignore */}
+    },
     async loadUsers(){
       const token = localStorage.getItem('user-token'); if(!token) return;
       try { const resp = await axios.get('http://127.0.0.1:8000/api/company/users/', { headers:{ Authorization:'Token '+token } }); this.users = resp.data; }
@@ -240,7 +262,7 @@ export default {
     isSameDate(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); },
     isWeekend(d){ const wd=d.getDay(); return wd===0 || wd===6; },
     monthGridRange(d){ const first=new Date(d.getFullYear(), d.getMonth(),1); const last=new Date(d.getFullYear(), d.getMonth()+1,0); const dayFirst=first.getDay()||7; const gridStart=new Date(first); gridStart.setDate(first.getDate()-(dayFirst-1)); gridStart.setHours(0,0,0,0); const dayLast=last.getDay()||7; const gridEnd=new Date(last); gridEnd.setDate(last.getDate()+(7-dayLast)); gridEnd.setHours(23,59,59,999); return [gridStart, gridEnd]; },
-    async load(){ const token=localStorage.getItem('user-token'); if(!token){ this.$router.push('/login'); return; } try { const [start,end]=this.monthGridRange(this.cursor); const params=new URLSearchParams(); params.set('start', start.toISOString()); params.set('end', end.toISOString()); if(this.status) params.set('status', this.status); const resp= await axios.get(`http://127.0.0.1:8000/api/tasks/?${params.toString()}`, { headers:{ Authorization:`Token ${token}` } }); this.events = resp.data.map(e=>({ ...e, client_name: e.client ? `${e.client.first_name||''} ${e.client.last_name||''}`.trim():'' })); this.$nextTick(()=>{ this.setLayoutMetrics(); this.updateCalHeight(); }); } catch(e){ console.error('Не удалось загрузить задачи', e); this.events=[]; this.$nextTick(()=>{ this.setLayoutMetrics(); this.updateCalHeight(); }); } },
+    async load(){ const token=localStorage.getItem('user-token'); if(!token){ this.$router.push('/login'); return; } try { const [start,end]=this.monthGridRange(this.cursor); const params=new URLSearchParams(); params.set('start', start.toISOString()); params.set('end', end.toISOString()); if(this.status) params.set('status', this.status); const resp= await axios.get(`http://127.0.0.1:8000/api/tasks/?${params.toString()}`, { headers:{ Authorization:`Token ${token}` } }); this.events = resp.data.map(e=>({ ...e, client_name: e.client ? `${e.client.first_name||''} ${e.client.last_name||''}`.trim():'' })); this.$nextTick(()=>{ this.setLayoutMetrics(); this.updateCalHeight(); this.resumeEditFromRoute(); }); } catch(e){ console.error('Не удалось загрузить задачи', e); this.events=[]; this.$nextTick(()=>{ this.setLayoutMetrics(); this.updateCalHeight(); this.resumeEditFromRoute(); }); } },
     goPrev(){ this.shift(-1); }, goNext(){ this.shift(1); }, goToday(){ this.cursor=new Date(); this.load(); }, shift(step){ const d=new Date(this.cursor); d.setMonth(d.getMonth()+step); this.cursor=d; this.load(); },
     statusDotColor(status){
       const s = (status || '').toLowerCase();
@@ -356,7 +378,7 @@ export default {
     hideAssigneeTooltip(){ this.hoverTooltip.visible=false; }
   },
   watch: { status(){ this.load(); } },
-  mounted(){ this.$nextTick(()=>{ this.setLayoutMetrics(); this.updateCalHeight(); }); window.addEventListener('resize', this.scheduleResize); window.addEventListener('orientationchange', this.scheduleResize); document.body.classList.add('no-cal-scroll'); },
+  mounted(){ this.$nextTick(()=>{ this.setLayoutMetrics(); this.updateCalHeight(); this.resumeEditFromRoute(); }); window.addEventListener('resize', this.scheduleResize); window.addEventListener('orientationchange', this.scheduleResize); document.body.classList.add('no-cal-scroll'); },
   beforeUnmount(){ window.removeEventListener('resize', this.scheduleResize); window.removeEventListener('orientationchange', this.scheduleResize); if(this.resizeRaf) cancelAnimationFrame(this.resizeRaf); document.body.classList.remove('no-cal-scroll'); this.closeDayPopover(); }
 };
 </script>

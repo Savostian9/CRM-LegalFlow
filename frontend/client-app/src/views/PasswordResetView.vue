@@ -30,7 +30,7 @@
       </form>
       
       <div class="auth-links">
-  <router-link to="/login">{{ $t('auth.common.backToLogin') }}</router-link>
+        <router-link to="/login">{{ $t('auth.common.backToLogin') }}</router-link>
       </div>
     </div>
   </div>
@@ -281,20 +281,7 @@ export default {
   background-color: rgba(30, 142, 62, 0.1);
 }
 
-.auth-links {
-  text-align: center; /* Центрируем одну ссылку */
-  margin-top: 30px;
-}
-
-.auth-links a {
-  color: var(--primary-color);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 14px;
-  transition: color 0.2s ease-out;
-}
-.auth-links a:hover {
-  text-decoration: underline;
-  color: var(--primary-hover);
-}
+.auth-links { display:flex; justify-content:center; align-items:center; gap:10px; margin-top:22px; }
+.auth-links a { color:#2563eb; text-decoration:none; font-weight:600; font-size:14px; text-shadow:0 1px 0 rgba(0,0,0,.05); }
+.auth-links a:hover { text-decoration:underline; }
 </style>

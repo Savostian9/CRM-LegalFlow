@@ -929,18 +929,21 @@ export default {
       this.showConfirmDialog = true;
     },
     goBack(){
-      // If there is a previous entry in history (length>1) just go back.
-      // Some browsers keep initial length=1 for first page; fallback to clients list.
-      try {
-        if(window.history.length > 1){
-          this.$router.back();
-        } else {
-          // Fallback to list
-          this.$router.push('/dashboard/clients');
+      try{
+        const q = this.$route && this.$route.query ? this.$route.query : {}
+        if(q.from === 'calendar'){
+          const taskId = q.taskId ? String(q.taskId) : ''
+          const resume = q.resume === 'edit' && taskId
+          // Return explicitly to calendar; optionally resume edit for taskId
+          this.$router.push({ name:'calendar', query: resume ? { resume:'edit', taskId } : {} })
+          return
         }
-      } catch(e){
-        this.$router.push('/dashboard/clients');
-      }
+      }catch{/* ignore and fallback */}
+      // Default behavior: history back or list fallback
+      try {
+        if(window.history.length > 1){ this.$router.back() }
+        else { this.$router.push('/dashboard/clients') }
+      } catch { this.$router.push('/dashboard/clients') }
     },
     async deleteClient() {
       if (this.pendingDelete) return;

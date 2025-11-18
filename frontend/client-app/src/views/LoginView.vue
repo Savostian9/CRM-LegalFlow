@@ -41,7 +41,9 @@
       
       <div class="auth-links">
         <router-link to="/password-reset">{{ $t('auth.login.forgot') }}</router-link>
+        <span class="sep">•</span>
         <router-link to="/register">{{ $t('auth.login.create') }}</router-link>
+        <span class="sep">•</span>
         <router-link to="/">{{ $t('auth.common.goHome') }}</router-link>
       </div>
 
@@ -379,19 +381,22 @@ export default {
 
 .auth-links {
   display: flex;
-  justify-content: space-between;
-  margin-top: 30px;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
-
 .auth-links a {
-  color: var(--primary-color);
+  color: #2563eb;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 14px;
-  transition: color 0.2s ease-out;
+  text-shadow: 0 1px 0 rgba(0,0,0,.05);
 }
-.auth-links a:hover {
-  text-decoration: underline;
-  color: var(--primary-hover);
-}
+.auth-links a:hover { text-decoration: underline; }
+.auth-links .sep { color: #cbd5e1; user-select: none; }
 </style>

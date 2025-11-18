@@ -155,11 +155,11 @@
         </div>
         <!-- Delete confirmation overlay -->
         <div v-if="showDeleteConfirm" class="confirm-overlay" @click.self="cancelDeleteTask">
-          <div class="confirm-dialog">
-            <p class="confirm-message">{{ t('tasks.confirm.deleteOne') || 'Удалить задачу?' }}</p>
-            <div class="confirm-actions">
-              <button class="btn danger small" :disabled="updating" @click="proceedDeleteTask">{{ updating ? t('common.loading') : t('common.delete') }}</button>
-              <button class="btn outline small" :disabled="updating" @click="cancelDeleteTask">{{ t('common.cancel') }}</button>
+          <div class="confirm-dialog-modern">
+            <p class="confirm-message-modern">{{ t('tasks.confirm.deleteOne') || 'Удалить задачу?' }}</p>
+            <div class="confirm-actions-modern">
+              <button class="btn-modern danger-modern" :disabled="updating" @click="proceedDeleteTask">{{ updating ? t('common.loading') : (t('common.yesDelete') || 'Да, удалить') }}</button>
+              <button class="btn-modern cancel-modern" :disabled="updating" @click="cancelDeleteTask">{{ t('common.cancel') || 'Отмена' }}</button>
             </div>
           </div>
         </div>
@@ -944,6 +944,7 @@ async function loadUsers(){
 .tm-footer .btn:not(.primary):not(.danger):not(.outline):hover { background:var(--btn-bg,#fff); border-color:var(--btn-border,#d0d7e2); color:var(--btn-text,#1e293b) !important; }
 .tm-footer .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -8px rgba(0,0,0,.22); }
 .tm-footer .btn:active { transform: translateY(0); box-shadow: 0 6px 12px -8px rgba(0,0,0,.20); }
+.tm-footer .btn.outline { background:#fff !important; border:1px solid #d0d7e2 !important; color:#1e293b !important; }
 .btn.primary { background:var(--primary-color,#4A90E2); color:#fff !important; border-color:var(--primary-color,#4A90E2); }
 /* Match TaskForm danger (pink) button exactly */
 .tm-footer .btn.danger { background:#ffe5ea; border:1px solid #f5c3cd; color:#c53030 !important; }
@@ -957,6 +958,16 @@ async function loadUsers(){
 .confirm-dialog { background:var(--card-bg); border:1px solid var(--card-border); border-radius:16px; padding:26px 28px 24px; width:min(420px,90%); box-shadow:0 12px 40px -8px rgba(0,0,0,.35); animation:pop .22s ease; }
 .confirm-message { margin:0 0 22px; font-size:16px; font-weight:600; line-height:1.45; color:#0f172a; }
 .confirm-actions { display:flex; gap:12px; justify-content:flex-end; }
+.confirm-dialog-modern { background:#fff; border-radius:14px; padding:24px 32px; width:min(400px,92vw); box-shadow:0 12px 40px -8px rgba(0,0,0,.35); animation:pop .22s ease; text-align:center; }
+.confirm-message-modern { margin:0 0 20px; font-size:16px; font-weight:600; line-height:1.5; color:#0f172a; }
+.confirm-actions-modern { display:flex; gap:12px; justify-content:center; }
+.btn-modern { height:38px; padding:0 24px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease; border:none; display:inline-flex; align-items:center; justify-content:center; min-width:120px; }
+.btn-modern:hover { transform:translateY(-2px); box-shadow:0 8px 16px -6px rgba(0,0,0,.25); }
+.btn-modern:active { transform:translateY(0); }
+.btn-modern:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+.btn-modern.danger-modern { background:#ffdfe6; border:1px solid #efb5c1; color:#dc2626; }
+.btn-modern.cancel-modern { background:#f1f5f9; border:1px solid #e2e8f0; color:#475569; }
+.btn-modern.cancel-modern:hover { background:#e2e8f0; }
 @keyframes pop { from { transform:translateY(14px); opacity:0; } to { transform:translateY(0); opacity:1; } }
 .task-list .type { width:10px; height:10px; border-radius:50%; background:#4A90E2; }
 .task-list .type.status-scheduled{ background:#4A90E2; }

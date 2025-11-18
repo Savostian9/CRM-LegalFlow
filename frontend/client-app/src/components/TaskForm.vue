@@ -3,7 +3,15 @@
     <div class="modal">
       <header class="modal-header">
         <div class="mh-left">
-          <button v-if="task" class="icon back" @click="$emit('back', task)" :title="$t('tasks.backToTask') || 'Назад к задаче'">←</button>
+          <button
+            v-if="task"
+            class="icon back"
+            @click="$emit('back', task)"
+            :title="($t('tasks.backToTask') && $t('tasks.backToTask') !== 'tasks.backToTask') ? $t('tasks.backToTask') : 'Назад к задаче'"
+            :aria-label="($t('tasks.backToTask') && $t('tasks.backToTask') !== 'tasks.backToTask') ? $t('tasks.backToTask') : 'Назад к задаче'"
+          >
+            ←
+          </button>
           <h3>{{ task ? $t('tasks.editTask') : $t('tasks.newTask') }}</h3>
         </div>
         <button class="icon" @click="tryClose">×</button>
@@ -60,6 +68,12 @@
           </label>
         </div>
         <footer class="footer">
+          <button
+            type="button"
+            class="btn outline"
+            v-if="task && activeClientId"
+            @click="goToClient"
+          >{{ gotoClientLabel() }}</button>
           <button type="button" class="btn danger" v-if="task && canDeleteTask" @click="showDeleteConfirm=true">{{ $t('common.delete') }}</button>
           <div class="spacer"></div>
           <button type="button" class="btn" @click="tryClose">{{ $t('common.cancel') }}</button>
@@ -68,11 +82,11 @@
       </form>
       <!-- Custom deletion confirm (client-style) -->
       <div v-if="showDeleteConfirm" class="confirm-dialog-overlay" @click.self="showDeleteConfirm=false">
-        <div class="confirm-dialog">
-          <p class="cd-text">{{ ($t('tasks.confirm.deleteOne') && $t('tasks.confirm.deleteOne')!=='tasks.confirm.deleteOne') ? $t('tasks.confirm.deleteOne') : 'Удалить задачу?' }}</p>
-          <div class="confirm-dialog-actions">
-            <button class="btn danger-pink" :disabled="deleting" @click="performDelete">{{ yesDeleteLabel() }}</button>
-            <button class="btn" :disabled="deleting" @click="showDeleteConfirm=false">{{ $t('common.cancel') }}</button>
+        <div class="confirm-dialog-modern">
+          <p class="confirm-message-modern">{{ ($t('tasks.confirm.deleteOne') && $t('tasks.confirm.deleteOne')!=='tasks.confirm.deleteOne') ? $t('tasks.confirm.deleteOne') : 'Удалить задачу?' }}</p>
+          <div class="confirm-actions-modern">
+            <button class="btn-modern danger-modern" :disabled="deleting" @click="performDelete">{{ yesDeleteLabel() }}</button>
+            <button class="btn-modern cancel-modern" :disabled="deleting" @click="showDeleteConfirm=false">{{ $t('common.cancel') || 'Отмена' }}</button>
           </div>
         </div>
       </div>
@@ -137,6 +151,21 @@ export default {
     form: { deep: true, handler() { this.dirty = true; } }
   },
   methods: {
+        goToClient(){
+          try{
+            const cid = this.activeClientId
+            if(!cid) return
+            this.$emit('close')
+            if (this.$router){
+              const q = (this.task && this.task.id) ? { from:'calendar', taskId:String(this.task.id), resume:'edit' } : { from:'calendar' }
+              this.$router.push({ name:'client-detail', params:{ id: cid }, query: q })
+            }
+          }catch{/* ignore navigation issues */}
+        },
+        gotoClientLabel(){
+          const v = this.$t && this.$t('tasks.gotoClient')
+          return (v && v !== 'tasks.gotoClient') ? v : 'К клиенту'
+        },
     autoGrow(el){
       if(!el) return
       el.style.height = 'auto'
@@ -291,6 +320,17 @@ export default {
     }
   },
   computed: {
+    activeClientId(){
+      try{
+        if(this.form && this.form.client_id) return this.form.client_id
+        const t = this.task
+        if(!t) return null
+        if (t.client && typeof t.client === 'object' && t.client.id) return t.client.id
+        if (typeof t.client === 'number') return t.client
+        if (t.client_id) return t.client_id
+        return null
+      }catch{ return null }
+    },
     canEditTask() {
       try {
         const permsJson = localStorage.getItem('user-permissions');
@@ -347,6 +387,7 @@ export default {
 .footer { display:flex; align-items:center; gap:8px; margin-top: 8px; }
 .footer .spacer { flex:1; }
 .btn { height:36px; padding:0 12px; border:1px solid var(--btn-border); border-radius:8px; background:var(--btn-bg); color:var(--btn-text); cursor:pointer; }
+.btn.outline { background:#fff; }
 /* Subtle hover/press animations for footer buttons and enlarged size */
 .footer .btn { height:42px; padding:0 18px; border-radius:10px; font-weight:600; transition: transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease; }
 .footer .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -8px rgba(0,0,0,.22); }
@@ -359,13 +400,18 @@ export default {
 .btn.danger-pink { background:#ffe5ea; border:1px solid #f5c3cd; color:#c53030; border-radius:8px; }
 .btn.danger-pink:hover { background:#ffe5ea; border-color:#efb5c1; }
 /* Confirm deletion styling (client style refined) */
-.confirm-dialog-overlay { position: fixed; inset:0; background: rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index: 2050; }
-.confirm-dialog { background:#fff; border-radius:14px; padding:24px 32px 22px; width:440px; max-width:92vw; box-shadow:0 8px 28px rgba(0,0,0,.20); border:1px solid #e5e7eb; font-family:'Inter',sans-serif; }
-.confirm-dialog .cd-text { margin:0 0 20px; font-size:16px; line-height:1.45; font-weight:500; color:#1f2937; text-align:center; }
-.confirm-dialog-actions { display:flex; gap:14px; justify-content:center; }
-.confirm-dialog-actions .btn { height:38px; padding:0 20px; border-radius:8px; font-weight:600; min-width:132px; }
-.confirm-dialog-actions .btn:not(.danger-pink) { background:#fff; border:1px solid #d7dee6; color:#1f2937; }
-.confirm-dialog-actions .btn:not(.danger-pink):hover { border-color:#c7d2dc; }
+.confirm-dialog-overlay { position: fixed; inset:0; background: rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index: 2050; backdrop-filter:blur(2px); }
+.confirm-dialog-modern { background:#fff; border-radius:14px; padding:24px 32px; width:min(400px,92vw); box-shadow:0 12px 40px -8px rgba(0,0,0,.35); animation:pop-in .22s ease; text-align:center; }
+.confirm-message-modern { margin:0 0 20px; font-size:16px; font-weight:600; line-height:1.5; color:#0f172a; }
+.confirm-actions-modern { display:flex; gap:12px; justify-content:center; }
+.btn-modern { height:38px; padding:0 24px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease, background-color .18s ease, border-color .18s ease; border:1px solid transparent; display:inline-flex; align-items:center; justify-content:center; min-width:120px; }
+.btn-modern:hover { transform:translateY(-2px); box-shadow:0 8px 16px -6px rgba(0,0,0,.25); }
+.btn-modern:active { transform:translateY(0); }
+.btn-modern:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+.btn-modern.danger-modern { background:#ffdfe6; border:1px solid #efb5c1; color:#dc2626; }
+.btn-modern.cancel-modern { background:#f1f5f9; border:1px solid #e2e8f0; color:#475569; }
+.btn-modern.cancel-modern:hover { background:#e2e8f0; }
+@keyframes pop-in { from { transform:translateY(14px); opacity:0; } to { transform:translateY(0); opacity:1; } }
 .suggest { list-style:none; margin:6px 0 0; padding:0; border:1px solid var(--card-border); border-radius:8px; max-height:160px; overflow:auto; background:var(--card-bg); }
 .suggest li { padding:6px 10px; cursor:pointer; }
 .suggest li:hover { background:#f7f9fc; }

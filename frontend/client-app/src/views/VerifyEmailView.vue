@@ -3,7 +3,8 @@
     <div class="auth-card">
   <h2 class="auth-title">{{ $t('auth.verify.title') }}</h2>
       <p class="info-text">
-  {{ $t('auth.verify.sent') }} <strong>{{ email }}</strong>
+        {{ $t('auth.verify.sent') }}
+        <strong class="email-line">{{ email }}</strong>
       </p>
       
       <form @submit.prevent="handleVerification" class="auth-form">
@@ -161,6 +162,14 @@ export default {
   color: #555;
   line-height: 1.5;
 }
+.info-text .email-line {
+  display: block;
+  margin-top: 6px;
+  font-weight: 700;
+  white-space: nowrap; /* не переносить email */
+  word-break: normal;
+  overflow-wrap: normal;
+}
 .form-group label {
   display: none; /* Скрываем label, т.к. есть placeholder и заголовок */
 }
@@ -184,6 +193,28 @@ export default {
   color: white;
   cursor: pointer;
   font-size: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: transform .15s ease, box-shadow .22s ease, background-color .18s ease;
+}
+.auth-button:hover { transform: translateY(-2px); box-shadow: 0 10px 18px -10px rgba(0,123,255,.35); }
+.auth-button:active { transform: translateY(0); box-shadow: 0 6px 12px -10px rgba(0,123,255,.3); }
+.auth-button::before {
+  content: "";
+  position: absolute;
+  top: 0; left: -40%;
+  width: 40%; height: 100%;
+  background: linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.55) 50%, rgba(255,255,255,0) 100%);
+  transform: skewX(-20deg);
+  opacity: 0;
+  pointer-events: none;
+}
+.auth-button:hover::before { animation: btnShine .9s ease; }
+@keyframes btnShine {
+  0% { transform: translateX(0) skewX(-20deg); opacity: 0; }
+  30% { opacity: .9; }
+  60% { opacity: .4; }
+  100% { transform: translateX(260%) skewX(-20deg); opacity: 0; }
 }
 .resend-container {
     margin-top: 25px;
