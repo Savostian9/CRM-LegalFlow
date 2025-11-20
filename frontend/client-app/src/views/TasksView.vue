@@ -62,19 +62,53 @@
       </form>
     </section>
 
-    <section class="card">
-      <div class="list-header">
-        <div class="filters">
-          <input v-model="query" class="search" type="text" :placeholder="$t('tasks.filters.searchPH')" @input="debouncedLoad" />
-          <UiSelect
-            v-model="status"
-            :options="statusOptions"
-            :placeholder="$t('tasks.filters.statusAll')"
-            aria-label="Status"
-            @change="loadTasks"
+    <div class="list-header">
+      <div class="filters">
+        <div class="search-box">
+          <input 
+            v-model="query" 
+            class="search-input" 
+            type="text" 
+            :placeholder="$t('tasks.filters.searchPH')" 
+            @input="debouncedLoad" 
           />
+          <span class="search-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
+            </svg>
+          </span>
         </div>
+        <UiSelect
+          v-model="status"
+          :options="statusOptions"
+          :placeholder="$t('tasks.filters.statusAll')"
+          aria-label="Status"
+          @change="loadTasks"
+        />
       </div>
+    </div>
+
+    <div class="date-filter modern">
+      <div class="chips">
+        <button :class="['chip', { active: preset === 'all' }]" @click="setPreset('all')">{{ $t('clients.date.all') || 'Все' }}</button>
+        <button :class="['chip', { active: preset === 'today' }]" @click="setPreset('today')">{{ $t('clients.date.today') || 'Сегодня' }}</button>
+        <button :class="['chip', { active: preset === '7d' }]" @click="setPreset('7d')">{{ $t('clients.date.seven') || '7 дней' }}</button>
+        <button :class="['chip', { active: preset === 'month' }]" @click="setPreset('month')">{{ $t('clients.date.month') || 'Месяц' }}</button>
+        <button :class="['chip', { active: preset === 'custom' }]" @click="toggleCustomRange">{{ $t('clients.date.custom') || 'Период' }}</button>
+      </div>
+      <div v-if="showCustomDate" class="custom-range">
+        <label class="date-label">
+          {{ $t('clients.extra.from') || 'От' }}
+          <AltDateTimePicker mode="date" v-model="dateFrom" @change="loadTasks" />
+        </label>
+        <label class="date-label">
+          {{ $t('clients.extra.to') || 'До' }}
+          <AltDateTimePicker mode="date" v-model="dateTo" @change="loadTasks" />
+        </label>
+        <button class="clear-chip" v-if="dateFrom || dateTo" @click="clearCustomRange">{{ $t('clients.extra.reset') || 'Сбросить' }}</button>
+      </div>
+    </div>
+
       <div v-if="users.length" class="assignee-filter-bar">
         <label class="af-label">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -93,9 +127,9 @@
         <button class="af-clear" v-if="assigneeFilter && !disableAssigneeFilterForManager" @click="assigneeFilter=''">{{ $t('clients.extra.reset') || 'Reset' }}</button>
       </div>
 
-  <div v-if="loading" class="empty">{{ $t('tasks.loading') }}</div>
-  <div v-else-if="filteredTasks.length === 0" class="empty">{{ $t('tasks.empty') }}</div>
-  <table v-else class="tasks-table">
+      <div v-if="loading" class="empty">{{ $t('tasks.loading') }}</div>
+      <div v-else-if="filteredTasks.length === 0" class="empty">{{ $t('tasks.empty') }}</div>
+      <table v-else class="tasks-table">
         <thead>
           <tr>
             <th>{{ $t('tasks.table.date') }}</th>
@@ -115,7 +149,6 @@
           </tr>
         </tbody>
       </table>
-    </section>
     <!-- Modal for viewing/editing a task -->
     <div v-if="showTaskModal" class="task-modal-overlay" @click.self="attemptCloseTaskModal">
       <div class="task-modal">
@@ -231,6 +264,10 @@ export default {
       query: '',
       status: '',
       assigneeFilter: '',
+      preset: 'all',
+      dateFrom: null,
+      dateTo: null,
+      showCustomDate: false,
       form: {
         client_id: '',
         title: '',
@@ -296,6 +333,8 @@ export default {
         const params = {}
         if(this.status) params.status = this.status
         if(this.query) params.q = this.query
+        if(this.dateFrom) params.start = this.dateFrom
+        if(this.dateTo) params.end = this.dateTo
         const resp = await axios.get('http://127.0.0.1:8000/api/tasks/', {
           headers: { Authorization: 'Token ' + this.token() },
           params
@@ -650,7 +689,53 @@ export default {
       if(!el) return
       el.style.height = 'auto'
       el.style.height = el.scrollHeight + 'px'
-    }
+    },
+    setPreset(p) {
+      this.preset = p;
+      const now = new Date();
+      const toLocalISODate = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      if (p === 'all') {
+        this.dateFrom = null;
+        this.dateTo = null;
+        this.showCustomDate = false;
+      } else if (p === 'today') {
+        this.dateFrom = toLocalISODate(now);
+        this.dateTo = toLocalISODate(now);
+        this.showCustomDate = false;
+      } else if (p === '7d') {
+        const past = new Date();
+        past.setDate(now.getDate() - 7);
+        this.dateFrom = toLocalISODate(past);
+        this.dateTo = toLocalISODate(now);
+        this.showCustomDate = false;
+      } else if (p === 'month') {
+        // Current calendar month (1st to last day)
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        this.dateFrom = toLocalISODate(start);
+        this.dateTo = toLocalISODate(end);
+        this.showCustomDate = false;
+      } else if (p === 'custom') {
+        this.showCustomDate = !this.showCustomDate;
+        return; 
+      }
+      this.loadTasks();
+    },
+    toggleCustomRange() {
+      this.preset = 'custom';
+      this.showCustomDate = !this.showCustomDate;
+    },
+    clearCustomRange() {
+      this.dateFrom = null;
+      this.dateTo = null;
+      this.loadTasks();
+    },
   }
   ,computed:{
     canCreateTask() {
@@ -740,11 +825,38 @@ label { color:#334155; font-weight:600; }
 .filters { display:flex; gap:8px; }
 .search { min-width:260px; }
 .empty { padding:12px; color:#64748b; }
-.assignee-filter-bar { display:flex; align-items:center; gap:16px; margin:12px 0 4px; background:#fff; border:1px solid #e0e6ed; border-radius:10px; padding:10px 18px; }
+/* Assignee Filter Bar */
+.assignee-filter-bar { 
+  display:flex; 
+  align-items:center; 
+  gap:16px; 
+  margin: 0 0 16px;
+  background:#fff; 
+  border:1px solid #e0e6ed; 
+  border-radius:10px; 
+  padding:10px 18px; 
+}
 .assignee-filter-bar .af-label { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#5a6a7b; }
 .assignee-filter-bar .af-select { min-width:220px; }
-.assignee-filter-bar .af-clear { background:none; border:none; color:#111827; font-size:12px; cursor:pointer; }
-.assignee-filter-bar .af-clear:hover { text-decoration:underline; }
+.assignee-filter-bar .af-clear { 
+  margin-left: -6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+}
+.assignee-filter-bar .af-clear:hover { 
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  text-decoration: none;
+}
 .tasks-table { width:100%; border-collapse:collapse; background:var(--card-bg); border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.07); overflow:hidden; table-layout:fixed; font-family:'Inter',sans-serif; }
 .tasks-table th, .tasks-table td { padding:14px 16px; text-align:left; font-size:14px; }
 .tasks-table thead th { background:#f7f9fc; font-weight:700; color:#5a6a7b; }
@@ -784,4 +896,105 @@ label { color:#334155; font-weight:600; }
 .btn.danger-pink:hover { background:#ffdfe6; border-color:#efb5c1; }
 .confirm-dialog-actions .btn:not(.danger-pink) { background:#fff; border:1px solid #d7dee6; color:#1f2937; }
 .confirm-dialog-actions .btn:not(.danger-pink):hover { border-color:#c7d2dc; }
+/* Date Filter Styles */
+.date-filter.modern {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 0 4px;
+}
+
+.date-filter .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip {
+  border: 1px solid var(--form-border,#e2e8f0);
+  background: var(--card-bg);
+  color: #334155;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.chip:hover { background: #f7f9fc; }
+.chip.active { background: #e8f4f0; border-color: #c7e6db; color: #2f7f66; }
+
+.custom-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.custom-range .date-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.clear-chip {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+}
+.clear-chip:hover { 
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  text-decoration: none;
+}
+
+/* Search Box Styles */
+.search-box {
+  position: relative;
+  width: 420px;
+}
+
+.search-input { 
+  width: 100%; 
+  padding: 8px 36px 8px 12px; 
+  height: 40px;
+  border: 1px solid var(--form-border); 
+  border-radius: var(--form-radius,8px); 
+  font-family: 'Inter', sans-serif; 
+  transition: border-color .18s, box-shadow .18s; 
+  background: var(--form-bg,#fff);
+}
+
+.search-input:focus { 
+  outline: none; 
+  border-color: var(--form-border-focus); 
+  box-shadow: var(--form-focus-ring); 
+}
+
+.search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #5a6a7b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.search-input:focus + .search-icon {
+  color: var(--primary-color);
+}
 </style>

@@ -700,13 +700,23 @@ export default {
 .custom-range .date-input:hover::-webkit-calendar-picker-indicator { opacity: 1; filter: none; }
 
 .clear-chip {
-  border: none;
-  background: transparent;
-  color: #111827; /* black/dark */
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  font-weight: 400; /* normal */
+  padding: 6px 14px;
+  border-radius: 20px;
+  transition: all 0.2s ease;
 }
-.clear-chip:hover { color:#000; text-decoration: underline; }
+.clear-chip:hover { 
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  text-decoration: none;
+}
 
 /* Modern manager filter */
 .creator-filter {

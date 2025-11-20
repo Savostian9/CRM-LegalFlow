@@ -3,7 +3,19 @@
     <header class="finance-header">
       <h1>{{ $t('finance.title') }}</h1>
       <div class="filters">
-        <input v-model="search" type="text" :placeholder="$t('clients.searchPlaceholder')" />
+        <div class="search-box">
+          <input 
+            v-model="search" 
+            type="text" 
+            :placeholder="$t('clients.searchPlaceholder')" 
+            class="search-input"
+          />
+          <span class="search-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16z" />
+            </svg>
+          </span>
+        </div>
         <UiSelect
           v-model="status"
           :options="[
@@ -16,6 +28,27 @@
         />
       </div>
     </header>
+
+    <div class="date-filter modern">
+      <div class="chips">
+        <button :class="['chip', { active: preset === 'all' }]" @click="setPreset('all')">{{ $t('clients.date.all') }}</button>
+        <button :class="['chip', { active: preset === 'today' }]" @click="setPreset('today')">{{ $t('clients.date.today') }}</button>
+        <button :class="['chip', { active: preset === '7d' }]" @click="setPreset('7d')">{{ $t('clients.date.seven') }}</button>
+        <button :class="['chip', { active: preset === 'month' }]" @click="setPreset('month')">{{ $t('clients.date.month') }}</button>
+        <button :class="['chip', { active: preset === 'custom' }]" @click="toggleCustomRange">{{ $t('clients.date.custom') }}</button>
+      </div>
+      <div v-if="showCustomDate" class="custom-range">
+        <label class="date-label">
+          {{ $t('clients.extra.from') }}
+          <AltDateTimePicker mode="date" v-model="createdFrom" @change="fetch" />
+        </label>
+        <label class="date-label">
+          {{ $t('clients.extra.to') }}
+          <AltDateTimePicker mode="date" v-model="createdTo" @change="fetch" />
+        </label>
+        <button class="clear-chip" v-if="createdFrom || createdTo" @click="clearCustomRange">{{ $t('clients.extra.reset') }}</button>
+      </div>
+    </div>
 
     <section class="finance-stats" v-if="!loading">
       <div class="stat">
@@ -105,6 +138,10 @@ export default {
       clients: [],
       search: '',
       status: 'all', // all | paid | debt
+      preset: 'all',
+      createdFrom: null,
+      createdTo: null,
+      showCustomDate: false,
       role: 'MANAGER',
       managerFilter: '',
   /* manager dropdown UI removed in favor of standalone select */
@@ -222,7 +259,16 @@ export default {
       if (!token) { this.$router.push('/login'); return; }
       this.loading = true;
       try {
-        const resp = await axios.get('http://127.0.0.1:8000/api/clients/', { headers: { Authorization: `Token ${token}` } });
+        let url = 'http://127.0.0.1:8000/api/clients/';
+        const params = new URLSearchParams();
+        if (this.createdFrom) params.append('created_from', this.createdFrom);
+        if (this.createdTo) params.append('created_to', this.createdTo);
+        
+        if ([...params].length > 0) {
+            url += `?${params.toString()}`;
+        }
+
+        const resp = await axios.get(url, { headers: { Authorization: `Token ${token}` } });
         this.clients = resp.data;
         // If we don't have managers loaded yet and role allows, build fallback list
         if (this.role !== 'MANAGER' && (!this.managers || this.managers.length === 0)) {
@@ -233,6 +279,52 @@ export default {
       } finally {
         this.loading = false;
       }
+    },
+    setPreset(p) {
+      this.preset = p;
+      const now = new Date();
+      const toLocalISODate = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
+      if (p === 'all') {
+        this.createdFrom = null;
+        this.createdTo = null;
+        this.showCustomDate = false;
+      } else if (p === 'today') {
+        this.createdFrom = toLocalISODate(now);
+        this.createdTo = toLocalISODate(now);
+        this.showCustomDate = false;
+      } else if (p === '7d') {
+        const past = new Date();
+        past.setDate(now.getDate() - 7);
+        this.createdFrom = toLocalISODate(past);
+        this.createdTo = toLocalISODate(now);
+        this.showCustomDate = false;
+      } else if (p === 'month') {
+        // Current calendar month (1st to last day)
+        const start = new Date(now.getFullYear(), now.getMonth(), 1);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        this.createdFrom = toLocalISODate(start);
+        this.createdTo = toLocalISODate(end);
+        this.showCustomDate = false;
+      } else if (p === 'custom') {
+        this.showCustomDate = !this.showCustomDate;
+        return; 
+      }
+      this.fetch();
+    },
+    toggleCustomRange() {
+      this.preset = 'custom';
+      this.showCustomDate = !this.showCustomDate;
+    },
+    clearCustomRange() {
+      this.createdFrom = null;
+      this.createdTo = null;
+      this.fetch();
     },
     balance(c) {
       return Number(c.service_cost || 0) - Number(c.amount_paid || 0);
@@ -266,16 +358,32 @@ export default {
 .finance-header h1 { font-size: 28px; color: #2c3e50; font-weight: 700; }
 
 .filters { display: flex; gap: 10px; }
-.filters input, .filters select { height: 40px; padding: 0 12px; border: 1px solid var(--form-border); border-radius: var(--form-radius,8px); font-family: 'Inter', sans-serif; transition:border-color .18s, box-shadow .18s; display:inline-flex; align-items:center; background:var(--form-bg,#fff); }
+.filters select { height: 40px; padding: 0 12px; border: 1px solid var(--form-border); border-radius: var(--form-radius,8px); font-family: 'Inter', sans-serif; transition:border-color .18s, box-shadow .18s; display:inline-flex; align-items:center; background:var(--form-bg,#fff); }
 .filters :deep(.ui-select__trigger){ height:40px; padding:0 12px; border-radius:var(--form-radius,8px); display:inline-flex; align-items:center; }
-.filters input:focus, .filters select:focus { outline:none; border-color:var(--form-border-focus); box-shadow:var(--form-focus-ring); }
+.filters select:focus { outline:none; border-color:var(--form-border-focus); box-shadow:var(--form-focus-ring); }
 
 /* Manager filter bar (second row) */
-.manager-filter-bar { display:flex; align-items:center; gap:16px; margin-top:14px; background:#fff; border:1px solid #e0e6ed; border-radius:10px; padding:10px 18px; }
-.manager-filter-bar .mf-label { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#5a6a7b; }
+.manager-filter-bar { display:flex; align-items:center; margin-top:14px; margin-bottom: 16px; background:#fff; border:1px solid #e0e6ed; border-radius:10px; padding:10px 18px; }
+.manager-filter-bar .mf-label { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; color:#5a6a7b; margin-right: 16px; }
 .manager-filter-bar .mf-select { min-width:220px; }
-.manager-filter-bar .mf-clear { background:none; border:none; color:#111827; font-size:12px; cursor:pointer; }
-.manager-filter-bar .mf-clear:hover { text-decoration:underline; }
+.manager-filter-bar .mf-clear { 
+  margin-left: -30px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+}
+.manager-filter-bar .mf-clear:hover { 
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
 
 .finance-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
 .stat { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; }
@@ -323,4 +431,137 @@ export default {
 
 /* Manager filter dropdown styles (scoped) */
 /* (manager-filter wrapper removed; using plain UiSelect aligned with other filters) */
+
+.date-filter.modern {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.date-filter .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip {
+  border: 1px solid var(--form-border,#e2e8f0);
+  background: var(--card-bg);
+  color: #334155;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.chip:hover { background: #f7f9fc; }
+.chip.active { background: #e8f4f0; border-color: #c7e6db; color: #2f7f66; }
+
+.custom-range {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.custom-range .date-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.custom-range .date-input {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: #4b5563; /* grey text */
+  background: #ffffff; /* white background */
+  border: 1px solid #cbd5e1; /* slate-300 */
+  border-radius: 10px;
+  padding: 10px 12px;
+  line-height: 1.2;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02) inset;
+}
+.custom-range .date-input:focus {
+  outline: none;
+  border-color: #4A9E80;
+  box-shadow: 0 0 0 2px rgba(74,158,128,.12);
+  background: #ffffff; /* keep white on focus */
+}
+/* Placeholder like dd.mm.yyyy look */
+.custom-range .date-input::-webkit-datetime-edit { font-family: 'Inter', sans-serif; color: #4b5563; }
+.custom-range .date-input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+.custom-range .date-input::-webkit-datetime-edit-month-field,
+.custom-range .date-input::-webkit-datetime-edit-day-field,
+.custom-range .date-input::-webkit-datetime-edit-year-field { padding: 0 2px; }
+.custom-range .date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+  filter: grayscale(100%);
+}
+.custom-range .date-input:hover::-webkit-calendar-picker-indicator { opacity: 1; filter: none; }
+
+.clear-chip {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 20px;
+  transition: all 0.2s ease;
+}
+.clear-chip:hover { 
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  text-decoration: none;
+}
+
+/* Search box styles from ClientListView */
+.search-box {
+  position: relative;
+  width: 420px; /* Increased width to fit long placeholder text */
+}
+
+.search-input { 
+  width: 100%; 
+  padding: 8px 36px 8px 12px; 
+  height: 40px;
+  border: 1px solid var(--form-border); 
+  border-radius: var(--form-radius,8px); 
+  font-family: 'Inter', sans-serif; 
+  transition: border-color .18s, box-shadow .18s; 
+  background: var(--form-bg,#fff);
+}
+
+.search-input:focus { 
+  outline: none; 
+  border-color: var(--form-border-focus); 
+  box-shadow: var(--form-focus-ring); 
+}
+
+.search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #5a6a7b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.search-input:focus + .search-icon {
+  color: var(--primary-color);
+}
 </style>

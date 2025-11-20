@@ -65,9 +65,6 @@
       <h2 class="pricing-heading">{{ $t('pricing.title') }}</h2>
       <p class="pricing-sub">{{ $t('pricing.subtitle') }}</p>
       <PricingPlans :show-trial="true" @select="onSelectPlan" />
-      <div class="pricing-cta">
-        <router-link to="/register" class="button primary">{{ $t('home.cta') }}</router-link>
-      </div>
     </section>
     <footer class="footer">
       <router-link to="/privacy-policy">Polityka prywatności</router-link>
@@ -148,7 +145,8 @@ export default {
 
 .auth-buttons {
   display: flex;
-  gap: 15px;
+  align-items: center;
+  gap: 18px;
 }
 
 .button {
@@ -161,30 +159,54 @@ export default {
   white-space: nowrap; /* Запрещаем перенос текста на кнопках */
 }
 
-.button.primary {
-  background-color: var(--primary-color);
-  color: var(--white-color);
-  box-shadow: 0 4px 15px rgba(74, 144, 226, 0.2);
-}
-/* Жёстко закрепляем белый цвет текста на синих кнопках-линках */
-.button.primary,
-.button.primary:link,
-.button.primary:visited,
-.button.primary:active {
-  color: #ffffff !important;
-}
 
+.button.primary {
+  background: linear-gradient(90deg, #2563eb 0%, #4A90E2 100%);
+  color: #fff !important;
+  border-radius: 14px;
+  font-weight: 700;
+  box-shadow: 0 6px 24px rgba(74,144,226,0.18);
+  letter-spacing: 0.02em;
+  border: none;
+  transition: background 0.25s, box-shadow 0.18s, transform 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+.button.primary::after {
+  content: "";
+  position: absolute;
+  left: -60%;
+  top: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.25) 50%, rgba(255,255,255,0) 100%);
+  transform: skewX(-18deg);
+  opacity: 0;
+  pointer-events: none;
+}
 .button.primary:hover {
-  background-color: #ffffff; /* белый фон при наведении */
-  color: #000000 !important; /* чёрный текст при наведении */
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(90deg, #357ABD 0%, #2563eb 100%);
+  box-shadow: 0 10px 32px rgba(74,144,226,0.22);
+  transform: translateY(-2px) scale(1.04);
+}
+.button.primary:hover::after {
+  animation: btnShine 0.9s ease;
+  opacity: 1;
+}
+@keyframes btnShine {
+  0% { transform:translateX(0) skewX(-18deg); opacity:0; }
+  30% { opacity:.7; }
+  60% { opacity:.3; }
+  100% { transform:translateX(260%) skewX(-18deg); opacity:0; }
 }
 
 .button.secondary {
   background-color: #f0f2f5;
   color: var(--dark-blue);
   border-color: transparent;
+  font-size: 1em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .button.secondary:hover {
@@ -205,8 +227,7 @@ export default {
 .pricing-section { max-width:1200px; margin:50px auto 40px; padding:0 60px 10px; }
 .pricing-heading { font-size:2.4em; font-weight:700; color:var(--dark-blue); margin:0 0 10px; text-align:center; }
 .pricing-sub { text-align:center; margin:0 0 28px; font-size:1.05em; color:#4b5563; }
-.pricing-cta { text-align:center; margin-top:30px; }
-
+/* removed bottom CTA button */
 
 .hero-content {
   animation: fadeInUp 0.8s ease-out;

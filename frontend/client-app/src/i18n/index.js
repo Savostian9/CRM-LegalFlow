@@ -339,7 +339,7 @@ const messages = {
         deleteError: 'Не удалось удалить задачу'
       },
       filters: {
-        searchPH: 'Поиск по названию...',
+        searchPH: 'Поиск по названию, клиенту, ответственному...',
         statusAll: 'Все статусы'
       },
       table: { date: 'Дата', time: 'Время', client: 'Клиент', name: 'Название', type: 'Тип', status: 'Статус', assignee: 'Ответственный' },
@@ -358,8 +358,9 @@ const messages = {
     },
     pricing: {
       title: 'Тарифы',
-      subtitle: 'Выберите удобный план. Начните с бесплатного Trial на 14 дней.',
-      pricePeriod: { month: 'месяц', period: 'период' },
+      subtitle: 'Оплата только в PLN. Месяц или год со скидкой.',
+      pricePeriod: { month: 'Месяц', year: 'Год', period: 'мес' },
+      billedYearly: 'при оплате за год',
       includesTitle: 'Что входит',
       additionalTitle: 'Дополнительно',
       fields: {
@@ -372,33 +373,39 @@ const messages = {
           badge: '14 дней',
           description: 'Пробный доступ ко всем основным функциям с ограниченными лимитами.',
           features: [
-            'Все основные функции для теста',
-            'Быстрый старт без карты',
-            'Ограничения по лимитам',
-            'Переход на блокировку по окончании'
+            'До 10 клиентов; базовые возможности',
+            'До 50 файлов на клиента (до 1 ГБ)',
+            '1 сотрудник: администратор, доступ ко всем разделам',
+            'До 20 задач; базовый календарь',
+            'Авто email-уведомления: до 20 сообщений',
+            'Финансы для 10 клиентов: сумма оплат и список должников',
+            'Техподдержка стандартная'
           ]
         },
         STARTER: {
           badge: 'Рекомендуем',
           description: 'Расширенные лимиты и поддержка для растущей команды.',
           features: [
-            'Расширенные лимиты',
-            'Приоритетные улучшения',
-            'Email поддержка',
-            'Базовые отчеты',
-            'Роли доступа (admin/staff/viewer)'
+            'До 350 клиентов в год',
+            'До 3 ГБ файлов в год',
+            'До 5 сотрудников; расширенные/кастомные роли и доступы',
+            'До 500 задач/год; календарь с фильтрами по датам и сотрудникам',
+            'Авто email-уведомления: до 1000 сообщений/год',
+            'Финансы: оплаты и долги; мини-отчеты (история, задолженность, фильтры)',
+            'Техподдержка стандартная до 48 часов'
           ]
         },
         PRO: {
           badge: 'Максимум',
           description: 'Максимальные лимиты, аналитика и расширенные интеграции.',
           features: [
-            'Большие лимиты (до 3000 клиентов)',
-            'Приоритетная поддержка',
-            'Расширенные отчеты и аналитика (roadmap)',
-            'Custom fields (roadmap)',
-            'Webhooks & интеграции (roadmap)',
-            'Расширенный аудит действий'
+            'Безлимит клиентов',
+            'До 30 ГБ файлов в год',
+            'До 15 сотрудников; расширенные/кастомные роли и доступы (каждый след. +49 PLN/мес)',
+            'Безлимит задач/год; календарь с фильтрами по датам и сотрудникам',
+            'Авто email-уведомления: до 15000 сообщений/год (с возможностью увеличения)',
+            'Финансы: полный мониторинг; расширенные отчеты; экспорт CSV; категории услуг',
+            'Поддержка: высокий приоритет и быстрое реагирование'
           ]
         }
       },
@@ -647,6 +654,7 @@ const messages = {
       resource: 'Ресурс',
       current: 'Текущее',
       limit: 'Лимит',
+      limitUnlimited: 'Без ограничений',
       rows: {
         users: 'Пользователи',
         clients: 'Клиенты',
@@ -667,7 +675,8 @@ const messages = {
       plan: {
         currentStarter: 'Текущий план Starter активен.',
         proActive: 'План Pro активен. Максимальные лимиты.',
-        active: 'Активен'
+        active: 'Активен',
+        unavailable: 'Недоступно'
       },
       toast: {
         upgradeSoon: 'Функция апгрейда скоро будет доступна.',
@@ -1012,7 +1021,7 @@ const messages = {
         deleteError: 'Nie udało się usunąć zadania'
       },
       filters: {
-        searchPH: 'Szukaj po nazwie...',
+        searchPH: 'Szukaj po nazwie, kliencie, odpowiedzialnym...',
         statusAll: 'Wszystkie statusy'
       },
       table: { date: 'Data', time: 'Czas', client: 'Klient', name: 'Nazwa', type: 'Typ', status: 'Status', assignee: 'Odpowiedzialny' },
@@ -1031,8 +1040,9 @@ const messages = {
     },
     pricing: {
       title: 'Cennik',
-      subtitle: 'Wybierz wygodny plan. Zacznij od bezpłatnego okresu próbnego 14 dni.',
-      pricePeriod: { month: 'miesiąc', period: 'okres' },
+      subtitle: 'Opłata tylko w PLN. Miesiąc lub rok ze zniżką.',
+      pricePeriod: { month: 'Miesiąc', year: 'Rok', period: 'mies' },
+      billedYearly: 'przy płatności za rok',
       includesTitle: 'Co zawiera',
       additionalTitle: 'Dodatkowo',
       fields: {
@@ -1045,33 +1055,39 @@ const messages = {
           badge: '14 dni',
           description: 'Dostęp próbny do wszystkich podstawowych funkcji z ograniczonymi limitami.',
           features: [
-            'Wszystkie podstawowe funkcje do testów',
-            'Szybki start bez karty',
-            'Ograniczenia limitów',
-            'Blokada po zakończeniu okresu'
+            'Do 10 klientów; podstawowe możliwości',
+            'Do 50 plików na klienta (do 1 GB)',
+            '1 pracownik: administrator, dostęp do wszystkich sekcji',
+            'Do 20 zadań; podstawowy kalendarz',
+            'Auto powiadomienia e-mail: do 20 wiadomości',
+            'Finanse dla 10 klientów: suma wpłat i lista dłużników',
+            'Wsparcie techniczne standardowe'
           ]
         },
         STARTER: {
           badge: 'Polecamy',
           description: 'Rozszerzone limity i wsparcie dla rozwijającego się zespołu.',
           features: [
-            'Rozszerzone limity',
-            'Priorytetowe usprawnienia',
-            'Wsparcie e-mail',
-            'Podstawowe raporty',
-            'Role dostępu (admin/staff/viewer)'
+            'Do 350 klientów rocznie',
+            'Do 3 GB plików rocznie',
+            'Do 5 pracowników; rozszerzone/niestandardowe role i dostępy',
+            'Do 500 zadań/rok; kalendarz z filtrami wg dat i pracowników',
+            'Auto powiadomienia e-mail: do 1000 wiadomości/rok',
+            'Finanse: wpłaty i długi; mini-raporty (historia, zadłużenie, filtry)',
+            'Wsparcie techniczne standardowe do 48 godzin'
           ]
         },
         PRO: {
           badge: 'Maksimum',
           description: 'Maksymalne limity, analityka i rozszerzone integracje.',
           features: [
-            'Duże limity (do 3000 klientów)',
-            'Wsparcie priorytetowe',
-            'Zaawansowane raporty i analityka (roadmap)',
-            'Pola niestandardowe (roadmap)',
-            'Webhooks i integracje (roadmap)',
-            'Zaawansowany audyt działań'
+            'Nielimitowani klienci',
+            'Do 30 GB plików rocznie',
+            'Do 15 pracowników; rozszerzone/niestandardowe role i dostępy (każdy kolejny +49 PLN/mies)',
+            'Nielimitowane zadania/rok; kalendarz z filtrami wg dat i pracowników',
+            'Auto powiadomienia e-mail: do 15000 wiadomości/rok (z możliwością zwiększenia)',
+            'Finanse: pełny monitoring; rozszerzone raporty; eksport CSV; kategorie usług',
+            'Wsparcie: wysoki priorytet i szybka reakcja'
           ]
         }
       },
@@ -1320,6 +1336,7 @@ const messages = {
       resource: 'Zasób',
       current: 'Bieżące',
       limit: 'Limit',
+      limitUnlimited: 'Bez limitu',
       rows: {
         users: 'Użytkownicy',
         clients: 'Klienci',
@@ -1340,7 +1357,8 @@ const messages = {
       plan: {
         currentStarter: 'Plan Starter jest aktywny.',
         proActive: 'Plan Pro aktywny. Maksymalne limity.',
-        active: 'Aktywny'
+        active: 'Aktywny',
+        unavailable: 'Niedostępny'
       },
       toast: {
         upgradeSoon: 'Funkcja ulepszenia wkrótce będzie dostępna.',
