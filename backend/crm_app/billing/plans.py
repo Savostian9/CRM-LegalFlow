@@ -7,36 +7,36 @@ from __future__ import annotations
 from typing import Dict, Any
 
 TRIAL_LIMITS: Dict[str, Any] = {
-    'users': 3,
-    'clients': 100,
-    'cases': 50,
-    'files': 200,
-    'files_storage_mb': 2 * 1024,  # 2 GB
-    'tasks_per_month': 100,
-    'reminders_active': 30,
-    'emails_per_month': 50,
+    'users': 1,
+    'clients': 10,
+    'cases': 10,
+    'files': 500,
+    'files_storage_mb': 1 * 1024,  # 1 GB
+    'tasks_per_month': 20,
+    'reminders_active': 20,
+    'emails_per_month': 20,
 }
 
 STARTER_LIMITS: Dict[str, Any] = {
-    'users': 3,
-    'clients': 300,
-    'cases': 300,
-    'files': 2000,          # количество файлов
-    'files_storage_mb': 10 * 1024,  # 10 GB в мегабайтах
-    'tasks_per_month': 1000,
-    'reminders_active': 300,
-    'emails_per_month': 500,
+    'users': 5,
+    'clients': 350,
+    'cases': 350,
+    'files': 3000,          # количество файлов
+    'files_storage_mb': 3 * 1024,  # 3 GB в мегабайтах
+    'tasks_per_month': 500,
+    'reminders_active': 500,
+    'emails_per_month': 1000,
 }
 
 PRO_LIMITS: Dict[str, Any] = {
     'users': 15,
-    'clients': 3000,
-    'cases': 3000,
-    'files': 10000,
-    'files_storage_mb': 50 * 1024,  # 50 GB
-    'tasks_per_month': 10000,
-    'reminders_active': 2000,
-    'emails_per_month': 5000,
+    'clients': 1000000,
+    'cases': 1000000,
+    'files': 100000,
+    'files_storage_mb': 30 * 1024,  # 30 GB
+    'tasks_per_month': 1000000,
+    'reminders_active': 10000,
+    'emails_per_month': 15000,
 }
 
 PLAN_LIMITS: Dict[str, Dict[str, Any]] = {

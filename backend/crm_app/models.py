@@ -5,6 +5,39 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 
+PLAN_LIMITS = {
+    'TRIAL': {
+        'users': 1,
+        'clients': 10,
+        'cases': 10,
+        'files': 500,
+        'files_storage_mb': 1 * 1024,
+        'tasks_per_month': 20,
+        'reminders_active': 20,
+        'emails_per_month': 20,
+    },
+    'STARTER': {
+        'users': 5,
+        'clients': 350,
+        'cases': 350,
+        'files': 3000,
+        'files_storage_mb': 3 * 1024,
+        'tasks_per_month': 500,
+        'reminders_active': 500,
+        'emails_per_month': 1000,
+    },
+    'PRO': {
+        'users': 15,
+        'clients': 1000000,
+        'cases': 1000000,
+        'files': 100000,
+        'files_storage_mb': 30 * 1024,
+        'tasks_per_month': 1000000,
+        'reminders_active': 10000,
+        'emails_per_month': 15000,
+    },
+}
+
 # --- Модель Company ---
 class Company(models.Model):
     name = models.CharField(max_length=200)
@@ -140,7 +173,7 @@ class Document(models.Model):
         ('ZUS_RCA_DRA', 'ZUS RCA/DRA'),
         ('POLISA', 'Polisa ubezpieczeniowa'),
         ('ZASWIADCZENIE_US', 'Zaświadczenie z Urzędu Skarbowego'),
-        ('ZASWIADCZENIA_ZUS', 'Zaświadczenia ZUS pracodawcy'),
+        ('ZASWIADCZENIA_ZUS', 'Zaświadczenia ZUS работадателя'),
         ('PIT_37', 'PIT 37'),
         ('BADANIE_LEKARSKIE', 'Badanie lekarskie'),
         ('BADANIE_MEDYCZNE', 'Badanie medyczne'),
@@ -174,6 +207,15 @@ class UploadedFile(models.Model):
     file = models.FileField(upload_to='client_documents/%Y/%m/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     description = models.CharField(max_length=255, blank=True)
+    file_size = models.PositiveIntegerField(default=0, help_text='Размер файла в байтах')
+
+    def save(self, *args, **kwargs):
+        if self.file and not self.file_size:
+            try:
+                self.file_size = self.file.size
+            except Exception:
+                pass
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.file.name

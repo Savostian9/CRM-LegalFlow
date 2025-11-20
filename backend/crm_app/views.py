@@ -34,6 +34,7 @@ from .serializers import ClientListSerializer, ClientSerializer, LegalCaseSerial
     ProfileSerializer, ChangePasswordSerializer, CompanySerializer, UserAdminSerializer, InviteSerializer, NotificationSerializer, UploadedFileSerializer, UserPermissionSetSerializer
 from urllib.parse import urlparse
 from django.db.utils import OperationalError
+from .limits import check_limit  # Import check_limit
 
 def _check_user_permission(user, permission_flag: str) -> bool:
     """
@@ -1016,7 +1017,7 @@ class UserDetailAdminView(APIView):
             company = getattr(user, 'owned_company', None)
             if company:
                 company.owner = None
-                company.save(update_fields=['owner'])
+                company.save()
         except Exception:
             company = None
         user.delete()
@@ -1032,6 +1033,9 @@ class InviteCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Проверка лимита пользователей (включая активные приглашения)
+        check_limit(request.user, 'users')
+
         # Check permission
         if not _check_user_permission(request.user, 'can_invite_users'):
             return Response({'detail': 'У вас нет прав для создания приглашений'}, status=status.HTTP_403_FORBIDDEN)
@@ -1220,10 +1224,11 @@ class BillingUsageView(APIView):
         })
 
 class BillingUpgradeView(APIView):
-    """Endpoint апгрейда плана (временный, без оплаты).
+    """Endpoint переключения плана (временный, без оплаты).
     Поддерживаемые сценарии:
       - TRIAL -> STARTER | PRO
       - STARTER -> PRO
+      - PRO -> STARTER (даунгрейд)
     В запросе можно передать {"target_plan": "PRO"} или "STARTER"; по умолчанию STARTER.
     """
     permission_classes = [IsAuthenticated]
@@ -1239,12 +1244,13 @@ class BillingUpgradeView(APIView):
         current = company.plan.upper() if company.plan else 'TRIAL'
         if current == target:
             return Response({'detail': f'Уже на плане {target}'}, status=status.HTTP_200_OK)
-        allowed = False
-        if current == 'TRIAL' and target in ('STARTER', 'PRO'):
-            allowed = True
-        elif current == 'STARTER' and target == 'PRO':
-            allowed = True
-        if not allowed:
+        allowed_map = {
+            'TRIAL': {'STARTER', 'PRO'},
+            'STARTER': {'PRO'},
+            'PRO': {'STARTER'},
+        }
+        allowed_targets = allowed_map.get(current, set())
+        if target not in allowed_targets:
             return Response({'detail': f'Нельзя перейти с {current} на {target}'}, status=status.HTTP_400_BAD_REQUEST)
         company.plan = target
         company.save(update_fields=['plan'])
@@ -1316,6 +1322,9 @@ class ClientListView(APIView):
 
     # ДОБАВЛЯЕМ МЕТОД POST
     def post(self, request):
+        # Проверка лимита клиентов
+        check_limit(request.user, 'clients')
+
         # Check permission
         if not _check_user_permission(request.user, 'can_create_client'):
             return Response({'detail': 'У вас нет прав для создания клиентов'}, status=status.HTTP_403_FORBIDDEN)
@@ -1329,7 +1338,7 @@ class ClientListView(APIView):
         # Уберем служебные поля из запроса, чтобы сериализатор не ругался на неизвестные
         data = request.data.copy()
         raw_manager_id = data.pop('responsible_manager_id', None) or data.pop('created_by_id', None)
-        serializer = ClientSerializer(data=data)
+        serializer = ClientSerializer(data=data, context={'request': request})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1409,7 +1418,7 @@ class ClientDetailView(APIView):
             if client.created_by_id and client.created_by_id != request.user.id:
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
         try:
-            serializer = ClientSerializer(client, data=request.data)
+            serializer = ClientSerializer(client, data=request.data, context={'request': request})
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data)
@@ -1480,6 +1489,9 @@ class CaseCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, client_pk):
+        # Проверка лимита дел
+        check_limit(request.user, 'cases')
+
         # Check permission
         if not _check_user_permission(request.user, 'can_create_case'):
             return Response({'detail': 'У вас нет прав для создания дел'}, status=status.HTTP_403_FORBIDDEN)
@@ -1551,7 +1563,18 @@ class TaskListCreateView(APIView):
         if client_q:
             qs = qs.filter(client_id=client_q)
         if search:
-            qs = qs.filter(models.Q(title__icontains=search) | models.Q(description__icontains=search))
+            import re
+            # Use regex for case-insensitive search (supports Cyrillic in SQLite)
+            pattern = re.escape(search)
+            qs = qs.filter(
+                models.Q(title__iregex=pattern) | 
+                models.Q(description__iregex=pattern) |
+                models.Q(client__first_name__iregex=pattern) |
+                models.Q(client__last_name__iregex=pattern) |
+                models.Q(assignees__first_name__iregex=pattern) |
+                models.Q(assignees__last_name__iregex=pattern) |
+                models.Q(assignees__username__iregex=pattern)
+            ).distinct()
         if start and end:
             qs = qs.filter(end__gte=start, start__lte=end)
 
@@ -1577,6 +1600,9 @@ class TaskListCreateView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
+        # Проверка лимита задач (в месяц)
+        check_limit(request.user, 'tasks_per_month')
+
         # Check permission
         if not _check_user_permission(request.user, 'can_create_task'):
             return Response({'detail': 'У вас нет прав для создания задач'}, status=status.HTTP_403_FORBIDDEN)
@@ -1922,22 +1948,19 @@ class UpcomingTasksWidgetView(APIView):
             start__lt=end_dt
         )
         role = getattr(request.user, 'role', None)
-        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT'):
-            user_company_id = getattr(request.user, 'company_id', None)
-            if user_company_id:
-                qs = base_qs.filter(
-                    Q(client__created_by__company_id=user_company_id) |
-                    Q(client__user__company_id=user_company_id) |
-                    Q(client__isnull=True, created_by__company_id=user_company_id)
-                )
-            else:
-                qs = base_qs.none()
+        if role in ('ADMIN', 'LEAD', 'LAWYER', 'ASSISTANT') and request.user.company_id:
+            # Видимость: задачи по клиентам своей компании или личные задачи сотрудников компании
+            qs = base_qs.filter(
+                models.Q(client__created_by__company_id=request.user.company_id) |
+                models.Q(client__user__company_id=request.user.company_id) |
+                models.Q(client__isnull=True, created_by__company_id=request.user.company_id)
+            )
         else:
             # Менеджер: свои или назначенные ему
             qs = base_qs.filter(
-                Q(client__created_by=request.user) |
-                Q(client__isnull=True, created_by=request.user) |
-                Q(assignees=request.user)
+                models.Q(client__created_by=request.user) |
+                models.Q(client__isnull=True, created_by=request.user) |
+                models.Q(assignees=request.user)
             )
         limit = 100 if range_type in ('week', 'month') else 50
         try:
@@ -1986,9 +2009,9 @@ class FinanceSummaryView(APIView):
         now_local = timezone.localtime()
         start_month = now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         if start_month.month == 12:
-            end_month = start_month.replace(year=start_month.year + 1, month=1)
+            end_month = start_month.replace(year=start_month.year + 1, month=1, day=1)
         else:
-            end_month = start_month.replace(month=start_month.month + 1)
+            end_month = start_month.replace(month=start_month.month + 1, day=1)
 
         # Клиенты, у которых есть напоминания в этом месяце
         client_ids_with_rem = Reminder.objects.filter(
@@ -2327,6 +2350,10 @@ class DocumentFileUploadView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, document_id):
+        # Проверка лимитов файлов и хранилища
+        check_limit(request.user, 'files')
+        check_limit(request.user, 'files_storage_mb')
+
         # Check permission
         if not _check_user_permission(request.user, 'can_upload_files'):
             return Response({'detail': 'У вас нет прав для загрузки файлов.'}, status=status.HTTP_403_FORBIDDEN)

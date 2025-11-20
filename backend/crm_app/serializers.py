@@ -4,6 +4,7 @@ from rest_framework import serializers
 from django.db import models
 from django.contrib.auth import authenticate
 from .models import User, Client, LegalCase, Document, UploadedFile, Task, Reminder, Company, Invite, Notification, UserPermissionSet
+from .limits import check_limit
 
 # --- СЕРИАЛИЗАТОРЫ ДЛЯ ПОЛЬЗОВАТЕЛЕЙ ---
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -261,6 +262,11 @@ class ClientSerializer(serializers.ModelSerializer):
         client = Client.objects.create(user=user, **validated_data)
         # Создаем напоминания, если были переданы при создании
         if reminders_data:
+            # Проверяем лимит на отправку email (напоминаний)
+            request = self.context.get('request')
+            if request and request.user:
+                check_limit(request.user, 'emails_per_month')
+
             allowed_types = {choice[0] for choice in Reminder.REMINDER_TYPES}
             for rem in reminders_data:
                 r_type = rem.get('reminder_type')
@@ -350,7 +356,12 @@ class ClientSerializer(serializers.ModelSerializer):
                             Document.objects.create(legal_case=legal_case, **document_data)
 
         # Обрабатываем напоминания (2 типа)
-        if reminders_data is not None:
+        if reminders_data:
+            # Проверяем лимит на отправку email (напоминаний)
+            request = self.context.get('request')
+            if request and request.user:
+                check_limit(request.user, 'emails_per_month')
+
             # Разрешенные типы
             allowed_types = {choice[0] for choice in Reminder.REMINDER_TYPES}
             provided_types = set()
