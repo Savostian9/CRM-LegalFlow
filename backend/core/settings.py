@@ -322,7 +322,7 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
 # Stripe Configuration
 STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'pk_test_51SFaGZ1dR7VpHP6keZiI7B4jKexOQpl2NhrEK4Q8oOtSbIPGmcax3pEecmPq1ZYYSKdsLc4J7duu8KW4jMUOYX2j00GpVIniO3')
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_51SFaGZ1dR7VpHP6k3H3UZQM878j2rMEddzgQ5vS855oJzhq98kqxlNZvP7OS3eM6QkAmR3XEIhXbJnG1DT5E8UQQ00JLofoV1Q')
-STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', 'whsec_b03118e7cf81451289dccb9febfc817e5fbf87c74a7ce7ed49681a9c29f23450')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', 'whsec_LyCJCTPkPnLVVLo4syXIYMF5in3OZSZS')
 
 _frontend_urls_env = os.environ.get('FRONTEND_URLS', '')
 if _frontend_urls_env:
