@@ -104,6 +104,7 @@ class CreateCheckoutSessionView(APIView):
 
 @csrf_exempt
 def stripe_webhook(request):
+    logger.info("Webhook received")
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
     event = None
@@ -114,10 +115,14 @@ def stripe_webhook(request):
         )
     except ValueError as e:
         # Invalid payload
+        logger.error(f"Invalid payload: {e}")
         return HttpResponse(status=400)
     except stripe.error.SignatureVerificationError as e:
         # Invalid signature
+        logger.error(f"Invalid signature: {e}")
         return HttpResponse(status=400)
+
+    logger.info(f"Webhook event type: {event['type']}")
 
     # Handle the event
     if event['type'] == 'checkout.session.completed':

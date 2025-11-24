@@ -75,5 +75,5 @@ urlpatterns = [
     # Billing / usage
     path('billing/usage/', BillingUsageView.as_view(), name='billing-usage'),
     path('billing/upgrade/', CreateCheckoutSessionView.as_view(), name='billing-upgrade'),
-    path('webhook/stripe/', stripe_webhook, name='stripe-webhook'),
+    path('billing/webhook/', stripe_webhook, name='stripe-webhook'),
 ]
