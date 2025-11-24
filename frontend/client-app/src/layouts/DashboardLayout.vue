@@ -661,31 +661,35 @@ export default {
 }
 .modal {
   background: #fff;
-  padding: 24px 28px;
-  border-radius: 12px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.25);
-  max-width: 420px;
+  padding: 32px 40px;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  max-width: 480px;
   width: 92vw;
+  text-align: center;
 }
 .modal p {
-  margin: 0 0 16px 0;
-  font-size: 16px;
+  margin: 0 0 24px 0;
+  font-size: 20px;
   color: var(--dark-blue);
-  font-weight: 500;
+  font-weight: 600;
 }
 .modal .muted {
   color: #475569;
   font-weight: 400;
-  font-size: 14px;
-  margin-top: -8px;
+  font-size: 15px;
+  margin-top: -12px;
+  margin-bottom: 24px;
 }
-.modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+.modal-actions { display: flex; gap: 16px; justify-content: center; }
 .modal-btn {
-  padding: 10px 18px;
-  border-radius: 10px;
+  padding: 12px 24px;
+  border-radius: 12px;
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 600;
+  font-size: 16px;
+  min-width: 120px;
 }
 .modal-btn.primary { background: var(--primary-color); color: #fff; }
 .modal-btn.secondary { background: #f0f2f5; color: var(--dark-blue); }

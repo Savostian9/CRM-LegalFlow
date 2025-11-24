@@ -1,3 +1,4 @@
+from rest_framework.exceptions import ValidationError
 import random
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -91,12 +92,13 @@ def _create_notification(user, title, message='', client=None, reminder=None, so
     except Exception:
         pass
 
-def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | None = None) -> bool:
+def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | None = None, user=None, company=None) -> bool:
     """Send mail with robust exception handling and optional HTML.
     Returns True if SMTP reports success, False otherwise.
     Prints diagnostic info when DEBUG is enabled.
     """
     from django.conf import settings
+    success = False
     try:
         from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
         if html_body:
@@ -104,9 +106,10 @@ def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | Non
             msg = EmailMultiAlternatives(subject, body, from_email, to)
             msg.attach_alternative(html_body, 'text/html')
             msg.send(fail_silently=False)
-            return True
-        sent = send_mail(subject, body, from_email, to, fail_silently=False)
-        return bool(sent)
+            success = True
+        else:
+            sent = send_mail(subject, body, from_email, to, fail_silently=False)
+            success = bool(sent)
     except Exception as e:
         try:
             if getattr(settings, 'DEBUG', False):
@@ -120,35 +123,14 @@ def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | Non
             pass
         return False
 
-
-def _safe_send_mail(subject: str, body: str, to: list[str], html_body: str | None = None) -> bool:
-    """Send mail with robust exception handling and optional HTML.
-    Returns True if SMTP reports success, False otherwise.
-    Prints diagnostic info when DEBUG is enabled.
-    """
-    from django.conf import settings
-    try:
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
-        if html_body:
-            from django.core.mail import EmailMultiAlternatives
-            msg = EmailMultiAlternatives(subject, body, from_email, to)
-            msg.attach_alternative(html_body, 'text/html')
-            msg.send(fail_silently=False)
-            return True
-        sent = send_mail(subject, body, from_email, to, fail_silently=False)
-        return bool(sent)
-    except Exception as e:
+    if success and (user or company):
         try:
-            if getattr(settings, 'DEBUG', False):
-                print('[email][error]', subject, '->', to, 'exception:', repr(e))
+            from .models import SentEmail
+            for recipient in to:
+                SentEmail.objects.create(user=user, company=company, recipient=recipient, subject=subject)
         except Exception:
             pass
-        try:
-            # Last attempt silent
-            send_mail(subject, body, getattr(settings, 'DEFAULT_FROM_EMAIL', None), to, fail_silently=True)
-        except Exception:
-            pass
-        return False
+    return success
 
 
 def _get_frontend_base(request):
@@ -207,16 +189,13 @@ def send_welcome_verification_email(user: User, token: str):
         except Exception:
             html_body = None
 
-        from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'info@legalflow.pl')
-        msg = EmailMultiAlternatives(subject, text_body, from_email, [user.email])
-        if html_body:
-            msg.attach_alternative(html_body, 'text/html')
-        msg.send(fail_silently=False)
+        # Use _safe_send_mail with user tracking
+        _safe_send_mail(subject, text_body, [user.email], html_body=html_body, user=user)
     except Exception:
         # Fallback to a very simple mail in case templates or EmailMultiAlternatives fail
         try:
             subject = 'Подтверждение регистрации'
-            send_mail(subject, f'Код подтверждения: {token}', getattr(settings, 'DEFAULT_FROM_EMAIL', 'info@legalflow.pl'), [user.email], fail_silently=False)
+            _safe_send_mail(subject, f'Код подтверждения: {token}', [user.email], user=user)
         except Exception:
             pass
 
@@ -1069,6 +1048,15 @@ class InviteAcceptView(APIView):
             invite = Invite.objects.get(token=token, is_active=True)
         except Invite.DoesNotExist:
             return Response({'detail': 'Приглашение не найдено'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Проверяем лимит пользователей перед принятием приглашения
+        from .limits import check_limit
+        try:
+            # Проверяем лимит для компании пригласившего (или владельца приглашения)
+            check_limit(invite.created_by, 'users')
+        except ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+
         # Создаём пользователя и привязываем к компании
         if User.objects.filter(email__iexact=email).exists():
             return Response({'detail': 'Email уже используется'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1169,24 +1157,26 @@ class BillingUsageView(APIView):
         try:
             from .models import UploadedFile
             files_count = UploadedFile.objects.filter(document__in=files_qs).count()
-            # Суммарный вес хранить позже (сейчас не всегда FileField size доступен быстро)
+            # Суммарный вес
             total_storage_mb = 0
             try:
-                total_size = UploadedFile.objects.filter(document__in=files_qs).aggregate(s=Sum('file'))
+                total_bytes = UploadedFile.objects.filter(document__in=files_qs).aggregate(s=Sum('file_size'))['s'] or 0
+                total_storage_mb = round(total_bytes / (1024 * 1024), 2)
             except Exception:
                 total_storage_mb = 0
         except Exception:
             total_storage_mb = 0
 
-        # Tasks за текущий месяц
+        # Tasks за текущий год (по запросу пользователя лимиты годовые)
         now = timezone.now()
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         tasks_month = Task.objects.filter(
-            client__in=Client.objects.filter(
+            models.Q(client__in=Client.objects.filter(
                 models.Q(created_by__company_id=company.id) | models.Q(user__company_id=company.id)
-            ),
-            created_at__gte=month_start
-        ).count() if hasattr(Task, 'created_at') else 0
+            )) |
+            models.Q(created_by__company_id=company.id),
+            created_at__gte=year_start
+        ).distinct().count() if hasattr(Task, 'created_at') else 0
 
         # Active reminders (sent_at is null)
         reminders_active = Reminder.objects.filter(
@@ -1198,13 +1188,21 @@ class BillingUsageView(APIView):
 
         # Emails per month (пока нет лога — 0)
         emails_month = 0
+        try:
+            from .models import SentEmail
+            emails_month = SentEmail.objects.filter(
+                models.Q(company=company) | models.Q(user__company=company),
+                sent_at__gte=year_start
+            ).count()
+        except Exception:
+            pass
 
         raw_usage = {
             'users': users_count,
             'clients': clients_count,
             'cases': cases_count,
             'files': files_count,
-            'files_storage_mb': 0,  # пока не считаем вес
+            'files_storage_mb': total_storage_mb,
             'tasks_per_month': tasks_month,
             'reminders_active': reminders_active,
             'emails_per_month': emails_month,
@@ -1423,6 +1421,8 @@ class ClientDetailView(APIView):
                 serializer.save()
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1630,8 +1630,7 @@ class TaskListCreateView(APIView):
                     if users:
                         task.assignees.add(*list(users))
             except Exception:
-                pass
-            # Создаём уведомления для всех назначенных исполнителей (кроме автора)
+                pass            # Создаём уведомления для всех назначенных исполнителей (кроме автора)
             try:
                 # Подготовим имя постановщика задачи (создателя)
                 creator = request.user
@@ -2387,6 +2386,40 @@ class DocumentFileUploadView(APIView):
         if not files:
             return Response({'detail': 'Файл не передан'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # --- Проверка лимита с учетом размера загружаемых файлов ---
+        try:
+            incoming_size_mb = sum(f.size for f in files) / (1024 * 1024)
+            user = request.user
+            if user and user.company:
+                from .models import PLAN_LIMITS
+                company = user.company
+                plan = company.plan or 'TRIAL'
+                limits = PLAN_LIMITS.get(plan, PLAN_LIMITS['TRIAL'])
+                limit_mb = limits.get('files_storage_mb')
+                
+                if limit_mb is not None:
+                    # Считаем текущее использование
+                    total_bytes = UploadedFile.objects.filter(
+                        models.Q(document__legal_case__client__created_by__company=company) | 
+                        models.Q(document__legal_case__client__user__company=company)
+                    ).distinct().aggregate(Sum('file_size'))['file_size__sum'] or 0
+                    current_mb = total_bytes / (1024 * 1024)
+                    
+                    if current_mb + incoming_size_mb > limit_mb:
+                        from django.utils.translation import get_language
+                        lang = get_language()
+                        if lang and lang.lower().startswith('pl'):
+                            msg = f'Przekroczono limit pamięci. Limit: {limit_mb} MB, Obecnie: {int(current_mb)} MB, Przesyłanie: {int(incoming_size_mb)} MB. Zaktualizuj plan.'
+                        else:
+                            msg = f'Превышен лимит хранилища. Лимит: {limit_mb} МБ, Текущее: {int(current_mb)} МБ, Загрузка: {int(incoming_size_mb)} МБ. Обновите тариф.'
+
+                        return Response({
+                            'detail': msg
+                        }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            pass
+        # -----------------------------------------------------------
+
         description = request.data.get('description', '')
 
         created = []
@@ -2435,6 +2468,7 @@ class UploadedFileDeleteView(APIView):
             if not (user_company_id and (owner_company_id == user_company_id or client_user_company_id == user_company_id)):
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
         else:
+            # MANAGER: только для своих клиентов
             if getattr(doc.legal_case.client, 'created_by_id', None) != request.user.id:
                 return Response({'detail': 'Доступ запрещен.'}, status=status.HTTP_403_FORBIDDEN)
 

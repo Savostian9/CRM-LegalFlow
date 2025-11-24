@@ -10,7 +10,7 @@
       <form @submit.prevent="handleVerification" class="auth-form">
         <div class="form-group">
           <label for="token">{{ $t('auth.verify.codeLabel') }}</label>
-          <input type="text" id="token" v-model="token" required maxlength="6" pattern="\d{6}" placeholder="------"
+          <input type="text" id="token" v-model="token" required pattern="\d{6}" placeholder="------"
                  @invalid="onCodeInvalid" @input="onCodeInput" />
         </div>
         
@@ -126,10 +126,32 @@ export default {
     ,onCodeInput(e){
       try{
         const t = e?.target; if(!t) return;
+        
+        // Очищаем от пробелов и нецифровых символов
+        let val = t.value.replace(/\D/g, '');
+        // Обрезаем до 6 цифр
+        if (val.length > 6) val = val.slice(0, 6);
+        
+        if (t.value !== val) {
+            t.value = val;
+            this.token = val;
+        }
+
         const v = t.validity || {};
         if (v.valid) { t.setCustomValidity(''); return; }
-        if (v.valueMissing) t.setCustomValidity(this.$t('auth.verify.codeRequired'));
-        else if (v.patternMismatch) t.setCustomValidity(this.$t('auth.verify.codeInvalid'));
+        
+        // Не показываем ошибку паттерна во время ввода, пока не набрано 6 цифр
+        // Но если набрано 6 и все равно ошибка (странно), то покажем
+        if (v.valueMissing) {
+            t.setCustomValidity(this.$t('auth.verify.codeRequired'));
+        } else if (v.patternMismatch) {
+            // Если длина меньше 6, это нормально при вводе - не спамим ошибкой
+            if (val.length < 6) {
+                t.setCustomValidity('');
+            } else {
+                t.setCustomValidity(this.$t('auth.verify.codeInvalid'));
+            }
+        }
       }catch{/* noop */}
     }
   }

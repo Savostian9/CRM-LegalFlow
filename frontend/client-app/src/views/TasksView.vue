@@ -236,6 +236,12 @@
         />
       </div>
     </div>
+
+    <teleport to="body">
+      <transition name="toast-fade">
+        <div v-if="toast && toast.show" :class="['toast-notification', toast.type]">{{ toast.message }}</div>
+      </transition>
+    </teleport>
   </div>
   
 </template>
@@ -251,6 +257,8 @@ export default {
   components:{ ClientAutocomplete, UiSelect, ConfirmDialog },
   data(){
     return {
+      toast: { show: false, type: 'success', message: '' },
+      toastTimer: null,
       tasks: [],
       loading: false,
       clients: [],
@@ -311,6 +319,20 @@ export default {
     '$route.query.task': function(){ this.tryOpenFromRoute() }
   },
   methods: {
+    notify(msg, type = 'success', ms = 3000) {
+      // Clear previous timer to avoid stuck toasts
+      if (this.toastTimer) {
+        clearTimeout(this.toastTimer)
+        this.toastTimer = null
+      }
+      this.toast = { show: true, type, message: msg }
+      this.toastTimer = setTimeout(() => {
+        if (this.toast.show) {
+          this.toast.show = false
+        }
+        this.toastTimer = null
+      }, ms)
+    },
     humanizeLogin(value){
       try{
         if(!value) return ''
@@ -425,16 +447,17 @@ export default {
         })
         this.toggleForm()
         this.loadTasks()
+        this.notify(this.$t('tasks.createSuccess') || 'Задача создана', 'success')
       } catch(e){
         if(e && e.validation){
-          alert(e.message)
+          this.notify(e.message, 'error')
         } else if(e?.response?.data){
           console.error('Create task 400', e.response.data)
-          const msg = typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)
-          alert(msg)
+          const msg = e.response.data.detail || (typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data))
+          this.notify(msg, 'error')
         } else {
           console.error('Create task error', e)
-          alert(this.$t('tasks.createError'))
+          this.notify(this.$t('tasks.createError'), 'error')
         }
       } finally {
         this.submitting = false
@@ -621,16 +644,17 @@ export default {
         }
         this.showTaskModal = false
         await this.loadTasks()
+        this.notify(this.$t('tasks.updateSuccess') || 'Задача обновлена', 'success')
       } catch(e){
         const status = e?.response?.status
         const data = e?.response?.data
         if (status === 403) {
-          alert(this.tr('tasks.updateForbidden','Нет прав для редактирования этой задачи'))
+          this.notify(this.tr('tasks.updateForbidden','Нет прав для редактирования этой задачи'), 'error')
         } else if (status === 405) {
-          alert(this.tr('tasks.updateMethodNotAllowed','Метод не разрешён для этого URL'))
+          this.notify(this.tr('tasks.updateMethodNotAllowed','Метод не разрешён для этого URL'), 'error')
         } else if (data) {
-          const msg = typeof data === 'string' ? data : JSON.stringify(data)
-          alert(msg)
+          const msg = data.detail || (typeof data === 'string' ? data : JSON.stringify(data))
+          this.notify(msg, 'error')
         }
         console.error('Update task error', e)
       }
@@ -650,14 +674,15 @@ export default {
         this.showDeleteConfirm = false
         this.showTaskModal = false
         await this.loadTasks()
+        this.notify(this.$t('tasks.deleteSuccess') || 'Задача удалена', 'success')
       }catch(e){
         const status = e?.response?.status
         if(status === 403){
-          alert(this.tr('tasks.deleteForbidden','Нет прав для удаления этой задачи'))
+          this.notify(this.tr('tasks.deleteForbidden','Нет прав для удаления этой задачи'), 'error')
         } else {
           const data = e?.response?.data
-          const msg = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : this.tr('tasks.deleteError','Не удалось удалить задачу')
-          alert(msg)
+          const msg = data ? (data.detail || (typeof data === 'string' ? data : JSON.stringify(data))) : this.tr('tasks.deleteError','Не удалось удалить задачу')
+          this.notify(msg, 'error')
         }
         console.error('Delete task error', e)
       } finally {
@@ -996,5 +1021,34 @@ label { color:#334155; font-weight:600; }
 
 .search-input:focus + .search-icon {
   color: var(--primary-color);
+}
+
+/* Toast Notification (styled like buttons) */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  z-index: 2000;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(180deg,#4A90E2,#3b7fc9);
+  border:1px solid #3b7fc9;
+}
+.toast-notification.success { /* inherits base blue styles */ --_success: 1; }
+.toast-notification.error { background: linear-gradient(180deg,#dc2626,#b91c1c); border-color:#b91c1c; }
+
+.toast-fade-enter-active, .toast-fade-leave-active {
+  transition: opacity 0.5s, transform 0.5s;
+}
+.toast-fade-enter-from, .toast-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 </style>

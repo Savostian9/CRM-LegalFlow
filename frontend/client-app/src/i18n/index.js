@@ -258,6 +258,7 @@ const messages = {
     clients: {
       title: 'Клиенты',
       add: 'Добавить клиента',
+      addSuccess: 'Клиент успешно добавлен',
       searchPlaceholder: 'Поиск по имени, фамилии, email, телефону...',
       date: { all: 'Все', today: 'Сегодня', seven: '7 дней', month: 'Этот месяц', custom: 'Пользовательский' },
       manager: 'Менеджер',
@@ -298,6 +299,9 @@ const messages = {
       cancel: 'Отмена',
       newTask: 'Новая задача',
       create: 'Создать',
+      createSuccess: 'Задача создана',
+      updateSuccess: 'Задача обновлена',
+      deleteSuccess: 'Задача удалена',
       created: 'Задача создана',
       validationDate: 'Укажите дату задачи',
       optional: 'Необязательно: будет сейчас',
@@ -365,7 +369,7 @@ const messages = {
       additionalTitle: 'Дополнительно',
       fields: {
         users: 'Пользователи', clients: 'Клиенты', cases: 'Дела', files: 'Файлы', storage: 'Хранилище',
-        tasksPerMonth: 'Задачи / месяц', remindersActive: 'Активные напоминания', emailsPerMonth: 'Email / месяц'
+        tasksPerMonth: 'Задачи', remindersActive: 'Активные напоминания', emailsPerMonth: 'Email'
       },
       actions: { select: 'Выбрать', trialCta: 'Активируется при регистрации' },
       plans: {
@@ -661,9 +665,9 @@ const messages = {
         cases: 'Дела',
         files: 'Файлы',
         storageMb: 'Хранилище (MB)',
-        tasksMonth: 'Задачи / месяц',
+        tasksMonth: 'Задачи',
         remindersActive: 'Активные напоминания',
-        emailsMonth: 'Email / месяц'
+        emailsMonth: 'Email'
       },
       trial: {
         remaining: 'Осталось {days} {dayWord} Trial периода.',
@@ -940,6 +944,7 @@ const messages = {
     clients: {
       title: 'Klienci',
       add: 'Dodaj klienta',
+      addSuccess: 'Klient został pomyślnie dodany',
       searchPlaceholder: 'Szukaj po imieniu, nazwisku, e-mailu, telefonie...',
       date: { all: 'Wszystkie', today: 'Dziś', seven: '7 dni', month: 'Ten miesiąc', custom: 'Niestandardowy' },
       manager: 'Menedżer',
@@ -980,6 +985,9 @@ const messages = {
       cancel: 'Anuluj',
       newTask: 'Nowe zadanie',
       create: 'Utwórz',
+      createSuccess: 'Zadanie utworzone',
+      updateSuccess: 'Zadanie zaktualizowane',
+      deleteSuccess: 'Zadanie usunięte',
       created: 'Zadanie utworzone',
       validationDate: 'Podaj datę zadania',
       optional: 'Opcjonalnie: ustawiamy teraz',
@@ -1047,7 +1055,7 @@ const messages = {
       additionalTitle: 'Dodatkowo',
       fields: {
         users: 'Użytkownicy', clients: 'Klienci', cases: 'Sprawy', files: 'Pliki', storage: 'Magazyn',
-        tasksPerMonth: 'Zadania / miesiąc', remindersActive: 'Aktywne przypomnienia', emailsPerMonth: 'Email / miesiąc'
+        tasksPerMonth: 'Zadania', remindersActive: 'Aktywne przypomnienia', emailsPerMonth: 'Email'
       },
       actions: { select: 'Wybierz', trialCta: 'Aktywuje się przy rejestracji' },
       plans: {
@@ -1343,9 +1351,9 @@ const messages = {
         cases: 'Sprawy',
         files: 'Pliki',
         storageMb: 'Magazyn (MB)',
-        tasksMonth: 'Zadania / miesiąc',
+        tasksMonth: 'Zadania',
         remindersActive: 'Aktywne przypomnienia',
-        emailsMonth: 'Email / miesiąc'
+        emailsMonth: 'Email'
       },
       trial: {
         remaining: 'Pozostało {days} {dayWord} okresu Trial.',

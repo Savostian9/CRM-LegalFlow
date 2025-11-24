@@ -18,13 +18,13 @@ PLAN_LIMITS = {
     },
     'STARTER': {
         'users': 5,
-        'clients': 350,
-        'cases': 350,
-        'files': 3000,
-        'files_storage_mb': 3 * 1024,
-        'tasks_per_month': 500,
-        'reminders_active': 500,
-        'emails_per_month': 1000,
+        'clients': 5,
+        'cases': 5,
+        'files': 5,
+        'files_storage_mb': 5,
+        'tasks_per_month': 5,
+        'reminders_active': 5,
+        'emails_per_month': 5,
     },
     'PRO': {
         'users': 15,
@@ -51,6 +51,11 @@ class Company(models.Model):
     plan = models.CharField(max_length=30, default='TRIAL', help_text='Код активного тарифного плана')
     trial_started_at = models.DateTimeField(null=True, blank=True)
     trial_ends_at = models.DateTimeField(null=True, blank=True)
+
+    # Stripe fields
+    stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True)
+    subscription_status = models.CharField(max_length=50, default='active')  # active, past_due, canceled, etc.
 
     def __str__(self):
         return self.name
@@ -382,3 +387,19 @@ class UserPermissionSet(models.Model):
     def __str__(self):
         ident = getattr(self.user, 'email', None) or getattr(self.user, 'username', None) or self.user_id
         return f"Perms for {ident}"
+
+# --- Модель для лога отправленных email (для подсчета лимитов) ---
+class SentEmail(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='sent_emails', null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_emails_log')
+    recipient = models.EmailField()
+    subject = models.CharField(max_length=255, blank=True)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['company', 'sent_at']),
+        ]
+
+    def __str__(self):
+        return f"Email to {self.recipient} at {self.sent_at}"

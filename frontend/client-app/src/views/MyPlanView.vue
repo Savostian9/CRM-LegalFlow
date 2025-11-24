@@ -23,6 +23,8 @@
           :current-plan="planCode"
           :loading-plan="upgradeLoading ? upgradeTarget : null"
           :allowed-targets="availableUpgradeTargets"
+          :billing-cycle="billingCycle"
+          @update:billingCycle="billingCycle = $event"
           @select="handlePlanSelect"
         />
       </section>
@@ -64,7 +66,7 @@ export default {
   name: 'MyPlanView',
   components: { PricingPlans },
   data(){
-    return { upgradeLoading:false, upgradeTarget:null };
+    return { upgradeLoading:false, upgradeTarget:null, billingCycle: 'month' };
   },
   computed:{
     loading(){ return billingUsageState.loading && !billingUsageState.loaded; },
@@ -101,12 +103,12 @@ export default {
         { key: 'users', planKey: 'users', label: t('users') },
         { key: 'clients', planKey: 'clients', label: t('clients') },
         { key: 'storage_mb', planKey: 'files_storage_mb', label: t('storageMb'), formatter: 'storage' },
-        { key: 'tasks_month', planKey: 'tasks_per_month', label: t('tasksMonth') },
-        { key: 'emails_month', planKey: 'emails_per_month', label: t('emailsMonth') },
+        { key: 'tasks_month', planKey: 'tasks_per_month', label: t('tasksMonth').replace('месяц', 'год').replace('month', 'year') },
+        { key: 'emails_month', planKey: 'emails_per_month', label: t('emailsMonth').replace('месяц', 'год').replace('month', 'year') },
       ];
       return map.map((item)=>{
-        const currentRaw = u.current?.[item.key] ?? 0;
-        const limitRaw = (planLimits[item.planKey] ?? u.limits?.[item.key] ?? null);
+        const currentRaw = u.usage?.[item.planKey]?.current ?? 0;
+        const limitRaw = (planLimits[item.planKey] ?? u.limits?.[item.planKey] ?? null);
         const { currentDisplay, limitDisplay, progress } = this.formatLimitRow(item.formatter, currentRaw, limitRaw);
         return {
           key: item.key,
@@ -184,11 +186,28 @@ export default {
       this.upgradeLoading = true;
       try {
         const token = localStorage.getItem('user-token');
-        await axios.post('/api/billing/upgrade/', { target_plan: target }, { headers:{ Authorization:`Token ${token}` }});
+        const res = await axios.post(
+          '/api/billing/upgrade/',
+          {
+            target_plan: target,
+            billing_cycle: this.billingCycle
+          },
+          { headers:{ Authorization:`Token ${token}` }}
+        );
+
+        if (res.data && res.data.url) {
+          // Redirect to Stripe Checkout
+          window.location.href = res.data.url;
+          return;
+        }
+
+        // Safety fallback: просто обновляем usage и показываем тост
         await loadBillingUsage(true);
         this.$toast && this.$toast.success(this.$t('billing.toast.upgraded', { plan: target }));
       } catch(e){
-        this.$toast && this.$toast.error(this.$t('billing.toast.upgradeFailed'));
+        console.error(e);
+        const msg = e.response?.data?.error || e.response?.data?.detail || this.$t('billing.toast.upgradeFailed');
+        this.$toast && this.$toast.error(msg);
       } finally {
         this.upgradeLoading = false;
         this.upgradeTarget = null;
@@ -197,6 +216,18 @@ export default {
   },
   async created(){
     await loadBillingUsage();
+    // Check for success/canceled query params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('success')) {
+      this.$toast && this.$toast.success(this.$t('billing.toast.paymentSuccess'));
+      // Clear query params
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Reload usage to reflect new plan
+      await loadBillingUsage(true);
+    } else if (urlParams.get('canceled')) {
+      this.$toast && this.$toast.info(this.$t('billing.toast.paymentCanceled'));
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }
 }
 </script>

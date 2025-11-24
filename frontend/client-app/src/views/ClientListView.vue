@@ -1,5 +1,6 @@
 <template>
-  <div class="list-view-wrapper">
+  <div>
+    <div class="list-view-wrapper">
     <header class="content-header">
       <h1>{{ $t('clients.title') }}</h1>
       <!-- Кнопка не видна ассистенту; клиентам показываем только если у них ещё нет профиля -->
@@ -151,6 +152,11 @@
     </div>
 
     <!-- Закрытие списка обрабатывается глобальным обработчиком клика -->
+    <teleport to="body">
+      <transition name="toast-fade">
+        <div v-if="toast && toast.show" :class="['toast-notification', toast.type]">{{ toast.message }}</div>
+      </transition>
+    </teleport>
   </div>
 
   <AddClientModal 
@@ -160,6 +166,7 @@
     @close="showAddClientModal = false" 
     @save="addNewClient"
   />
+  </div>
 </template>
 
 <script>
@@ -175,9 +182,11 @@ export default {
   },
   data() {
     return {
-    clients: [],
-    loading: true,
-    currentUser: { is_client: false, is_manager: false, email: '', role: 'MANAGER' },
+      toast: { show: false, type: 'success', message: '' },
+      toastTimer: null,
+      clients: [],
+      loading: true,
+      currentUser: { is_client: false, is_manager: false, email: '', role: 'MANAGER' },
       showAddClientModal: false,
       searchQuery: '',
       createdFrom: '',
@@ -483,17 +492,30 @@ export default {
       const r = (this.currentUser.role || '').toUpperCase();
       return r === 'ADMIN' || r === 'LEAD';
     },
+    notify(msg, type = 'success', ms = 3000) {
+      if (this.toastTimer) {
+        clearTimeout(this.toastTimer);
+        this.toastTimer = null;
+      }
+      this.toast = { show: true, type, message: msg };
+      this.toastTimer = setTimeout(() => {
+        if (this.toast.show) {
+          this.toast.show = false;
+        }
+        this.toastTimer = null;
+      }, ms);
+    },
     async addNewClient(clientData) {
       const token = localStorage.getItem('user-token');
       try {
         // Ограничения на стороне фронта: клиенты могут создать профиль только для себя и только один раз
         if (!this.currentUser.is_manager) {
           if (!this.currentUser.is_client) {
-            alert('У вас нет прав для добавления клиента.');
+            this.notify('У вас нет прав для добавления клиента.', 'error');
             return;
           }
           if (this.clients.length > 0) {
-            alert('Ваш профиль клиента уже существует.');
+            this.notify('Ваш профиль клиента уже существует.', 'error');
             return;
           }
           // Принудительно выставляем email как у аккаунта
@@ -506,15 +528,19 @@ export default {
         // Перезагрузим список, чтобы получить корректные вычисляемые поля для таблицы
         await this.reloadClients();
         this.showAddClientModal = false;
+        this.notify(this.$t('clients.addSuccess') || 'Клиент успешно добавлен', 'success');
       } catch (error) {
         const msg = error.response?.data?.detail || error.response?.data || error.message || error;
         console.error("Ошибка при добавлении клиента:", error.response?.data || error);
-        if (error.response?.status === 403) {
-          alert("Недостаточно прав для добавления клиента.");
+        
+        if (typeof msg === 'string') {
+          this.notify(msg, 'error');
+        } else if (error.response?.status === 403) {
+          this.notify("Недостаточно прав для добавления клиента.", 'error');
         } else if (error.response?.status === 400) {
-          alert(typeof msg === 'string' ? msg : 'Проверьте введенные данные.');
+          this.notify('Проверьте введенные данные.', 'error');
         } else {
-          alert("Не удалось добавить клиента. Повторите попытку позже.");
+          this.notify("Не удалось добавить клиента. Повторите попытку позже.", 'error');
         }
       }
     },
@@ -973,5 +999,34 @@ export default {
     right: 16px !important;
     min-width: auto !important;
   }
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  z-index: 2000;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(180deg,#4A90E2,#3b7fc9);
+  border:1px solid #3b7fc9;
+}
+.toast-notification.success { /* inherits base blue styles */ --_success: 1; }
+.toast-notification.error { background: linear-gradient(180deg,#dc2626,#b91c1c); border-color:#b91c1c; }
+
+.toast-fade-enter-active, .toast-fade-leave-active {
+  transition: opacity 0.5s, transform 0.5s;
+}
+.toast-fade-enter-from, .toast-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 </style>

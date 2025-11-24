@@ -231,9 +231,11 @@
       </div>
     </div>
 
-    <transition name="toast-fade">
-      <div v-if="toast.show" :class="['toast-notification', toast.type]">{{ toast.message }}</div>
-    </transition>
+    <teleport to="body">
+      <transition name="toast-fade">
+        <div v-if="toast.show" :class="['toast-notification', toast.type]">{{ toast.message }}</div>
+      </transition>
+    </teleport>
     <!-- Модалка прав пользователя -->
     <div v-if="showPermModal" class="confirm-dialog-overlay">
       <div class="confirm-dialog" style="max-width:640px;">
@@ -551,10 +553,11 @@ export default {
       }
       const token = localStorage.getItem('user-token');
       try {
-  const res = await axios.post('/api/company/invites/', { role: this.inviteRole }, { headers: { Authorization: `Token ${token}` } });
+        const res = await axios.post('/api/company/invites/', { role: this.inviteRole }, { headers: { Authorization: `Token ${token}` } });
         this.invites.unshift(res.data);
       } catch (e) {
-        this.notify(this.$t('settings.toasts.inviteCreateError'), 'error');
+        const msg = e.response?.data?.detail || this.$t('settings.toasts.inviteCreateError');
+        this.notify(msg, 'error');
       }
     },
     async copyInvite(token){

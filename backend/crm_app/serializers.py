@@ -171,9 +171,29 @@ class EmailAuthTokenSerializer(serializers.Serializer):
 # --- СЕРИАЛИЗАТОРЫ ДЛЯ КЛИЕНТОВ И ДЕЛ ---
 
 class UploadedFileSerializer(serializers.ModelSerializer):
+    file = serializers.SerializerMethodField()
+
     class Meta:
         model = UploadedFile
         fields = ['id', 'file', 'description', 'uploaded_at']
+
+    def get_file(self, obj):
+        if not obj.file:
+            return None
+        try:
+            # Determine disposition based on extension
+            name = obj.file.name.lower()
+            disposition = 'attachment'
+            if name.endswith(('.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp')):
+                disposition = 'inline'
+            
+            # Force content disposition for signed URLs (S3)
+            return obj.file.storage.url(obj.file.name, parameters={'ResponseContentDisposition': disposition})
+        except TypeError:
+            # Fallback for storage backends that don't support parameters (e.g. FileSystemStorage)
+            return obj.file.url
+        except Exception:
+            return obj.file.url
 
 class DocumentSerializer(serializers.ModelSerializer):
     files = UploadedFileSerializer(many=True, read_only=True)
@@ -262,7 +282,7 @@ class ClientSerializer(serializers.ModelSerializer):
         client = Client.objects.create(user=user, **validated_data)
         # Создаем напоминания, если были переданы при создании
         if reminders_data:
-            # Проверяем лимит на отправку email (напоминаний)
+            # Проверяем лимит на количество отправленных email (если добавляем новые напоминания)
             request = self.context.get('request')
             if request and request.user:
                 check_limit(request.user, 'emails_per_month')
@@ -327,10 +347,13 @@ class ClientSerializer(serializers.ModelSerializer):
                         continue
                 else:
                     # Создаем новое дело
+                    request = self.context.get('request')
+                    if request and request.user:
+                        check_limit(request.user, 'cases')
                     legal_case = LegalCase.objects.create(client=instance, **case_data)
                 
                 # Обрабатываем документы для этого дела
-                if documents_data:
+                if documents_data is not None:
                     sent_doc_ids = {doc_data.get('id') for doc_data in documents_data if doc_data.get('id')}
                     
                     # Удаляем документы, которых нет в переданных данных
@@ -357,11 +380,7 @@ class ClientSerializer(serializers.ModelSerializer):
 
         # Обрабатываем напоминания (2 типа)
         if reminders_data:
-            # Проверяем лимит на отправку email (напоминаний)
             request = self.context.get('request')
-            if request and request.user:
-                check_limit(request.user, 'emails_per_month')
-
             # Разрешенные типы
             allowed_types = {choice[0] for choice in Reminder.REMINDER_TYPES}
             provided_types = set()
@@ -369,6 +388,12 @@ class ClientSerializer(serializers.ModelSerializer):
                 r_type = rem.get('reminder_type')
                 if r_type not in allowed_types:
                     continue
+                
+                # Если такого напоминания нет — значит создаем новое. Проверяем лимит.
+                if not Reminder.objects.filter(client=instance, reminder_type=r_type).exists():
+                    if request and request.user:
+                        check_limit(request.user, 'emails_per_month')
+
                 provided_types.add(r_type)
                 reminder_date = rem.get('reminder_date')
                 reminder_time = rem.get('reminder_time')

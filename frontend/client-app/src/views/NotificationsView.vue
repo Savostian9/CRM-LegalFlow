@@ -17,7 +17,10 @@
         <div class="item-header">
           <div class="left-head">
             <input v-if="selectMode" type="checkbox" :checked="selectedIds.includes(n.id)" @change="toggleOne(n.id,$event)" @click.stop />
-            <strong class="title">{{ n.title }}</strong>
+            <strong class="title">
+              <span v-if="isError(n)" class="error-mark">!</span>
+              {{ n.title }}
+            </strong>
           </div>
           <small class="time">{{ formatDate(n.created_at) }}</small>
         </div>
@@ -204,6 +207,9 @@ export default {
     sourceLabel(s) {
       const map = { REMINDER: this.$t('notifications.sourceReminder'), SYSTEM: this.$t('notifications.sourceSystem') }
       return map[s] || s
+    },
+    isError(n) {
+      return n.source === 'SYSTEM' && (n.title || '').startsWith('Напоминание:')
     }
   },
   mounted() { this.reload() }
@@ -262,4 +268,19 @@ export default {
 @keyframes pop { from { transform:scale(.92); opacity:0; } to { transform:scale(1); opacity:1; } }
 .item.has-client:not(.selected):not(.unread):hover { background:#f8fafc; }
 .item.has-client { cursor:pointer; }
+.error-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #fee2e2;
+  color: #ef4444;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: bold;
+  margin-right: 8px;
+  border: 1px solid #fecaca;
+  vertical-align: middle;
+}
 </style>

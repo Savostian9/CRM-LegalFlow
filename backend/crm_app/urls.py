@@ -29,7 +29,8 @@ from .views import (
     UserPermissionsBulkAdminView    
 )
 from .views import AdminStatsView
-from .views import NotificationListCreateView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView, NotificationDeleteView, NotificationBulkDeleteView, BillingUsageView, BillingUpgradeView, DocumentFileUploadView, UploadedFileDeleteView
+from .views import NotificationListCreateView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView, NotificationDeleteView, NotificationBulkDeleteView, BillingUsageView, DocumentFileUploadView, UploadedFileDeleteView
+from crm_app.billing.views import CreateCheckoutSessionView, stripe_webhook
 
 urlpatterns = [
     path('register/', RegisterRequestView.as_view(), name='register'),
@@ -73,5 +74,6 @@ urlpatterns = [
     path('notifications/bulk-delete/', NotificationBulkDeleteView.as_view(), name='notification-bulk-delete'),
     # Billing / usage
     path('billing/usage/', BillingUsageView.as_view(), name='billing-usage'),
-    path('billing/upgrade/', BillingUpgradeView.as_view(), name='billing-upgrade'),
+    path('billing/upgrade/', CreateCheckoutSessionView.as_view(), name='billing-upgrade'),
+    path('webhook/stripe/', stripe_webhook, name='stripe-webhook'),
 ]

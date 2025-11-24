@@ -1,0 +1,35 @@
+[2025-11-23 19:54:29,474] INFO crm_app.scheduler — Reminder scheduler started with interval=60s
+[2025-11-23 19:54:29,528] INFO django.utils.autoreload — Watching for file changes with StatReloader
+[2025-11-23 19:54:29,528] INFO django.utils.autoreload — Watching for file changes with StatReloader
+[2025-11-23 19:54:31,509] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:54:31,509] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:55:01,200] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:55:01,200] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:55:18,507] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:55:18,507] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:55:43,679] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:55:43,679] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:55:49,154] INFO django.server — "GET /api/tasks/?start=2025-10-26T23%3A00%3A00.000Z&end=2025-11-30T22%3A59%3A59.999Z HTTP/1.1" 200 14457
+[2025-11-23 19:55:49,154] INFO django.server — "GET /api/tasks/?start=2025-10-26T23%3A00%3A00.000Z&end=2025-11-30T22%3A59%3A59.999Z HTTP/1.1" 200 14457
+[2025-11-23 19:55:49,176] INFO django.server — "GET /api/company/users/ HTTP/1.1" 200 561
+[2025-11-23 19:55:49,176] INFO django.server — "GET /api/company/users/ HTTP/1.1" 200 561
+[2025-11-23 19:55:50,334] INFO django.server — "GET /api/user-info/ HTTP/1.1" 200 209
+[2025-11-23 19:55:50,334] INFO django.server — "GET /api/user-info/ HTTP/1.1" 200 209
+[2025-11-23 19:55:50,388] INFO django.server — "GET /api/clients/?sort=-created_at HTTP/1.1" 200 1618
+[2025-11-23 19:55:50,388] INFO django.server — "GET /api/clients/?sort=-created_at HTTP/1.1" 200 1618
+[2025-11-23 19:55:50,418] INFO django.server — "GET /api/company/users/ HTTP/1.1" 200 561
+[2025-11-23 19:55:50,418] INFO django.server — "GET /api/company/users/ HTTP/1.1" 200 561
+[2025-11-23 19:55:50,447] INFO django.server — "GET /api/tasks/ HTTP/1.1" 200 14457
+[2025-11-23 19:55:50,447] INFO django.server — "GET /api/tasks/ HTTP/1.1" 200 14457
+[2025-11-23 19:56:01,204] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:56:01,204] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:56:18,528] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:56:18,528] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:56:31,194] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:56:31,194] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:57:18,548] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:57:18,548] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:57:18,561] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:57:18,561] INFO django.server — "GET /api/notifications/unread-count/ HTTP/1.1" 200 12
+[2025-11-23 19:58:15,124] INFO django.utils.autoreload — C:\Users\dima0\CRM2\backend\crm_app\views.py changed, reloading.
+[2025-11-23 19:58:15,124] INFO django.utils.autoreload — C:\Users\dima0\CRM2\backend\crm_app\views.py changed, reloading.

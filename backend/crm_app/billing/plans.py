@@ -19,13 +19,13 @@ TRIAL_LIMITS: Dict[str, Any] = {
 
 STARTER_LIMITS: Dict[str, Any] = {
     'users': 5,
-    'clients': 350,
-    'cases': 350,
-    'files': 3000,          # количество файлов
-    'files_storage_mb': 3 * 1024,  # 3 GB в мегабайтах
-    'tasks_per_month': 500,
-    'reminders_active': 500,
-    'emails_per_month': 1000,
+    'clients': 5,
+    'cases': 5,
+    'files': 5,          # количество файлов
+    'files_storage_mb': 5,  # 5 MB
+    'tasks_per_month': 5,
+    'reminders_active': 5,
+    'emails_per_month': 5,
 }
 
 PRO_LIMITS: Dict[str, Any] = {

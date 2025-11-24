@@ -217,7 +217,7 @@
                       <div class="progress-bar" :aria-label="$t('common.loading')">
                         <div class="progress-inner" :style="{ width: uploadProgress + '%' }"></div>
                       </div>
-                      <span class="progress-text">{{ uploadProgress }}%</span>
+                      <span class="progress-text">{{ uploadProgress === 100 ? $t('common.processing') : uploadProgress + '%' }}</span>
                       <button type="button" class="btn small cancel-upload-btn" @click="cancelUpload" :aria-label="$t('common.cancel')">
                         {{ $t('common.cancel') === 'common.cancel' ? 'Cancel' : $t('common.cancel') }}
                       </button>
@@ -282,17 +282,20 @@
     </div>
 
     <!-- Notification Toast -->
-    <transition name="toast-fade">
-      <div v-if="showNotification" :class="['toast-notification', notificationType]">
-        {{ notificationMessage }}
-      </div>
-    </transition>
+    <teleport to="body">
+      <transition name="toast-fade">
+        <div v-if="showNotification" :class="['toast-notification', notificationType]">
+          {{ notificationMessage }}
+        </div>
+      </transition>
+    </teleport>
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import { cloneDeep } from 'lodash';
+import i18n from '@/i18n';
 
 export default {
   name: 'ClientDetailView',
@@ -303,8 +306,8 @@ export default {
       client: null,
       editableClient: null,
   remindersAtMap: { UMOWA_PRACA_ZLECENIA: null, UMOWA_NAJMU: null, ZUS_ZUA_ZZA: null, ZUS_RCA_DRA: null },
-  reminderErrors: { UMOWA_PRACA_ZLECENIA: '', UMOWA_NAJMU: '', ZUS_ZUA_ZZA: '', ZUS_RCA_DRA: '' },
-  reminderInvalidJustNow: { UMOWA_PRACA_ZLECENIA: false, UMOWA_NAJMU: false, ZUS_ZUA_ZZA: false, ZUS_RCA_DRA: false },
+  reminderErrors: { UMOWA_PRACA_ZLECENIA: '', UMOWA_NAJMU: '', ZUS_ZUA_ZLECENIA: '', ZUS_RCA_DRA: '' },
+  reminderInvalidJustNow: { UMOWA_PRACA_ZLECENIA: false, UMOWA_NAJMU: false, ZUS_ZUA_ZLECENIA: false, ZUS_RCA_DRA: false },
   statusMap: { '-' : '-', 'PREPARATION': this.$t('clientDetail.caseStatus.PREPARATION'), 'SUBMITTED': this.$t('clientDetail.caseStatus.SUBMITTED'), 'IN_PROGRESS': this.$t('clientDetail.caseStatus.IN_PROGRESS'), 'DECISION_POSITIVE': this.$t('clientDetail.caseStatus.DECISION_POSITIVE'), 'DECISION_NEGATIVE': this.$t('clientDetail.caseStatus.DECISION_NEGATIVE'), 'CLOSED': this.$t('clientDetail.caseStatus.CLOSED') },
   caseTypeMap: { '-' : '-', 'CZASOWY_POBYT': this.$t('clientDetail.caseTypes.CZASOWY_POBYT'), 'STALY_POBYT': this.$t('clientDetail.caseTypes.STALY_POBYT'), 'REZydent_UE': this.$t('clientDetail.caseTypes.REZydent_UE'), 'OBYWATELSTWO': this.$t('clientDetail.caseTypes.OBYWATELSTWO') },
   docTypeMap: { 'ZALACZNIK_1': this.$t('clientDetail.docTypes.ZALACZNIK_1'), 'UMOWA_PRACA': this.$t('clientDetail.docTypes.UMOWA_PRACA'), 'UMOWA_NAJMU': this.$t('clientDetail.docTypes.UMOWA_NAJMU'), 'ZUS_ZUA_ZZA': this.$t('clientDetail.docTypes.ZUS_ZUA_ZZA'), 'ZUS_RCA_DRA': this.$t('clientDetail.docTypes.ZUS_RCA_DRA'), 'POLISA': this.$t('clientDetail.docTypes.POLISA'), 'ZASWIADCZENIE_US': this.$t('clientDetail.docTypes.ZASWIADCZENIE_US'), 'ZASWIADCZENIA_ZUS': this.$t('clientDetail.docTypes.ZASWIADCZENIA_ZUS'), 'PIT_37': this.$t('clientDetail.docTypes.PIT_37'), 'BADANIE_LEKARSKIE': this.$t('clientDetail.docTypes.BADANIE_LEKARSKIE'), 'BADANIE_MEDYCZNE': this.$t('clientDetail.docTypes.BADANIE_MEDYCZNE'), 'SWIADECTWO_KIEROWCY': this.$t('clientDetail.docTypes.SWIADECTWO_KIEROWCY'), 'PRAWO_JAZDY': this.$t('clientDetail.docTypes.PRAWO_JAZDY') },
@@ -438,7 +441,7 @@ export default {
   this.hydrateRemindersMap();
       } catch (error) {
         console.error("Ошибка при загрузке данных клиента:", error);
-        this.showToast(this.$t('clientDetail.toasts.loadError'), 'error');
+        this.showToast(i18n.global.t('clientDetail.toasts.loadError'), 'error');
       } finally {
         this.loading = false;
       }
@@ -463,15 +466,20 @@ export default {
 
             const allDocTypes = Object.keys(this.docTypeMap);
             const existingDocsMap = new Map();
+            const otherDocs = [];
             
             legalCase.documents.forEach(doc => {
-              const key = doc.document_type === 'INNE' ? `INNE:${(doc.name || '').trim()}` : doc.document_type;
-              existingDocsMap.set(key, doc);
                 if (!doc.files) doc.files = [];
+                if (doc.document_type === 'INNE') {
+                    otherDocs.push(doc);
+                } else {
+                    existingDocsMap.set(doc.document_type, doc);
+                }
             });
 
             const finalDocs = [];
             allDocTypes.forEach(docType => {
+              if (docType === 'INNE') return; // Skip INNE here, handled separately
               if (existingDocsMap.has(docType)) {
                 finalDocs.push(existingDocsMap.get(docType));
                 } else {
@@ -483,13 +491,16 @@ export default {
                 }
             });
 
+            // Append all INNE docs
+            finalDocs.push(...otherDocs);
+
+            // Handle any other unknown types
             legalCase.documents.forEach(doc => {
-                if (!allDocTypes.includes(doc.document_type)) {
+                if (doc.document_type !== 'INNE' && !allDocTypes.includes(doc.document_type)) {
                   if (doc.id) {
                     const existsById = finalDocs.some(d => d.id && d.id === doc.id);
                     if (!existsById) finalDocs.push(doc);
                   } else {
-                    // For unsaved custom docs allow duplicates
                     finalDocs.push(doc);
                   }
                 }
@@ -648,9 +659,9 @@ export default {
     removeCase(caseIndex) {
       if(!this.canDeleteCase){
         const k='clientDetail.toasts.deleteForbidden';
-        const tr=this.$t(k); this.showToast(tr===k?'Нет прав на удаление дела':tr,'error',1400); return;
+        const tr=i18n.global.t(k); this.showToast(tr===k?'Нет прав на удаление дела':tr,'error',1400); return;
       }
-      this.confirmDialogMessage = this.$t('clientDetail.confirm.deleteCase');
+      this.confirmDialogMessage = i18n.global.t('clientDetail.confirm.deleteCase');
       this.confirmCallback = () => {
         this.editableClient.legal_cases.splice(caseIndex, 1);
         this.saveAllChanges();
@@ -672,35 +683,49 @@ export default {
       if (!file) return;
       if(!this.canUploadFiles){
         const k='clientDetail.toasts.deleteFileForbidden';
-        const tr=this.$t(k); this.showToast(tr===k?'Нет прав на удаление файлов':tr,'error',1400); return;
+        const tr=i18n.global.t(k); this.showToast(tr===k?'Нет прав на удаление файлов':tr,'error',1400); return;
       }
-      // Серверный файл
+
+      const doc = this.editableClient?.legal_cases?.[caseIndex]?.documents?.[docIndex];
+      if (!doc || !Array.isArray(doc.files)) return;
+
+      // Optimistic update: remove immediately
+      const originalFiles = [...doc.files];
+      const originalStatus = doc.status;
+      
+      let removeIdx = -1;
+      if (file.id) {
+          removeIdx = doc.files.findIndex(f => f.id === file.id);
+      } else {
+          removeIdx = doc.files.indexOf(file);
+      }
+
+      if (removeIdx !== -1) {
+          doc.files.splice(removeIdx, 1);
+      }
+      
+      if (doc.files.length === 0) {
+          doc.status = 'NOT_SUBMITTED';
+      }
+
+      // Server file
       if (file.id) {
         const token = localStorage.getItem('user-token');
         try {
           await axios.delete(`http://127.0.0.1:8000/api/files/${file.id}/`, {
             headers: { Authorization: `Token ${token}` }
           });
-          // Локально обновляем список файлов
-          const doc = this.editableClient?.legal_cases?.[caseIndex]?.documents?.[docIndex];
-          if (doc && Array.isArray(doc.files)) {
-            doc.files = doc.files.filter(f => (f.id || null) !== file.id);
-            if (doc.files.length === 0) doc.status = 'NOT_SUBMITTED';
-          }
-          this.showToast(this.$t('clientDetail.toasts.saved'), 'success', 900);
+          this.showToast(i18n.global.t('clientDetail.toasts.saved'), 'success', 900);
         } catch (e) {
+          // Revert on error
+          doc.files = originalFiles;
+          doc.status = originalStatus;
+          
           console.error('Delete file failed', e.response?.data || e);
-          this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+          const msg = e.response?.data?.detail || (typeof e.response?.data === 'string' ? e.response.data : null);
+          this.showToast(msg || i18n.global.t('clientDetail.toasts.saveError'), 'error');
         }
-        return;
       }
-      // Локально добавленный до сохранения
-      const doc = this.editableClient?.legal_cases?.[caseIndex]?.documents?.[docIndex];
-      if (!doc) return;
-      const idx = (doc.files || []).indexOf(file);
-      if (idx >= 0) doc.files.splice(idx, 1);
-      if ((doc.files || []).length === 0) doc.status = 'NOT_SUBMITTED';
-      // Не перезагружаем карточку
     },
     triggerUpload(caseIndex, docIndex) {
       this.uploadingDocContext = { caseIndex, docIndex };
@@ -769,11 +794,12 @@ export default {
           const msg = String(e?.message || '').toLowerCase();
           if (e?.code === 'ERR_CANCELED' || msg.includes('abort') || msg.includes('canceled')) {
             const k = 'common.canceled';
-            const tr = this.$t(k);
+            const tr = i18n.global.t(k);
             this.showToast(tr === k ? 'Загрузка отменена' : tr, 'error', 1200);
           } else {
             console.error('Upload failed', e.response?.data || e);
-            this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+            const msg = e.response?.data?.detail || (typeof e.response?.data === 'string' ? e.response.data : null);
+            this.showToast(msg || i18n.global.t('clientDetail.toasts.saveError'), 'error');
           }
         }
       } finally {
@@ -888,14 +914,56 @@ export default {
                 });
             }
             
-      this.showToast(this.$t('clientDetail.toasts.saved'), 'success', 1500);
+      this.showToast(i18n.global.t('clientDetail.toasts.saved'), 'success', 1500);
 
         } catch (error) {
             console.error("Ошибка сохранения:", error.response?.data || error);
-      this.showToast(this.$t('clientDetail.toasts.saveError'), 'error');
+            const msg = this._extractLimitOrDetail(error);
+            this.showToast(msg || i18n.global.t('clientDetail.toasts.saveError'), 'error');
         } finally {
             this.isSaving = false;
         }
+    },
+    _extractLimitOrDetail(err){
+      try {
+        const data = err?.response?.data;
+        if(!data) return null;
+        // DRF ValidationError({'detail': msg}) -> {detail: ['msg']} sometimes
+        // or ValidationError({'detail': msg}) -> {detail: 'msg'} depending on serializer.
+        // Normalize.
+        let detail = data.detail;
+        if(Array.isArray(detail)) detail = detail[0];
+        // Handle nested {detail: {detail: '...'}}
+        if(detail && typeof detail === 'object') {
+          const inner = detail.detail;
+          if(inner){
+            if(Array.isArray(inner)) detail = inner[0]; else if(typeof inner === 'string') detail = inner;
+          }
+          // Fallback: DRF ErrorDetail repr -> ErrorDetail(string='...', code='invalid')
+          if(typeof detail === 'object') {
+            const raw = String(detail);
+            const m = raw.match(/string='([^']+)'/);
+            if(m) detail = m[1];
+          }
+        }
+        if(typeof detail !== 'string') detail = null;
+        // If it's a limit message we return it directly.
+        if(detail && (detail.includes('Превышен лимит') || detail.includes('Przekroczono limit'))) {
+          // Replace generic "email" with refined wording if server not yet updated
+          detail = detail.replace(/"email"/g, '"email напоминания"');
+          return detail;
+        }
+        // Maybe server put message elsewhere
+        if(!detail){
+          // look for first string value in data
+          for(const k of Object.keys(data)){
+            const v = data[k];
+            if(typeof v === 'string' && (v.includes('Превышен лимит') || v.includes('Przekroczono limit'))) return v;
+            if(Array.isArray(v) && v.length && typeof v[0] === 'string' && (v[0].includes('Превышен лимит') || v[0].includes('Przekroczono limit'))) return v[0];
+          }
+        }
+        return detail;
+      } catch { return null }
     },
           formatCurrency(val) {
             const num = Number(val || 0);
@@ -957,9 +1025,14 @@ export default {
         this.$router.push('/dashboard/clients');
       } catch (e) {
         console.error('Ошибка удаления клиента', e.response?.data || e);
-        const keyErr = 'clientDetail.toasts.deleteError'
-        const errTr = this.$t(keyErr)
-        this.showToast(errTr === keyErr ? 'Ошибка удаления клиента' : errTr, 'error');
+        const msg = e.response?.data?.detail || (typeof e.response?.data === 'string' ? e.response.data : null);
+        if (msg) {
+          this.showToast(msg, 'error');
+        } else {
+          const keyErr = 'clientDetail.toasts.deleteError'
+          const errTr = this.$t(keyErr)
+          this.showToast(errTr === keyErr ? 'Ошибка удаления клиента' : errTr, 'error');
+        }
       } finally {
         this.pendingDelete = false;
       }
@@ -1389,10 +1462,10 @@ export default {
 }
 
 /* Upload progress UI */
-.uploading-wrapper { display:flex; align-items:center; gap:10px; min-width:160px; }
-.progress-bar { position:relative; flex:1; height:8px; background:#e2e8f0; border-radius:6px; overflow:hidden; }
+.uploading-wrapper { display:flex; align-items:center; gap:10px; min-width:200px; flex: 1; justify-content: flex-end; }
+.progress-bar { position:relative; flex:1; max-width: 80px; height:6px; background:#e2e8f0; border-radius:4px; overflow:hidden; }
 .progress-inner { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,#4A90E2,#3b7fc9); transition:width .2s ease; }
-.progress-text { font-size:12px; font-weight:600; color:#4b5563; width:40px; text-align:right; }
+.progress-text { font-size:12px; font-weight:600; color:#4b5563; white-space: nowrap; min-width: 35px; text-align: right; }
 
 
 .empty-state, .loader {

@@ -108,6 +108,7 @@ MIDDLEWARE = [
     # CORS should be as high as possible
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -318,6 +319,10 @@ else:
 # URL фронтенда (используется для генерации ссылок, например, сброс пароля)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8080')
 
+# Stripe Configuration
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'pk_test_51SFaGZ1dR7VpHP6keZiI7B4jKexOQpl2NhrEK4Q8oOtSbIPGmcax3pEecmPq1ZYYSKdsLc4J7duu8KW4jMUOYX2j00GpVIniO3')
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_51SFaGZ1dR7VpHP6k3H3UZQM878j2rMEddzgQ5vS855oJzhq98kqxlNZvP7OS3eM6QkAmR3XEIhXbJnG1DT5E8UQQ00JLofoV1Q')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', 'whsec_b03118e7cf81451289dccb9febfc817e5fbf87c74a7ce7ed49681a9c29f23450')
 
 _frontend_urls_env = os.environ.get('FRONTEND_URLS', '')
 if _frontend_urls_env:
@@ -377,21 +382,33 @@ if USE_S3:
             AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
             AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL')
             AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME') or None
-            AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN') or ''
+            # AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN') or ''
+            # Disable custom domain to force Boto3 to sign URLs using the endpoint
+            AWS_S3_CUSTOM_DOMAIN = None
 
             AWS_DEFAULT_ACL = os.environ.get('AWS_DEFAULT_ACL')  # let bucket policy control access by default
-            # Allow override from env; default to unsigned public URLs
-            AWS_QUERYSTRING_AUTH = _get_bool('AWS_QUERYSTRING_AUTH', False)
+            # Allow override from env; default to signed URLs (True) to allow access to private objects
+            # Fix: handle empty string in env as default (True)
+            _qs_auth_env = os.environ.get('AWS_QUERYSTRING_AUTH')
+            if _qs_auth_env is not None and _qs_auth_env.strip() != '':
+                AWS_QUERYSTRING_AUTH = _qs_auth_env.strip().lower() in {'1', 'true', 'yes', 'on'}
+            else:
+                AWS_QUERYSTRING_AUTH = True
+            
             try:
                 AWS_QUERYSTRING_EXPIRE = int(os.environ.get('AWS_QUERYSTRING_EXPIRE', '3600'))
             except Exception:
                 AWS_QUERYSTRING_EXPIRE = 3600
-            _sigv = os.environ.get('AWS_S3_SIGNATURE_VERSION')
-            if _sigv:
-                AWS_S3_SIGNATURE_VERSION = _sigv
+            
+            # Force s3v4 signature for OVH/S3 compatibility
+            AWS_S3_SIGNATURE_VERSION = os.environ.get('AWS_S3_SIGNATURE_VERSION', 's3v4')
+            
             AWS_S3_FILE_OVERWRITE = False
             AWS_S3_ADDRESSING_STYLE = 'virtual'
-            AWS_S3_OBJECT_PARAMETERS = { 'CacheControl': 'max-age=86400' }
+            AWS_S3_OBJECT_PARAMETERS = {
+                'CacheControl': 'max-age=86400',
+                'ContentDisposition': 'inline',
+            }
 
             # Derive MEDIA_URL
             if AWS_S3_CUSTOM_DOMAIN:
@@ -402,9 +419,20 @@ if USE_S3:
 
             _safe_no_delete = _get_bool('SAFE_STORAGE_NO_DELETE', False)
             if _safe_no_delete:
-                DEFAULT_FILE_STORAGE = 'crm_app.storage.SafeS3Boto3Storage'
+                _storage_backend = 'crm_app.storage.SafeS3Boto3Storage'
             else:
-                DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+                _storage_backend = 'storages.backends.s3boto3.S3Boto3Storage'
+            
+            DEFAULT_FILE_STORAGE = _storage_backend
+            STORAGES = {
+                "default": {
+                    "BACKEND": _storage_backend,
+                },
+                "staticfiles": {
+                    "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+                },
+            }
+
             if DEBUG:
                 print('[storage] Using S3 storage MEDIA_URL=', MEDIA_URL, 'safe_no_delete=', _safe_no_delete)
         except Exception as _s3_err:
@@ -449,6 +477,7 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "simple",
+            "level": "INFO",
         },
         "mail_admins": {
             "level": "ERROR",
@@ -459,8 +488,11 @@ LOGGING = {
     "loggers": {
         "django": {
             "handlers": ["rotating_file", "console", "mail_admins"],
-            "level": "DEBUG",
+            "level": "INFO",
             "propagate": True,
+        },
+        "django.utils.autoreload": {
+            "level": "INFO",
         },
         "django.request": {
             "handlers": ["rotating_file", "mail_admins"],

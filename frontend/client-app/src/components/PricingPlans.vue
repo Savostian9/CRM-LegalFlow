@@ -12,7 +12,7 @@
         :class="{ active: billingCycle === 'month' }"
         role="tab"
         :aria-selected="billingCycle === 'month'"
-        @click="billingCycle = 'month'"
+        @click="setCycle('month')"
       >
         {{ $t('pricing.pricePeriod.month') }}
       </button>
@@ -21,7 +21,7 @@
         :class="{ active: billingCycle === 'year' }"
         role="tab"
         :aria-selected="billingCycle === 'year'"
-        @click="billingCycle = 'year'"
+        @click="setCycle('year')"
       >
         {{ $t('pricing.pricePeriod.year') }} <span class="discount">-20%</span>
       </button>
@@ -87,13 +87,10 @@ export default {
     selectLabel: { type: String, default: '' },
     currentLabel: { type: String, default: '' },
     processingLabel: { type: String, default: '' },
-    unavailableLabel: { type: String, default: '' }
+    unavailableLabel: { type: String, default: '' },
+    billingCycle: { type: String, default: 'month' }
   },
-  data() {
-    return {
-      billingCycle: 'month'
-    };
-  },
+  emits: ['select', 'update:billingCycle'],
   computed: {
     plans() {
       const all = getPlanCatalogArray();
@@ -120,6 +117,9 @@ export default {
     }
   },
   methods: {
+    setCycle(val) {
+      this.$emit('update:billingCycle', val);
+    },
     currentPrice(plan) {
       if (this.billingCycle === 'year' && plan.priceYearly !== undefined) {
         return plan.priceYearly;
