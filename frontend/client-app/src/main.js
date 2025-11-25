@@ -5,6 +5,8 @@ import App from './App.vue'
 import router from './router' // Убедитесь, что роутер импортируется,
 import VueTelInput from 'vue-tel-input' // <-- ДОБАВЬТЕ ЭТУ СТРОКУ
 import 'vue-tel-input/vue-tel-input.css'
+import Toast from 'vue-toastification'
+import 'vue-toastification/dist/index.css'
 import './styles/forms.css'
 import i18n from './i18n'
 import UiSelect from './components/UiSelect.vue'
@@ -19,6 +21,20 @@ const app = createApp(App)
 app.use(router) // <--- ВОТ ЭТА СТРОКА ВСЁ ИСПРАВИТ
 app.use(VueTelInput)
 app.use(i18n)
+app.use(Toast, {
+  position: 'top-right',
+  timeout: 4000,
+  closeOnClick: true,
+  pauseOnFocusLoss: true,
+  pauseOnHover: true,
+  draggable: true,
+  draggablePercent: 0.6,
+  showCloseButtonOnHover: false,
+  hideProgressBar: false,
+  closeButton: 'button',
+  icon: true,
+  rtl: false
+})
 app.use(VCalendar, {})
 // Global components so they can be used in any view's template without local imports
 app.component('UiSelect', UiSelect)

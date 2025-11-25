@@ -13,6 +13,7 @@ export const billingUsageState = reactive({
   // convenience flags (populated after load)
   isStarter: false,
   isPro: false,
+  isRestricted: false,
 });
 
 export async function loadBillingUsage(force=false) {
@@ -39,6 +40,19 @@ export async function loadBillingUsage(force=false) {
     } else {
       billingUsageState.daysLeft = null;
     }
+
+    // Calculate restriction status
+    // Restricted if: (Trial AND Expired) OR (Not Trial AND No Active Subscription)
+    const status = res.data?.subscription_status;
+    const isTrialExpired = trial?.expired;
+    const isActiveSub = status === 'active' || status === 'trialing';
+    
+    if (billingUsageState.isTrial) {
+      billingUsageState.isRestricted = !!isTrialExpired;
+    } else {
+      billingUsageState.isRestricted = !isActiveSub;
+    }
+
     billingUsageState.loaded = true;
   } catch (e) {
     billingUsageState.error = e?.message || 'LOAD_FAILED';

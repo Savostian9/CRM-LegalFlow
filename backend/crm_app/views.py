@@ -1216,7 +1216,7 @@ class BillingUsageView(APIView):
                 stripe.api_key = settings.STRIPE_SECRET_KEY
                 customer = stripe.Customer.retrieve(
                     company.stripe_customer_id, 
-                    expand=['invoice_settings.default_payment_method']
+                    expand=['invoice_settings.default_payment_method', 'subscriptions']
                 )
                 pm = customer.invoice_settings.default_payment_method
                 if pm and isinstance(pm, dict):
@@ -1227,12 +1227,25 @@ class BillingUsageView(APIView):
                         'exp_month': card.get('exp_month'),
                         'exp_year': card.get('exp_year'),
                     }
+                
+                # Sync subscription status from Stripe
+                if customer.subscriptions and customer.subscriptions.data:
+                    sub = customer.subscriptions.data[0]
+                    if company.subscription_status != sub.status:
+                        company.subscription_status = sub.status
+                        company.save(update_fields=['subscription_status'])
+                else:
+                    # No active subscriptions found in Stripe
+                    if company.subscription_status != 'canceled':
+                        company.subscription_status = 'canceled'
+                        company.save(update_fields=['subscription_status'])
             except Exception:
                 pass
 
         return Response({
             'plan': plan_code,
             'stripe_customer_id': company.stripe_customer_id,
+            'subscription_status': company.subscription_status,
             'limits': limits,
             'usage': formatted,
             'payment_method': payment_method_info,

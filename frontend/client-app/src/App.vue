@@ -5,7 +5,27 @@
 </template>
 
 <script>
+import { useToast } from 'vue-toastification'
+import { useI18n } from 'vue-i18n'
+import { onMounted, onUnmounted } from 'vue'
+
 export default {
+  setup() {
+    const toast = useToast()
+    const { t } = useI18n()
+
+    const showRestricted = () => {
+      toast.warning(t('billing.toast.restricted'))
+    }
+
+    onMounted(() => {
+      window.addEventListener('show-restricted-toast', showRestricted)
+    })
+
+    onUnmounted(() => {
+      window.removeEventListener('show-restricted-toast', showRestricted)
+    })
+  },
   components: { }
 }
 </script>
@@ -66,4 +86,17 @@ body {
 a { color: var(--link-color); }
 
 /* (Form control styles centralized in styles/forms.css) */
+
+/* Toast customization */
+.Vue-Toastification__toast--warning {
+  background-color: #fbbf24 !important; /* Amber-400 */
+  color: #1f2937 !important; /* Dark gray text */
+}
+.Vue-Toastification__toast--warning .Vue-Toastification__close-button {
+  color: #1f2937 !important;
+  opacity: 0.7;
+}
+.Vue-Toastification__toast--warning .Vue-Toastification__icon {
+  color: #1f2937 !important;
+}
 </style>

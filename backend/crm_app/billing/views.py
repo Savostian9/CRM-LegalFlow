@@ -32,13 +32,21 @@ class CreateCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        user = None
         try:
             user = request.user
+            logger.info(f"CreateCheckoutSession: Starting for user={user.email if user else 'unknown'}")
+            
             if not user.company:
+                logger.warning(f"CreateCheckoutSession: User {user.email} has no company")
                 return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
             
             company = user.company
+            logger.info(f"CreateCheckoutSession: Company={company.name}, ID={company.id}")
+            
             data = request.data
+            logger.info(f"CreateCheckoutSession: Raw request.data={data}")
+            
             target_plan = data.get('target_plan', '').upper()
             billing_cycle = data.get('billing_cycle', 'month') # month or year
 
@@ -69,6 +77,11 @@ class CreateCheckoutSessionView(APIView):
             
             # Create Checkout Session
             domain = settings.FRONTEND_URL # e.g. http://localhost:8080
+            logger.info(f"CreateCheckoutSession: Using domain={domain} for success/cancel URLs")
+            
+            if not domain:
+                logger.error("CreateCheckoutSession: FRONTEND_URL is not set!")
+                return Response({'error': 'Server configuration error: FRONTEND_URL not set'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             checkout_session = stripe.checkout.Session.create(
                 customer=company.stripe_customer_id,
@@ -109,8 +122,11 @@ class CreateCheckoutSessionView(APIView):
             
             return Response({'id': checkout_session.id, 'url': checkout_session.url})
 
+        except stripe.error.StripeError as e:
+            logger.exception(f"Stripe API error for user={user.email if user else 'unknown'}: {e}")
+            return Response({'error': f'Stripe error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            logger.exception("Stripe checkout error")
+            logger.exception(f"Stripe checkout error for user={user.email if user else 'unknown'}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

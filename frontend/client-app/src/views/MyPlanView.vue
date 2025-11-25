@@ -28,7 +28,7 @@
         <h3>{{ $t('pricing.title') }}</h3>
         <p>{{ $t('pricing.subtitle') }}</p>
         <PricingPlans
-          :current-plan="planCode"
+          :current-plan="effectivePlanCode"
           :loading-plan="upgradeLoading ? upgradeTarget : null"
           :allowed-targets="availableUpgradeTargets"
           :billing-cycle="billingCycle"
@@ -84,24 +84,39 @@ export default {
     daysLeft(){ return billingUsageState.daysLeft; },
     trialEndsAt(){ return billingUsageState.trialEndsAt; },
     planCode(){ return (this.usage?.plan || 'TRIAL').toUpperCase(); },
+    subscriptionStatus() { return this.usage?.subscription_status; },
+    isActiveSubscription() {
+      // If plan is TRIAL, status might be null or anything, we consider it active trial
+      if (this.planCode === 'TRIAL') return true;
+      // For paid plans, check status
+      return this.subscriptionStatus === 'active' || this.subscriptionStatus === 'trialing';
+    },
+    effectivePlanCode() {
+      return this.isActiveSubscription ? this.planCode : 'TRIAL';
+    },
     planMeta(){
       return PLAN_CATALOG[this.planCode] || null;
     },
     planLabel(){
+      if (!this.isActiveSubscription && this.planCode !== 'TRIAL') {
+        const name = this.planCode === 'PRO' ? 'Pro' : 'Starter';
+        return `${name} (${this.$t('billing.statusCanceled') || 'Canceled'})`;
+      }
       if (this.planCode === 'PRO') return 'Pro';
       if (this.planCode === 'STARTER') return 'Starter';
       return 'Trial';
     },
-    isStarter(){ return this.planCode === 'STARTER'; },
-    isPro(){ return this.planCode === 'PRO'; },
+    isStarter(){ return this.planCode === 'STARTER' && this.isActiveSubscription; },
+    isPro(){ return this.planCode === 'PRO' && this.isActiveSubscription; },
     hasStripeCustomer(){ return !!this.usage?.stripe_customer_id; },
     availableUpgradeTargets(){
+      const current = this.effectivePlanCode;
       const map = {
         TRIAL: ['STARTER', 'PRO'],
         STARTER: ['PRO'],
         PRO: ['STARTER']
       };
-      return map[this.planCode] || [];
+      return map[current] || ['STARTER', 'PRO'];
     },
     limitRows(){
       const u = this.usage;

@@ -701,11 +701,13 @@ const messages = {
         active: 'Активен',
         unavailable: 'Недоступно'
       },
+      statusCanceled: 'Отменена',
       manageSubscription: 'Управление подпиской',
       toast: {
         upgradeSoon: 'Функция апгрейда скоро будет доступна.',
         upgraded: 'План обновлён до {plan}',
-        upgradeFailed: 'Не удалось обновить план'
+        upgradeFailed: 'Не удалось обновить план',
+        restricted: 'Доступ ограничен. Пожалуйста, оформите подписку.'
       }
     }
   },
@@ -1407,11 +1409,13 @@ const messages = {
         active: 'Aktywny',
         unavailable: 'Niedostępny'
       },
+      statusCanceled: 'Anulowana',
       manageSubscription: 'Zarządzaj subskrypcją',
       toast: {
         upgradeSoon: 'Funkcja ulepszenia wkrótce będzie dostępna.',
         upgraded: 'Plan został zaktualizowany do {plan}',
-        upgradeFailed: 'Nie udało się zaktualizować planu'
+        upgradeFailed: 'Nie udało się zaktualizować planu',
+        restricted: 'Dostęp ograniczony. Proszę wykupić subskrypcję.'
       }
     }
   }

@@ -218,7 +218,7 @@
             </div>
             <div class="billing-row">
               <span class="label">{{ $t('billing.status') }}:</span>
-              <span class="value">{{ billingUsage?.subscription_status || 'Active' }}</span>
+              <span class="value" style="text-transform: capitalize;">{{ billingUsage?.subscription_status || 'Active' }}</span>
             </div>
             <div class="billing-row" v-if="billingUsage?.payment_method">
               <span class="label">{{ $t('billing.paymentMethod') }}:</span>

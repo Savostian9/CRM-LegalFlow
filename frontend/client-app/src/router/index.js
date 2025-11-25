@@ -26,6 +26,7 @@ import TasksView from '../views/TasksView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
 import MyPlanView from '../views/MyPlanView.vue'
 import AdminDashboardView from '../views/AdminDashboardView.vue'
+import { billingUsageState, loadBillingUsage } from '@/billing/usageStore.js'
 
 const routes = [
   // --- Маршруты без бокового меню ---
@@ -160,16 +161,34 @@ const router = createRouter({
 })
 
 // Навигационный гвард для проверки авторизации и ролей
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('user-token')
   const role = localStorage.getItem('user-role')
   const isSuperuser = localStorage.getItem('is-superuser') === '1'
 
   // Проверяем, требует ли маршрут (или его родитель) авторизации
-  if (to.matched.some(record => record.meta.requiresAuth) && !token) {
-    // Если да, и токена нет - перенаправляем на страницу входа
-    next('/login')
-    return
+  if (to.matched.some(record => record.meta.requiresAuth)) {
+    if (!token) {
+      // Если да, и токена нет - перенаправляем на страницу входа
+      next('/login')
+      return
+    }
+
+    // Если пользователь авторизован, проверим статус подписки
+    try {
+      await loadBillingUsage()
+    } catch (e) {
+      console.error('Failed to load billing usage', e)
+    }
+
+    if (billingUsageState.isRestricted) {
+      const allowedNames = ['settings', 'my-plan', 'faq']
+      if (!allowedNames.includes(to.name)) {
+        window.dispatchEvent(new CustomEvent('show-restricted-toast'))
+        next({ name: 'my-plan' })
+        return
+      }
+    }
   }
 
   // Роут только для суперпользователя
