@@ -1208,10 +1208,34 @@ class BillingUsageView(APIView):
             'emails_per_month': emails_month,
         }
         formatted = format_usage(limits, raw_usage)
+
+        payment_method_info = None
+        if company.stripe_customer_id:
+            try:
+                import stripe
+                stripe.api_key = settings.STRIPE_SECRET_KEY
+                customer = stripe.Customer.retrieve(
+                    company.stripe_customer_id, 
+                    expand=['invoice_settings.default_payment_method']
+                )
+                pm = customer.invoice_settings.default_payment_method
+                if pm and isinstance(pm, dict):
+                    card = pm.get('card', {})
+                    payment_method_info = {
+                        'brand': card.get('brand'),
+                        'last4': card.get('last4'),
+                        'exp_month': card.get('exp_month'),
+                        'exp_year': card.get('exp_year'),
+                    }
+            except Exception:
+                pass
+
         return Response({
             'plan': plan_code,
+            'stripe_customer_id': company.stripe_customer_id,
             'limits': limits,
             'usage': formatted,
+            'payment_method': payment_method_info,
             'trial': {
                 'started_at': trial_started,
                 'ends_at': trial_ends,

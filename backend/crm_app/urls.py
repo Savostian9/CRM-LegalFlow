@@ -30,7 +30,15 @@ from .views import (
 )
 from .views import AdminStatsView
 from .views import NotificationListCreateView, NotificationMarkReadView, NotificationMarkAllReadView, NotificationUnreadCountView, NotificationDeleteView, NotificationBulkDeleteView, BillingUsageView, DocumentFileUploadView, UploadedFileDeleteView
-from crm_app.billing.views import CreateCheckoutSessionView, stripe_webhook
+from crm_app.billing.views import (
+    CreateCheckoutSessionView, 
+    stripe_webhook, 
+    CreateCustomerPortalSessionView, 
+    CancelSubscriptionView,
+    StripeConfigView,
+    CreateSetupIntentView,
+    UpdateDefaultPaymentMethodView
+)
 
 urlpatterns = [
     path('register/', RegisterRequestView.as_view(), name='register'),
@@ -75,5 +83,10 @@ urlpatterns = [
     # Billing / usage
     path('billing/usage/', BillingUsageView.as_view(), name='billing-usage'),
     path('billing/upgrade/', CreateCheckoutSessionView.as_view(), name='billing-upgrade'),
+    path('billing/portal/', CreateCustomerPortalSessionView.as_view(), name='billing-portal'),
+    path('billing/cancel/', CancelSubscriptionView.as_view(), name='billing-cancel'),
+    path('billing/config/', StripeConfigView.as_view(), name='billing-config'),
+    path('billing/setup-intent/', CreateSetupIntentView.as_view(), name='billing-setup-intent'),
+    path('billing/update-payment-method/', UpdateDefaultPaymentMethodView.as_view(), name='billing-update-payment-method'),
     path('billing/webhook/', stripe_webhook, name='stripe-webhook'),
 ]

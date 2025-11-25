@@ -191,7 +191,8 @@ const messages = {
         profile: 'Профиль',
         company: 'Компания',
         users: 'Пользователи',
-        invites: 'Приглашения'
+        invites: 'Приглашения',
+        billing: 'Подписка'
       },
       profile: {
         title: 'Профиль пользователя',
@@ -653,6 +654,24 @@ const messages = {
     }
     ,billing: {
       title: 'Мой план',
+      desc: 'Здесь вы можете управлять своим тарифным планом, изменить карту оплаты или отменить подписку.',
+      currentPlan: 'Текущий план',
+      status: 'Статус',
+      paymentMethod: 'Способ оплаты',
+      manageBtn: 'Счета и история (Stripe)',
+      manageHint: 'Переход в портал Stripe для просмотра истории платежей и скачивания счетов.',
+      updateCard: 'Обновить карту',
+      updateCardHint: 'Безопасное обновление данных карты.',
+      updateCardTitle: 'Обновление способа оплаты',
+      saveCard: 'Сохранить карту',
+      cardUpdated: 'Карта успешно обновлена!',
+      cardError: 'Ошибка при обновлении карты.',
+      linkHint: 'Link безопасно сохраняет ваши данные для быстрой оплаты в один клик (экономит время).',
+      cancelBtn: 'Отменить подписку',
+      cancelHint: 'Подписка останется активной до конца оплаченного периода.',
+      cancelConfirm: 'Вы уверены, что хотите отменить подписку? Доступ сохранится до конца периода.',
+      canceling: 'Отмена...',
+      canceledSuccess: 'Подписка отменена. Она будет действовать до конца периода.',
       error: 'Ошибка',
       usageLimits: 'Использование и лимиты',
       resource: 'Ресурс',
@@ -682,6 +701,7 @@ const messages = {
         active: 'Активен',
         unavailable: 'Недоступно'
       },
+      manageSubscription: 'Управление подпиской',
       toast: {
         upgradeSoon: 'Функция апгрейда скоро будет доступна.',
         upgraded: 'План обновлён до {plan}',
@@ -877,7 +897,8 @@ const messages = {
         profile: 'Profil',
         company: 'Firma',
         users: 'Użytkownicy',
-        invites: 'Zaproszenia'
+        invites: 'Zaproszenia',
+        billing: 'Subskrypcja'
       },
       profile: {
         title: 'Profil użytkownika',
@@ -1339,6 +1360,24 @@ const messages = {
     }
     ,billing: {
       title: 'Mój plan',
+      desc: 'Tutaj możesz zarządzać swoim planem taryfowym, zmienić kartę płatniczą lub anulować subskrypcję.',
+      currentPlan: 'Obecny plan',
+      status: 'Status',
+      paymentMethod: 'Metoda płatności',
+      manageBtn: 'Faktury i historia (Stripe)',
+      manageHint: 'Przejście do portalu Stripe w celu przeglądania historii płatności i pobierania faktur.',
+      updateCard: 'Zaktualizuj kartę',
+      updateCardHint: 'Bezpieczna aktualizacja danych karty.',
+      updateCardTitle: 'Aktualizacja metody płatności',
+      saveCard: 'Zapisz kartę',
+      cardUpdated: 'Karta została pomyślnie zaktualizowana!',
+      cardError: 'Błąd podczas aktualizacji karty.',
+      linkHint: 'Link bezpiecznie zapisuje Twoje dane do szybkich płatności jednym kliknięciem (oszczędza czas).',
+      cancelBtn: 'Anuluj subskrypcję',
+      cancelHint: 'Subskrypcja pozostanie aktywna do końca opłaconego okresu.',
+      cancelConfirm: 'Czy na pewno chcesz anulować subskrypcję? Dostęp zostanie zachowany do końca okresu.',
+      canceling: 'Anulowanie...',
+      canceledSuccess: 'Subskrypcja anulowana. Będzie aktywna do końca okresu.',
       error: 'Błąd',
       usageLimits: 'Wykorzystanie i limity',
       resource: 'Zasób',
@@ -1368,6 +1407,7 @@ const messages = {
         active: 'Aktywny',
         unavailable: 'Niedostępny'
       },
+      manageSubscription: 'Zarządzaj subskrypcją',
       toast: {
         upgradeSoon: 'Funkcja ulepszenia wkrótce będzie dostępna.',
         upgraded: 'Plan został zaktualizowany do {plan}',

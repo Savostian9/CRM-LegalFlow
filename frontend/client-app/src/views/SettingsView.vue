@@ -19,6 +19,7 @@
   <button :class="['tab', {active: activeTab==='company'}]" @click="activeTab='company'" v-if="isOwner">{{ $t('settings.tabs.company') }}</button>
   <button :class="['tab', {active: activeTab==='users'}]" @click="activeTab='users'" v-if="isAdminOrLead">{{ $t('settings.tabs.users') }}</button>
   <button :class="['tab', {active: activeTab==='invites'}]" @click="activeTab='invites'" v-if="isAdminOrLead && canInviteUsers">{{ $t('settings.tabs.invites') }}</button>
+  <button :class="['tab', {active: activeTab==='billing'}]" @click="activeTab='billing'" v-if="isOwner">{{ $t('settings.tabs.billing') }}</button>
       </div>
 
       <!-- Profile -->
@@ -203,6 +204,51 @@
           </div>
         </div>
       </section>
+
+      <!-- Billing -->
+      <section v-if="activeTab==='billing' && isOwner" class="data-section">
+        <h3>{{ $t('billing.title') }}</h3>
+        <p style="margin-bottom:24px; color:#4b5563;">{{ $t('billing.desc') }}</p>
+        
+        <div class="billing-card">
+          <div class="billing-info">
+            <div class="billing-row">
+              <span class="label">{{ $t('billing.currentPlan') }}:</span>
+              <span class="value plan-badge" :class="planCode.toLowerCase()">{{ planCode }}</span>
+            </div>
+            <div class="billing-row">
+              <span class="label">{{ $t('billing.status') }}:</span>
+              <span class="value">{{ billingUsage?.subscription_status || 'Active' }}</span>
+            </div>
+            <div class="billing-row" v-if="billingUsage?.payment_method">
+              <span class="label">{{ $t('billing.paymentMethod') }}:</span>
+              <span class="value">
+                {{ billingUsage.payment_method.brand.toUpperCase() }} •••• {{ billingUsage.payment_method.last4 }}
+                ({{ billingUsage.payment_method.exp_month }}/{{ billingUsage.payment_method.exp_year }})
+              </span>
+            </div>
+          </div>
+
+          <div class="billing-actions">
+            <button v-if="hasStripeCustomer" class="button secondary" @click="openCardModal" :disabled="cardLoading">
+              {{ cardLoading ? $t('common.loading') : $t('billing.updateCard') }}
+            </button>
+            <p class="hint">{{ $t('billing.updateCardHint') }}</p>
+            
+            <button v-if="hasStripeCustomer" class="button primary" @click="openPortal" :disabled="portalLoading">
+              {{ portalLoading ? $t('common.loading') : $t('billing.manageBtn') }}
+            </button>
+            <p class="hint">{{ $t('billing.manageHint') }}</p>
+            
+            <div v-if="hasStripeCustomer && billingUsage?.subscription_status === 'active'" style="margin-top: 16px; width: 100%; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+              <button class="button danger" @click="showCancelDialog = true" :disabled="cancelLoading">
+                {{ cancelLoading ? $t('billing.canceling') : $t('billing.cancelBtn') }}
+              </button>
+              <p class="hint" style="margin-top: 6px;">{{ $t('billing.cancelHint') }}</p>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Confirm Dialog -->
@@ -227,6 +273,35 @@
         <div class="confirm-dialog-actions">
           <button class="button primary" @click="confirmUserDeletion">{{ $t('common.yesDelete') }}</button>
           <button class="button secondary" @click="cancelUserDeletion">{{ $t('common.cancel') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cancel Subscription Dialog -->
+    <div v-if="showCancelDialog" class="confirm-dialog-overlay">
+      <div class="confirm-dialog">
+        <p>{{ $t('billing.cancelConfirm') }}</p>
+        <div class="confirm-dialog-actions">
+          <button class="button danger" @click="cancelSubscription" :disabled="cancelLoading">{{ $t('common.yes') }}</button>
+          <button class="button secondary" @click="showCancelDialog = false">{{ $t('common.cancel') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Update Card Dialog -->
+    <div v-if="showCardModal" class="confirm-dialog-overlay">
+      <div class="confirm-dialog" style="max-width: 500px;">
+        <h3>{{ $t('billing.updateCardTitle') }}</h3>
+        <div id="card-element" style="margin: 20px 0; padding: 12px; border: 1px solid #e2e8f0; border-radius: 6px;">
+          <!-- Stripe Element will be inserted here -->
+        </div>
+        <p style="font-size: 13px; color: #64748b; margin-top: -12px; margin-bottom: 20px; line-height: 1.4;">
+          {{ $t('billing.linkHint') }}
+        </p>
+        <div v-if="cardError" style="color: #dc2626; font-size: 14px; margin-bottom: 12px;">{{ cardError }}</div>
+        <div class="confirm-dialog-actions">
+          <button class="button primary" @click="saveCard" :disabled="cardProcessing">{{ $t('billing.saveCard') }}</button>
+          <button class="button secondary" @click="closeCardModal" :disabled="cardProcessing">{{ $t('common.cancel') }}</button>
         </div>
       </div>
     </div>
@@ -320,6 +395,8 @@
 
 <script>
 import axios from '@/axios-setup'
+import { billingUsageState, loadBillingUsage } from '@/billing/usageStore.js';
+
 export default {
   name: 'SettingsView',
   data(){
@@ -355,9 +432,24 @@ export default {
       showUserDeleteDialog: false,
       userToDelete: null,
       notifications: [], // добавлено: список уведомлений после фильтрации
+      portalLoading: false,
+      showCancelDialog: false,
+      cancelLoading: false,
+      // Stripe Card Update
+      showCardModal: false,
+      cardLoading: false,
+      cardProcessing: false,
+      cardError: '',
+      stripe: null,
+      elements: null,
+      cardElement: null,
+      clientSecret: '',
     }
   },
   computed: {
+    billingUsage() { return billingUsageState.data; },
+    planCode() { return (this.billingUsage?.plan || 'TRIAL').toUpperCase(); },
+    hasStripeCustomer() { return !!this.billingUsage?.stripe_customer_id; },
     canInviteUsers() {
       try {
         const permsJson = localStorage.getItem('user-permissions');
@@ -424,11 +516,45 @@ export default {
         } catch (e) { /* ignore */ }
       }
       await this.fetchNotifications();
+      if (this.isOwner) {
+        try { await loadBillingUsage(); } catch(e) { /* ignore */ }
+      }
     } catch (_) {
       // Do not let errors during created() break render in production
     }
   },
   methods: {
+    async openPortal(){
+      this.portalLoading = true;
+      try {
+        const token = localStorage.getItem('user-token');
+        const res = await axios.post('/api/billing/portal/', {}, { headers: { Authorization: `Token ${token}` } });
+        if (res.data && res.data.url) {
+          window.location.href = res.data.url;
+        }
+      } catch (e) {
+        console.error(e);
+        this.notify(this.$t('billing.error'), 'error');
+      } finally {
+        this.portalLoading = false;
+      }
+    },
+    async cancelSubscription(){
+      this.cancelLoading = true;
+      try {
+        const token = localStorage.getItem('user-token');
+        await axios.post('/api/billing/cancel/', {}, { headers: { Authorization: `Token ${token}` } });
+        this.notify(this.$t('billing.canceledSuccess'));
+        this.showCancelDialog = false;
+        // Reload usage to update status
+        await loadBillingUsage();
+      } catch (e) {
+        console.error(e);
+        this.notify(this.$t('billing.error'), 'error');
+      } finally {
+        this.cancelLoading = false;
+      }
+    },
     notify(msg, type='success', ms=2000){
       this.toast = { show: true, type, message: msg };
       setTimeout(() => { this.toast.show = false }, ms);
@@ -617,6 +743,78 @@ export default {
         this.notify('Массовые права применены'); this.closeBulkPerms();
       }catch(e){ this.notify('Ошибка применения','error'); }
     },
+    async openCardModal(){
+      this.showCardModal = true;
+      this.cardLoading = true;
+      this.cardError = '';
+      
+      try {
+        const token = localStorage.getItem('user-token');
+        const cfgRes = await axios.get('/api/billing/config/', { headers: { Authorization: `Token ${token}` } });
+        const pubKey = cfgRes.data.publicKey;
+
+        if (!this.stripe) {
+          // eslint-disable-next-line no-undef
+          this.stripe = Stripe(pubKey);
+        }
+
+        const intentRes = await axios.post('/api/billing/setup-intent/', {}, { headers: { Authorization: `Token ${token}` } });
+        this.clientSecret = intentRes.data.client_secret;
+
+        this.elements = this.stripe.elements();
+        this.cardElement = this.elements.create('card', { hidePostalCode: true });
+        
+        this.$nextTick(() => {
+            this.cardElement.mount('#card-element');
+        });
+
+      } catch (e) {
+        console.error(e);
+        this.cardError = this.$t('billing.error');
+      } finally {
+        this.cardLoading = false;
+      }
+    },
+    closeCardModal(){
+      this.showCardModal = false;
+      if (this.cardElement) {
+        this.cardElement.destroy();
+        this.cardElement = null;
+      }
+    },
+    async saveCard(){
+      this.cardProcessing = true;
+      this.cardError = '';
+      
+      try {
+        const result = await this.stripe.confirmCardSetup(this.clientSecret, {
+          payment_method: {
+            card: this.cardElement,
+            billing_details: {
+              name: this.company.name,
+              email: this.me.email
+            },
+          },
+        });
+
+        if (result.error) {
+          this.cardError = result.error.message;
+        } else {
+          const token = localStorage.getItem('user-token');
+          const pmId = result.setupIntent.payment_method;
+          await axios.post('/api/billing/update-payment-method/', { payment_method_id: pmId }, { headers: { Authorization: `Token ${token}` } });
+          
+          this.notify(this.$t('billing.cardUpdated'));
+          this.closeCardModal();
+          await loadBillingUsage(true);
+        }
+      } catch (e) {
+        console.error(e);
+        this.cardError = this.$t('billing.cardError');
+      } finally {
+        this.cardProcessing = false;
+      }
+    },
   }
 }
 </script>
@@ -759,4 +957,55 @@ export default {
 .perm-card { transition: border-color .18s, box-shadow .18s, background-color .25s; }
 .perm-card:hover { border-color:#3B82F6; box-shadow:0 0 0 1px rgba(59,130,246,.35), 0 2px 6px rgba(0,0,0,.08); }
 .perm-card:focus-within { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.35); }
+
+.billing-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 600px;
+}
+.billing-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.billing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.billing-row:last-child { border-bottom: none; }
+.billing-row .label { font-weight: 500; color: #64748b; }
+.billing-row .value { font-weight: 600; color: #0f172a; }
+.plan-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.plan-badge.trial { background: #eff6ff; color: #3b82f6; }
+.plan-badge.starter { background: #f0fdf4; color: #16a34a; }
+.plan-badge.pro { background: #faf5ff; color: #9333ea; }
+
+.billing-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+}
+.billing-actions .hint {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
+}
 </style>

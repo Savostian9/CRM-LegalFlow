@@ -80,6 +80,18 @@ class CreateCheckoutSessionView(APIView):
                     },
                 ],
                 mode='subscription',
+                tax_id_collection={
+                    'enabled': True,
+                },
+                customer_update={
+                    'address': 'auto',
+                    'name': 'auto',
+                },
+                billing_address_collection='required',
+                shipping_address_collection={
+                    'allowed_countries': ['PL'],
+                },
+                locale='pl',
                 success_url=f'{domain}/dashboard/plan?success=true&session_id={{CHECKOUT_SESSION_ID}}',
                 cancel_url=f'{domain}/dashboard/plan?canceled=true',
                 metadata={
@@ -186,3 +198,123 @@ def handle_subscription_deleted(subscription):
             logger.info(f"Subscription canceled for company {company.name}")
     except Exception as e:
         logger.error(f"Error canceling subscription for customer {customer_id}: {e}")
+
+class CreateCustomerPortalSessionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            if not user.company:
+                return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            company = user.company
+            if not company.stripe_customer_id:
+                return Response({'error': 'No Stripe customer found'}, status=status.HTTP_400_BAD_REQUEST)
+
+            domain = settings.FRONTEND_URL
+            
+            # Create a session for the customer portal
+            session = stripe.billing_portal.Session.create(
+                customer=company.stripe_customer_id,
+                return_url=f'{domain}/dashboard/plan',
+            )
+            
+            return Response({'url': session.url})
+
+        except Exception as e:
+            logger.exception("Stripe portal error")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CancelSubscriptionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            if not user.company:
+                return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            company = user.company
+            sub_id = company.stripe_subscription_id
+            
+            if not sub_id:
+                return Response({'error': 'No active subscription found'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Cancel at period end
+            stripe.Subscription.modify(
+                sub_id,
+                cancel_at_period_end=True
+            )
+            
+            # Update local state immediately (optional, webhook will confirm)
+            company.subscription_status = 'active' # It remains active until period end, but we might want to track 'canceling'
+            # Stripe doesn't have a 'canceling' status, it just has cancel_at_period_end=True.
+            # We can rely on the webhook to update status eventually, or just return success.
+            
+            return Response({'message': 'Subscription will be canceled at the end of the billing period.'})
+
+        except Exception as e:
+            logger.exception("Error canceling subscription")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class StripeConfigView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({'publicKey': settings.STRIPE_PUBLISHABLE_KEY})
+
+class CreateSetupIntentView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            if not user.company:
+                return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            company = user.company
+            if not company.stripe_customer_id:
+                # Create customer if missing
+                customer = stripe.Customer.create(
+                    email=user.email,
+                    name=company.name,
+                    metadata={'company_id': company.id}
+                )
+                company.stripe_customer_id = customer.id
+                company.save(update_fields=['stripe_customer_id'])
+
+            intent = stripe.SetupIntent.create(
+                customer=company.stripe_customer_id,
+                payment_method_types=['card'],
+            )
+            
+            return Response({'client_secret': intent.client_secret})
+        except Exception as e:
+            logger.exception("Error creating SetupIntent")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class UpdateDefaultPaymentMethodView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user
+            company = user.company
+            payment_method_id = request.data.get('payment_method_id')
+            
+            if not payment_method_id:
+                return Response({'error': 'payment_method_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if not company.stripe_customer_id:
+                return Response({'error': 'No Stripe customer'}, status=status.HTTP_400_BAD_REQUEST)
+
+            stripe.Customer.modify(
+                company.stripe_customer_id,
+                invoice_settings={'default_payment_method': payment_method_id}
+            )
+            
+            return Response({'message': 'Default payment method updated'})
+        except Exception as e:
+            logger.exception("Error updating default payment method")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

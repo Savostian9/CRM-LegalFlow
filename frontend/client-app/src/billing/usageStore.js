@@ -1,6 +1,6 @@
 // Simple reactive store for billing usage & trial info
 import { reactive } from 'vue';
-import axios from 'axios';
+import axios from '@/axios-setup';
 
 export const billingUsageState = reactive({
   loading: false,
@@ -23,7 +23,7 @@ export async function loadBillingUsage(force=false) {
   try {
     const token = localStorage.getItem('user-token');
     if (!token) throw new Error('NO_TOKEN');
-    const res = await axios.get('http://127.0.0.1:8000/api/billing/usage/', { headers: { Authorization: `Token ${token}` }});
+    const res = await axios.get('/api/billing/usage/', { headers: { Authorization: `Token ${token}` }});
     billingUsageState.data = res.data;
     const plan = res.data?.plan;
     billingUsageState.isTrial = plan === 'TRIAL';

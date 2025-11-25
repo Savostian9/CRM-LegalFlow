@@ -1,0 +1,10 @@
+[2025-11-15 18:59:55,316] DEBUG django.db.backends — (0.000) 
+            SELECT name, type FROM sqlite_master
+            WHERE type in ('table', 'view') AND NOT name='sqlite_sequence'
+            ORDER BY name; args=None; alias=default
+[2025-11-15 18:59:55,316] DEBUG django.db.backends — (0.000) 
+            SELECT name, type FROM sqlite_master
+            WHERE type in ('table', 'view') AND NOT name='sqlite_sequence'
+            ORDER BY name; args=None; alias=default
+[2025-11-15 18:59:55,319] DEBUG django.db.backends — (0.000) SELECT "django_migrations"."id", "django_migrations"."app", "django_migrations"."name", "django_migrations"."applied" FROM "django_migrations"; args=(); alias=default
+[2025-11-15 18:59:55,319] DEBUG django.db.backends — (0.000) SELECT "django_migrations"."id", "django_migrations"."app", "django_migrations"."name", "django_migrations"."applied" FROM "django_migrations"; args=(); alias=default

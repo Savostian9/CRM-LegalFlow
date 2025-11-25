@@ -6,8 +6,16 @@
     <div v-else class="plan-content">
       <section class="plan-summary" :class="{ trial: isTrial, pro: isPro }">
         <div class="plan-summary__header">
-          <span class="plan-summary__label">{{ $t('billing.plan.active') }}</span>
-          <h2>{{ planLabel }}</h2>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span class="plan-summary__label">{{ $t('billing.plan.active') }}</span>
+            <h2>{{ planLabel }}</h2>
+          </div>
+          <button v-if="hasStripeCustomer" class="manage-sub-btn" @click="openPortal" :disabled="portalLoading">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+              <path fill-rule="evenodd" d="M2.5 4A1.5 1.5 0 0 0 1 5.5V6h18v-.5A1.5 1.5 0 0 0 17.5 4h-15ZM19 8.5H1v6A1.5 1.5 0 0 0 2.5 16h15a1.5 1.5 0 0 0 1.5-1.5v-6ZM3 13.25a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75Zm4.75-.75a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" clip-rule="evenodd" />
+            </svg>
+            {{ portalLoading ? $t('common.loading') : $t('billing.manageSubscription') }}
+          </button>
         </div>
         <p v-if="isTrial">{{ $t('billing.trial.remaining', { days: daysLeft, dayWord: dayWord }) }}</p>
         <p v-if="isTrial && trialEndsAt">{{ $t('billing.trial.until', { date: formatDate(trialEndsAt) }) }}</p>
@@ -66,7 +74,7 @@ export default {
   name: 'MyPlanView',
   components: { PricingPlans },
   data(){
-    return { upgradeLoading:false, upgradeTarget:null, billingCycle: 'month' };
+    return { upgradeLoading:false, upgradeTarget:null, billingCycle: 'month', portalLoading: false };
   },
   computed:{
     loading(){ return billingUsageState.loading && !billingUsageState.loaded; },
@@ -86,6 +94,7 @@ export default {
     },
     isStarter(){ return this.planCode === 'STARTER'; },
     isPro(){ return this.planCode === 'PRO'; },
+    hasStripeCustomer(){ return !!this.usage?.stripe_customer_id; },
     availableUpgradeTargets(){
       const map = {
         TRIAL: ['STARTER', 'PRO'],
@@ -212,6 +221,21 @@ export default {
         this.upgradeLoading = false;
         this.upgradeTarget = null;
       }
+    },
+    async openPortal(){
+      this.portalLoading = true;
+      try {
+        const token = localStorage.getItem('user-token');
+        const res = await axios.post('/api/billing/portal/', {}, { headers: { Authorization: `Token ${token}` } });
+        if (res.data && res.data.url) {
+          window.location.href = res.data.url;
+        }
+      } catch (e) {
+        console.error(e);
+        this.$toast && this.$toast.error(this.$t('billing.error'));
+      } finally {
+        this.portalLoading = false;
+      }
     }
   },
   async created(){
@@ -261,4 +285,43 @@ export default {
 .limit-card__progress-bar { height:100%; background:linear-gradient(90deg,#2563eb,#7c3aed); border-radius:999px; transition:width 0.3s ease; }
 .limit-card__progress-value { font-size:12px; font-weight:600; color:#475569; min-width:34px; text-align:right; }
 .loading, .error { padding:20px; }
+
+.manage-sub-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #fff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.manage-sub-btn:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+.manage-sub-btn:active {
+  transform: translateY(0);
+  background-color: #f1f5f9;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+.manage-sub-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+.manage-sub-btn svg {
+  color: #64748b;
+}
+.manage-sub-btn:hover svg {
+  color: #475569;
+}
 </style>
