@@ -111,6 +111,7 @@ class CreateCheckoutSessionView(APIView):
                 customer_update={
                     'address': 'auto',
                     'name': 'auto',
+                    'shipping': 'auto',  # Required for tax_id_collection
                 },
                 billing_address_collection='required',
                 shipping_address_collection={
