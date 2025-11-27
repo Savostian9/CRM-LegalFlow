@@ -1,5 +1,6 @@
 import stripe
 import logging
+import traceback
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -12,8 +13,13 @@ from crm_app.models import Company
 
 logger = logging.getLogger(__name__)
 
-# Configure Stripe
-stripe.api_key = settings.STRIPE_SECRET_KEY
+# Configure Stripe - log if key is missing
+_stripe_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+if _stripe_key:
+    stripe.api_key = _stripe_key
+    logger.info("Stripe API key configured successfully")
+else:
+    logger.error("STRIPE_SECRET_KEY is not configured!")
 
 # Price IDs mapping
 # TODO: Add Yearly Price IDs when available
@@ -34,10 +40,16 @@ class CreateCheckoutSessionView(APIView):
     def post(self, request):
         user = None
         try:
+            # Check Stripe key at runtime
+            if not stripe.api_key:
+                logger.error("Stripe API key is not set!")
+                return Response({'error': 'Payment system not configured'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
             user = request.user
             logger.info(f"CreateCheckoutSession: Starting for user={user.email if user else 'unknown'}")
             
             if not user.company:
+
                 logger.warning(f"CreateCheckoutSession: User {user.email} has no company")
                 return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -126,8 +138,10 @@ class CreateCheckoutSessionView(APIView):
             logger.exception(f"Stripe API error for user={user.email if user else 'unknown'}: {e}")
             return Response({'error': f'Stripe error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
-            logger.exception(f"Stripe checkout error for user={user.email if user else 'unknown'}")
+            tb = traceback.format_exc()
+            logger.error(f"Stripe checkout error for user={user.email if user else 'unknown'}: {e}\n{tb}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 @csrf_exempt
