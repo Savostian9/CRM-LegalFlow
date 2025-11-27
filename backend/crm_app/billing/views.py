@@ -189,18 +189,24 @@ def handle_checkout_completed(session):
     metadata = session.get('metadata', {})
     company_id = metadata.get('company_id')
     plan_code = metadata.get('plan')
+    
+    logger.info(f"handle_checkout_completed: session_id={session.get('id')}, customer={customer_id}, subscription={subscription_id}")
+    logger.info(f"handle_checkout_completed: metadata={metadata}, company_id={company_id}, plan_code={plan_code}")
 
     if company_id and plan_code:
         try:
             company = Company.objects.get(id=company_id)
+            old_plan = company.plan
             company.stripe_customer_id = customer_id
             company.stripe_subscription_id = subscription_id
-            company.plan = plan_code
+            company.plan = plan_code.upper()  # Ensure uppercase
             company.subscription_status = 'active'
             company.save()
-            logger.info(f"Company {company.name} upgraded to {plan_code}")
+            logger.info(f"Company {company.name} upgraded from {old_plan} to {plan_code.upper()}")
         except Company.DoesNotExist:
             logger.error(f"Company {company_id} not found in webhook")
+    else:
+        logger.warning(f"handle_checkout_completed: Missing company_id={company_id} or plan_code={plan_code}")
 
 def handle_subscription_updated(subscription):
     # Check status
