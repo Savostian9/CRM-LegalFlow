@@ -116,7 +116,9 @@ export default {
         STARTER: ['PRO'],
         PRO: ['STARTER']
       };
-      return map[current] || ['STARTER', 'PRO'];
+      const result = map[current] || ['STARTER', 'PRO'];
+      console.log('[MyPlanView] availableUpgradeTargets:', { current, planCode: this.planCode, subscriptionStatus: this.subscriptionStatus, isActiveSubscription: this.isActiveSubscription, result });
+      return result;
     },
     limitRows(){
       const u = this.usage;
