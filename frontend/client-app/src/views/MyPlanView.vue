@@ -32,6 +32,7 @@
           :loading-plan="upgradeLoading ? upgradeTarget : null"
           :allowed-targets="availableUpgradeTargets"
           :billing-cycle="billingCycle"
+          :is-canceled="isCanceledSubscription"
           @update:billingCycle="billingCycle = $event"
           @select="handlePlanSelect"
         />
@@ -108,6 +109,10 @@ export default {
     },
     isStarter(){ return this.planCode === 'STARTER' && this.isActiveSubscription; },
     isPro(){ return this.planCode === 'PRO' && this.isActiveSubscription; },
+    isCanceledSubscription(){
+      // True if user had a paid plan but subscription is now canceled
+      return this.planCode !== 'TRIAL' && !this.isActiveSubscription;
+    },
     hasStripeCustomer(){ return !!this.usage?.stripe_customer_id; },
     availableUpgradeTargets(){
       const current = this.effectivePlanCode;

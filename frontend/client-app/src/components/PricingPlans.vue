@@ -37,7 +37,7 @@
         <div class="plan-head">
           <h4>{{ plan.name }}</h4>
           <span v-if="planBadge(plan)" class="badge" :class="{ primary: plan.highlight }">{{ planBadge(plan) }}</span>
-          <span v-if="isCurrentPlan(plan.code)" class="current-chip">{{ currentText }}</span>
+          <span v-if="isCurrentPlan(plan.code) && !(plan.code === 'TRIAL' && isCanceled)" class="current-chip">{{ currentText }}</span>
         </div>
         <div class="price">
           <template v-if="currentPrice(plan) === 0">0 zł <span>/ {{ pricePeriodLabel(plan) }}</span></template>
@@ -88,7 +88,8 @@ export default {
     currentLabel: { type: String, default: '' },
     processingLabel: { type: String, default: '' },
     unavailableLabel: { type: String, default: '' },
-    billingCycle: { type: String, default: 'month' }
+    billingCycle: { type: String, default: 'month' },
+    isCanceled: { type: Boolean, default: false }  // true if paid subscription was canceled
   },
   emits: ['select', 'update:billingCycle'],
   computed: {
