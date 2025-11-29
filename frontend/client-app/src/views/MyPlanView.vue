@@ -193,7 +193,9 @@ export default {
     handlePlanSelect(planCode){
       const target = (planCode || '').toUpperCase();
       if (!target) { return; }
-      if (target === this.planCode) {
+      // Use effectivePlanCode (which is TRIAL if subscription is canceled)
+      // instead of planCode (which may still be PRO/STARTER in DB)
+      if (target === this.effectivePlanCode && this.isActiveSubscription) {
         if (this.$toast) {
           const message = this.$t('billing.plan.active');
           if (typeof this.$toast.info === 'function') {
