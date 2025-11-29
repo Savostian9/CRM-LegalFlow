@@ -150,10 +150,22 @@ export default {
       return this.allowedSet.has(upper);
     },
     onSelect(code) {
+      console.log('[PricingPlans] onSelect called:', { 
+        code, 
+        isSelectable: this.isPlanSelectable(code), 
+        isCurrentPlan: this.isCurrentPlan(code),
+        loadingPlan: this.loadingPlan,
+        currentPlan: this.currentPlan,
+        normalizedCurrentPlan: this.normalizedCurrentPlan,
+        allowedTargets: this.allowedTargets,
+        allowedSet: this.allowedSet ? Array.from(this.allowedSet) : null
+      });
       if (!code) return;
       if (!this.isPlanSelectable(code) || this.isCurrentPlan(code) || this.loadingPlan === code) {
+        console.log('[PricingPlans] onSelect blocked');
         return;
       }
+      console.log('[PricingPlans] emitting select event');
       this.$emit('select', code);
     }
   }
