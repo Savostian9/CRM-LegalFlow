@@ -56,6 +56,7 @@ class Company(models.Model):
     stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
     stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True)
     subscription_status = models.CharField(max_length=50, default='active')  # active, past_due, canceled, etc.
+    subscription_ends_at = models.DateTimeField(null=True, blank=True, help_text='Дата окончания текущего периода подписки')
 
     def __str__(self):
         return self.name

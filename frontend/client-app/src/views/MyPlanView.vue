@@ -21,6 +21,9 @@
         <p v-if="isTrial && trialEndsAt">{{ $t('billing.trial.until', { date: formatDate(trialEndsAt) }) }}</p>
         <p v-else-if="isStarter">{{ $t('billing.plan.currentStarter') }}</p>
         <p v-else-if="isPro">{{ $t('billing.plan.proActive') }}</p>
+        <p v-if="subscriptionEndsAt && !isTrial" class="plan-summary__ends">
+          {{ $t('billing.subscriptionEndsAt') }}: {{ formatDate(subscriptionEndsAt) }}
+        </p>
         <p class="plan-summary__hint">{{ $t('pricing.subtitle') }}</p>
       </section>
 
@@ -84,6 +87,7 @@ export default {
     isTrial(){ return billingUsageState.isTrial; },
     daysLeft(){ return billingUsageState.daysLeft; },
     trialEndsAt(){ return billingUsageState.trialEndsAt; },
+    subscriptionEndsAt(){ return this.usage?.subscription_ends_at; },
     planCode(){ return (this.usage?.plan || 'TRIAL').toUpperCase(); },
     subscriptionStatus() { return this.usage?.subscription_status; },
     isActiveSubscription() {

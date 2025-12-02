@@ -702,6 +702,7 @@ const messages = {
         unavailable: 'Недоступно'
       },
       statusCanceled: 'Отменена',
+      subscriptionEndsAt: 'Подписка активна до',
       manageSubscription: 'Управление подпиской',
       toast: {
         upgradeSoon: 'Функция апгрейда скоро будет доступна.',
@@ -1410,6 +1411,7 @@ const messages = {
         unavailable: 'Niedostępny'
       },
       statusCanceled: 'Anulowana',
+      subscriptionEndsAt: 'Subskrypcja aktywna do',
       manageSubscription: 'Zarządzaj subskrypcją',
       toast: {
         upgradeSoon: 'Funkcja ulepszenia wkrótce będzie dostępna.',

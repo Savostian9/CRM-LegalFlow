@@ -1210,9 +1210,11 @@ class BillingUsageView(APIView):
         formatted = format_usage(limits, raw_usage)
 
         payment_method_info = None
+        subscription_ends_at = None
         if company.stripe_customer_id:
             try:
                 import stripe
+                from datetime import datetime
                 stripe.api_key = settings.STRIPE_SECRET_KEY
                 customer = stripe.Customer.retrieve(
                     company.stripe_customer_id, 
@@ -1234,6 +1236,9 @@ class BillingUsageView(APIView):
                     if company.subscription_status != sub.status:
                         company.subscription_status = sub.status
                         company.save(update_fields=['subscription_status'])
+                    # Get subscription end date
+                    if sub.current_period_end:
+                        subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
                 else:
                     # No active subscriptions found in Stripe
                     if company.subscription_status != 'canceled':
@@ -1246,6 +1251,7 @@ class BillingUsageView(APIView):
             'plan': plan_code,
             'stripe_customer_id': company.stripe_customer_id,
             'subscription_status': company.subscription_status,
+            'subscription_ends_at': subscription_ends_at,
             'limits': limits,
             'usage': formatted,
             'payment_method': payment_method_info,
