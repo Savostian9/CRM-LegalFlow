@@ -1243,9 +1243,20 @@ class BillingUsageView(APIView):
                         if company.subscription_status != sub.status:
                             company.subscription_status = sub.status
                             company.save(update_fields=['subscription_status'])
-                        # Get subscription end date
-                        if sub.current_period_end:
+                        
+                        # Get subscription end date from latest_invoice (new Stripe API 2025+)
+                        # current_period_end removed in new API, use invoice.lines.data[0].period.end
+                        if hasattr(sub, 'current_period_end') and sub.current_period_end:
                             subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
+                        elif sub.latest_invoice:
+                            try:
+                                inv = stripe.Invoice.retrieve(sub.latest_invoice)
+                                if inv.lines and inv.lines.data:
+                                    period_end = inv.lines.data[0].period.end
+                                    if period_end:
+                                        subscription_ends_at = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
+                            except Exception as inv_err:
+                                logging.getLogger(__name__).warning(f"Could not retrieve invoice {sub.latest_invoice}: {inv_err}")
                     else:
                         # No active subscriptions found in Stripe via customer
                         if company.subscription_status != 'canceled':
@@ -1263,8 +1274,19 @@ class BillingUsageView(APIView):
                         if company.subscription_status != sub.status:
                             company.subscription_status = sub.status
                             company.save(update_fields=['subscription_status'])
-                        if sub.current_period_end:
+                        
+                        # Try current_period_end first (old API), then latest_invoice (new API)
+                        if hasattr(sub, 'current_period_end') and sub.current_period_end:
                             subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
+                        elif sub.latest_invoice:
+                            try:
+                                inv = stripe.Invoice.retrieve(sub.latest_invoice)
+                                if inv.lines and inv.lines.data:
+                                    period_end = inv.lines.data[0].period.end
+                                    if period_end:
+                                        subscription_ends_at = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
+                            except Exception as inv_err:
+                                logging.getLogger(__name__).warning(f"Could not retrieve invoice {sub.latest_invoice}: {inv_err}")
                         stripe_error = None  # fallback сработал
                 except Exception as e:
                     logging.getLogger(__name__).error(f"Stripe Subscription.retrieve error for {company.stripe_subscription_id}: {e}")
