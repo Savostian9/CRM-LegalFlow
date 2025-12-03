@@ -1,5 +1,6 @@
 from rest_framework.exceptions import ValidationError
 import random
+import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -1211,47 +1212,72 @@ class BillingUsageView(APIView):
 
         payment_method_info = None
         subscription_ends_at = None
-        if company.stripe_customer_id:
-            try:
-                import stripe
-                from datetime import datetime
-                stripe.api_key = settings.STRIPE_SECRET_KEY
-                customer = stripe.Customer.retrieve(
-                    company.stripe_customer_id, 
-                    expand=['invoice_settings.default_payment_method', 'subscriptions']
-                )
-                pm = customer.invoice_settings.default_payment_method
-                if pm and isinstance(pm, dict):
-                    card = pm.get('card', {})
-                    payment_method_info = {
-                        'brand': card.get('brand'),
-                        'last4': card.get('last4'),
-                        'exp_month': card.get('exp_month'),
-                        'exp_year': card.get('exp_year'),
-                    }
-                
-                # Sync subscription status from Stripe
-                if customer.subscriptions and customer.subscriptions.data:
-                    sub = customer.subscriptions.data[0]
-                    if company.subscription_status != sub.status:
-                        company.subscription_status = sub.status
-                        company.save(update_fields=['subscription_status'])
-                    # Get subscription end date
-                    if sub.current_period_end:
-                        subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
-                else:
-                    # No active subscriptions found in Stripe
-                    if company.subscription_status != 'canceled':
-                        company.subscription_status = 'canceled'
-                        company.save(update_fields=['subscription_status'])
-            except Exception:
-                pass
+        stripe_error = None
+        
+        # Пытаемся получить данные из Stripe
+        if company.stripe_customer_id or company.stripe_subscription_id:
+            import stripe
+            from datetime import datetime
+            stripe.api_key = settings.STRIPE_SECRET_KEY
+            
+            # Способ 1: через Customer с expand
+            if company.stripe_customer_id:
+                try:
+                    customer = stripe.Customer.retrieve(
+                        company.stripe_customer_id, 
+                        expand=['invoice_settings.default_payment_method', 'subscriptions']
+                    )
+                    pm = customer.invoice_settings.default_payment_method
+                    if pm and isinstance(pm, dict):
+                        card = pm.get('card', {})
+                        payment_method_info = {
+                            'brand': card.get('brand'),
+                            'last4': card.get('last4'),
+                            'exp_month': card.get('exp_month'),
+                            'exp_year': card.get('exp_year'),
+                        }
+                    
+                    # Sync subscription status from Stripe
+                    if customer.subscriptions and customer.subscriptions.data:
+                        sub = customer.subscriptions.data[0]
+                        if company.subscription_status != sub.status:
+                            company.subscription_status = sub.status
+                            company.save(update_fields=['subscription_status'])
+                        # Get subscription end date
+                        if sub.current_period_end:
+                            subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
+                    else:
+                        # No active subscriptions found in Stripe via customer
+                        if company.subscription_status != 'canceled':
+                            company.subscription_status = 'canceled'
+                            company.save(update_fields=['subscription_status'])
+                except Exception as e:
+                    logging.getLogger(__name__).error(f"Stripe Customer.retrieve error for {company.stripe_customer_id}: {e}")
+                    stripe_error = str(e)
+            
+            # Способ 2 (fallback): напрямую через Subscription ID
+            if not subscription_ends_at and company.stripe_subscription_id:
+                try:
+                    sub = stripe.Subscription.retrieve(company.stripe_subscription_id)
+                    if sub:
+                        if company.subscription_status != sub.status:
+                            company.subscription_status = sub.status
+                            company.save(update_fields=['subscription_status'])
+                        if sub.current_period_end:
+                            subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
+                        stripe_error = None  # fallback сработал
+                except Exception as e:
+                    logging.getLogger(__name__).error(f"Stripe Subscription.retrieve error for {company.stripe_subscription_id}: {e}")
+                    if not stripe_error:
+                        stripe_error = str(e)
 
         return Response({
             'plan': plan_code,
             'stripe_customer_id': company.stripe_customer_id,
+            'stripe_subscription_id': company.stripe_subscription_id,
             'subscription_status': company.subscription_status,
             'subscription_ends_at': subscription_ends_at,
+            'stripe_error': stripe_error,  # для отладки, можно убрать в проде
             'limits': limits,
             'usage': formatted,
             'payment_method': payment_method_info,
