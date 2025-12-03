@@ -1217,7 +1217,7 @@ class BillingUsageView(APIView):
         # Пытаемся получить данные из Stripe
         if company.stripe_customer_id or company.stripe_subscription_id:
             import stripe
-            from datetime import datetime
+            from datetime import datetime, timezone as dt_timezone
             stripe.api_key = settings.STRIPE_SECRET_KEY
             
             # Способ 1: через Customer с expand
@@ -1247,14 +1247,14 @@ class BillingUsageView(APIView):
                         # Get subscription end date from latest_invoice (new Stripe API 2025+)
                         # current_period_end removed in new API, use invoice.lines.data[0].period.end
                         if hasattr(sub, 'current_period_end') and sub.current_period_end:
-                            subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
+                            subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=dt_timezone.utc).isoformat()
                         elif sub.latest_invoice:
                             try:
                                 inv = stripe.Invoice.retrieve(sub.latest_invoice)
                                 if inv.lines and inv.lines.data:
                                     period_end = inv.lines.data[0].period.end
                                     if period_end:
-                                        subscription_ends_at = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
+                                        subscription_ends_at = datetime.fromtimestamp(period_end, tz=dt_timezone.utc).isoformat()
                             except Exception as inv_err:
                                 logging.getLogger(__name__).warning(f"Could not retrieve invoice {sub.latest_invoice}: {inv_err}")
                     else:
@@ -1277,14 +1277,14 @@ class BillingUsageView(APIView):
                         
                         # Try current_period_end first (old API), then latest_invoice (new API)
                         if hasattr(sub, 'current_period_end') and sub.current_period_end:
-                            subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=timezone.utc).isoformat()
+                            subscription_ends_at = datetime.fromtimestamp(sub.current_period_end, tz=dt_timezone.utc).isoformat()
                         elif sub.latest_invoice:
                             try:
                                 inv = stripe.Invoice.retrieve(sub.latest_invoice)
                                 if inv.lines and inv.lines.data:
                                     period_end = inv.lines.data[0].period.end
                                     if period_end:
-                                        subscription_ends_at = datetime.fromtimestamp(period_end, tz=timezone.utc).isoformat()
+                                        subscription_ends_at = datetime.fromtimestamp(period_end, tz=dt_timezone.utc).isoformat()
                             except Exception as inv_err:
                                 logging.getLogger(__name__).warning(f"Could not retrieve invoice {sub.latest_invoice}: {inv_err}")
                         stripe_error = None  # fallback сработал
