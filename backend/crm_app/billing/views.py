@@ -5,6 +5,7 @@ from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.core.mail import EmailMessage
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -294,26 +295,131 @@ def handle_invoice_finalized(invoice):
 
 def handle_invoice_payment_succeeded(invoice):
     """
-    Handle successful invoice payment - send receipt to customer.
+    Handle successful invoice payment - send receipt/invoice email to customer.
     """
     invoice_id = invoice.get('id')
     customer_id = invoice.get('customer')
     customer_email = invoice.get('customer_email')
     amount_paid = invoice.get('amount_paid', 0)
     currency = invoice.get('currency', 'pln').upper()
+    invoice_pdf = invoice.get('invoice_pdf')  # URL to PDF invoice
+    hosted_invoice_url = invoice.get('hosted_invoice_url')  # Stripe hosted invoice page
     
     logger.info(f"Invoice payment succeeded: id={invoice_id}, customer={customer_id}, "
                 f"email={customer_email}, amount={amount_paid/100:.2f} {currency}")
     
-    # The receipt is usually sent automatically by Stripe if configured,
-    # but we log it for tracking purposes
     try:
         company = Company.objects.filter(stripe_customer_id=customer_id).first()
+        company_name = company.name if company else 'Customer'
+        
         if company:
             logger.info(f"Payment received for company {company.name}: "
                        f"{amount_paid/100:.2f} {currency}")
+        
+        # Send invoice email to customer
+        if customer_email:
+            try:
+                amount_formatted = f"{amount_paid/100:.2f} {currency}"
+                
+                # Build email content
+                subject = f"Faktura za subskrypcję LegalFlow - {amount_formatted}"
+                
+                text_body = f"""Dzień dobry,
+
+Dziękujemy za płatność za subskrypcję LegalFlow.
+
+Szczegóły płatności:
+- Kwota: {amount_formatted}
+- Numer faktury: {invoice_id}
+- Firma: {company_name}
+
+"""
+                if invoice_pdf:
+                    text_body += f"Faktura PDF: {invoice_pdf}\n"
+                if hosted_invoice_url:
+                    text_body += f"Podgląd faktury online: {hosted_invoice_url}\n"
+                
+                text_body += """
+Jeśli masz pytania dotyczące faktury, odpowiedz na ten email.
+
+Pozdrawiamy,
+Zespół LegalFlow
+"""
+                
+                html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }}
+        .amount {{ font-size: 24px; font-weight: bold; color: #059669; margin: 20px 0; }}
+        .details {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+        .btn {{ display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 5px 10px 0; }}
+        .btn-secondary {{ background: #6b7280; }}
+        .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>LegalFlow</h1>
+            <p>Potwierdzenie płatności</p>
+        </div>
+        <div class="content">
+            <p>Dzień dobry,</p>
+            <p>Dziękujemy za płatność za subskrypcję LegalFlow.</p>
+            
+            <div class="details">
+                <p><strong>Szczegóły płatności:</strong></p>
+                <p class="amount">✓ {amount_formatted}</p>
+                <p><strong>Numer faktury:</strong> {invoice_id}</p>
+                <p><strong>Firma:</strong> {company_name}</p>
+            </div>
+            
+            <p>
+"""
+                if invoice_pdf:
+                    html_body += f'<a href="{invoice_pdf}" class="btn">📄 Pobierz fakturę PDF</a>'
+                if hosted_invoice_url:
+                    html_body += f'<a href="{hosted_invoice_url}" class="btn btn-secondary">🔗 Zobacz fakturę online</a>'
+                
+                html_body += """
+            </p>
+            
+            <p>Jeśli masz pytania dotyczące faktury, odpowiedz na ten email.</p>
+        </div>
+        <div class="footer">
+            <p>Pozdrawiamy,<br>Zespół LegalFlow</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+                
+                from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+                email = EmailMessage(
+                    subject=subject,
+                    body=text_body,
+                    from_email=from_email,
+                    to=[customer_email],
+                )
+                email.content_subtype = 'html'
+                email.body = html_body
+                email.send(fail_silently=False)
+                
+                logger.info(f"Invoice email sent to {customer_email} for invoice {invoice_id}")
+                
+            except Exception as e:
+                logger.error(f"Failed to send invoice email to {customer_email}: {e}")
+        else:
+            logger.warning(f"No customer email for invoice {invoice_id}, cannot send email")
+            
     except Exception as e:
-        logger.error(f"Error logging payment for customer {customer_id}: {e}")
+        logger.error(f"Error processing payment for customer {customer_id}: {e}")
 
 class CreateCustomerPortalSessionView(APIView):
     permission_classes = [IsAuthenticated]
