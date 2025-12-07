@@ -614,9 +614,11 @@ class ChangePlanView(APIView):
                         anchor_dt = datetime.datetime.fromtimestamp(billing_anchor)
                         now = datetime.datetime.now()
                         
-                        # Find next billing date after now
+                        # Find next billing date after now (this is period_end)
                         next_billing = anchor_dt
+                        prev_billing = anchor_dt
                         while next_billing <= now:
+                            prev_billing = next_billing
                             if interval == 'month':
                                 next_billing += relativedelta(months=interval_count)
                             elif interval == 'year':
@@ -627,7 +629,8 @@ class ChangePlanView(APIView):
                                 next_billing += relativedelta(days=interval_count)
                         
                         current_period_end = int(next_billing.timestamp())
-                        logger.info(f"ChangePlan: Calculated period_end from billing_anchor: {current_period_end}")
+                        current_period_start = int(prev_billing.timestamp())
+                        logger.info(f"ChangePlan: Calculated period from billing_anchor: start={current_period_start}, end={current_period_end}")
                 except Exception as e:
                     logger.warning(f"ChangePlan: Error calculating period from anchor: {e}")
             
@@ -808,6 +811,7 @@ class ChangePlanView(APIView):
                             {
                                 # Phase 1: Current plan until period end
                                 'items': [{'price': current_price_id, 'quantity': 1}],
+                                'start_date': current_period_start,  # Required for anchoring end_date
                                 'end_date': current_period_end,
                             },
                             {
