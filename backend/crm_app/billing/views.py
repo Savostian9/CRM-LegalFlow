@@ -564,25 +564,51 @@ class ChangePlanView(APIView):
             # Get current subscription from Stripe
             try:
                 subscription = stripe.Subscription.retrieve(sub_id)
-            except stripe.error.InvalidRequestError:
+                logger.info(f"ChangePlan: Retrieved subscription {sub_id}, status={subscription.status}")
+            except stripe.error.InvalidRequestError as e:
+                logger.error(f"ChangePlan: Subscription {sub_id} not found: {e}")
                 return Response({'error': 'Subscription not found in Stripe'}, 
                               status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                logger.exception(f"ChangePlan: Error retrieving subscription: {e}")
+                return Response({'error': f'Error retrieving subscription: {str(e)}'}, 
+                              status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             if subscription.status not in ('active', 'trialing'):
                 return Response({'error': f'Subscription is {subscription.status}, cannot change plan'}, 
                               status=status.HTTP_400_BAD_REQUEST)
             
-            # Get current subscription item
-            if not subscription.get('items') or not subscription['items'].get('data'):
-                return Response({'error': 'No subscription items found'}, 
+            # Get current subscription item - use safe access
+            try:
+                items_data = subscription.get('items', {})
+                if hasattr(items_data, 'data'):
+                    items_list = items_data.data
+                else:
+                    items_list = items_data.get('data', [])
+                
+                if not items_list:
+                    return Response({'error': 'No subscription items found'}, 
+                                  status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+                first_item = items_list[0]
+                subscription_item_id = first_item.get('id') or first_item.id
+                
+                # Get price info
+                price_obj = first_item.get('price') or first_item.price
+                if hasattr(price_obj, 'id'):
+                    current_price_id = price_obj.id
+                else:
+                    current_price_id = price_obj.get('id')
+                
+                # Get period end - Stripe objects use attribute access
+                current_period_end = getattr(subscription, 'current_period_end', None) or subscription.get('current_period_end')
+                
+                logger.info(f"ChangePlan: item_id={subscription_item_id}, price_id={current_price_id}, period_end={current_period_end}")
+                
+            except Exception as e:
+                logger.exception(f"ChangePlan: Error parsing subscription items: {e}")
+                return Response({'error': f'Error parsing subscription: {str(e)}'}, 
                               status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            subscription_item_id = subscription['items']['data'][0]['id']
-            current_price_id = subscription['items']['data'][0]['price']['id']
-            # Stripe objects support both dict and attribute access
-            current_period_end = subscription.get('current_period_end') or getattr(subscription, 'current_period_end', None)
-            
-            logger.info(f"ChangePlan: subscription period_end={current_period_end}, status={subscription.status}")
             
             # Determine if upgrade or downgrade
             upgrading = is_upgrade(company.plan, target_plan)
