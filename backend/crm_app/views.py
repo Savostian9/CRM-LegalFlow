@@ -1319,6 +1319,7 @@ class BillingUsageView(APIView):
                 from datetime import datetime, timezone as dt_timezone
                 from .billing.plans import STRIPE_PRICES
                 stripe.api_key = settings.STRIPE_SECRET_KEY
+                logger = logging.getLogger(__name__)
                 
                 # Get subscription with schedule expanded
                 sub = stripe.Subscription.retrieve(
@@ -1326,44 +1327,61 @@ class BillingUsageView(APIView):
                     expand=['schedule']
                 )
                 
-                schedule = sub.get('schedule')
+                # Get schedule - try both attribute and dict access
+                schedule = getattr(sub, 'schedule', None) or sub.get('schedule')
+                logger.info(f"BillingUsage: schedule raw = {schedule}, type = {type(schedule)}")
+                
                 if schedule and isinstance(schedule, str):
                     # Schedule is ID, need to retrieve it
                     schedule = stripe.SubscriptionSchedule.retrieve(schedule)
+                    logger.info(f"BillingUsage: retrieved schedule {schedule.get('id')}, status={schedule.get('status')}")
                 
-                if schedule and schedule.get('status') == 'active':
-                    phases = schedule.get('phases', [])
-                    if len(phases) >= 2:
-                        # There's a scheduled phase change
-                        current_phase = phases[0]
-                        next_phase = phases[1]
+                if schedule:
+                    schedule_status = getattr(schedule, 'status', None) or schedule.get('status')
+                    logger.info(f"BillingUsage: schedule status = {schedule_status}")
+                    
+                    if schedule_status == 'active':
+                        phases = getattr(schedule, 'phases', None) or schedule.get('phases', [])
+                        logger.info(f"BillingUsage: phases count = {len(phases) if phases else 0}")
                         
-                        # Get next phase price to determine plan
-                        next_price_id = None
-                        if next_phase.get('items'):
-                            next_price_id = next_phase['items'][0].get('price')
-                        
-                        # Map price_id back to plan name
-                        next_plan = None
-                        for plan_name, prices in STRIPE_PRICES.items():
-                            if next_price_id in prices.values():
-                                next_plan = plan_name
-                                break
-                        
-                        if next_plan and next_plan != plan_code:
-                            # Get effective date
-                            effective_ts = current_phase.get('end_date')
-                            effective_str = ''
-                            if effective_ts:
-                                effective_dt = datetime.fromtimestamp(effective_ts, tz=dt_timezone.utc)
-                                effective_str = effective_dt.strftime('%d.%m.%Y')
+                        if phases and len(phases) >= 2:
+                            # There's a scheduled phase change
+                            current_phase = phases[0]
+                            next_phase = phases[1]
                             
-                            pending_downgrade = {
-                                'new_plan': next_plan,
-                                'effective': effective_str,
-                                'effective_timestamp': effective_ts,
-                                'schedule_id': schedule.get('id'),
-                            }
+                            # Get next phase price to determine plan
+                            next_price_id = None
+                            next_items = next_phase.get('items') if isinstance(next_phase, dict) else getattr(next_phase, 'items', None)
+                            if next_items:
+                                first_item = next_items[0] if isinstance(next_items, list) else next_items
+                                next_price_id = first_item.get('price') if isinstance(first_item, dict) else getattr(first_item, 'price', None)
+                            
+                            logger.info(f"BillingUsage: next_price_id = {next_price_id}")
+                            
+                            # Map price_id back to plan name
+                            next_plan = None
+                            for plan_name, prices in STRIPE_PRICES.items():
+                                if next_price_id in prices.values():
+                                    next_plan = plan_name
+                                    break
+                            
+                            logger.info(f"BillingUsage: next_plan = {next_plan}, current plan_code = {plan_code}")
+                            
+                            if next_plan and next_plan != plan_code:
+                                # Get effective date
+                                effective_ts = current_phase.get('end_date') if isinstance(current_phase, dict) else getattr(current_phase, 'end_date', None)
+                                effective_str = ''
+                                if effective_ts:
+                                    effective_dt = datetime.fromtimestamp(effective_ts, tz=dt_timezone.utc)
+                                    effective_str = effective_dt.strftime('%d.%m.%Y')
+                                
+                                pending_downgrade = {
+                                    'new_plan': next_plan,
+                                    'effective': effective_str,
+                                    'effective_timestamp': effective_ts,
+                                    'schedule_id': schedule.get('id') if isinstance(schedule, dict) else getattr(schedule, 'id', None),
+                                }
+                                logger.info(f"BillingUsage: pending_downgrade = {pending_downgrade}")
             except Exception as e:
                 logging.getLogger(__name__).warning(f"Error checking pending downgrade: {e}")
 
