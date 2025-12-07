@@ -748,14 +748,14 @@ class ChangePlanView(APIView):
                     logger.info(f"ChangePlan CONFIRM: UPGRADE {company.plan} → {target_plan}")
                     
                     # Directly modify the subscription to upgrade
-                    # This will create a proration invoice and charge the saved card
+                    # Use 'always_invoice' to create and charge an invoice immediately
                     updated_subscription = stripe.Subscription.modify(
                         sub_id,
                         items=[{
                             'id': subscription_item_id,
                             'price': new_price_id,
                         }],
-                        proration_behavior='create_prorations',
+                        proration_behavior='always_invoice',  # Creates invoice immediately
                         metadata={
                             'company_id': str(company.id),
                             'plan': target_plan,
