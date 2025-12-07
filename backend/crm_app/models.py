@@ -379,6 +379,7 @@ class UserPermissionSet(models.Model):
     can_upload_files = models.BooleanField(default=True)
     can_invite_users = models.BooleanField(default=True)
     can_manage_users = models.BooleanField(default=True)
+    can_manage_subscription = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

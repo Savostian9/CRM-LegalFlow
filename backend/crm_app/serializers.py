@@ -67,10 +67,18 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 class ProfileSerializer(serializers.ModelSerializer):
+    is_owner = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'avatar']
-        read_only_fields = ['id', 'email']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'phone', 'avatar', 'is_owner']
+        read_only_fields = ['id', 'email', 'is_owner']
+
+    def get_is_owner(self, obj):
+        company = getattr(obj, 'company', None)
+        if company and company.owner_id == obj.id:
+            return True
+        return False
 
     def validate_username(self, value):
         import re
@@ -120,7 +128,7 @@ class UserPermissionSetSerializer(serializers.ModelSerializer):
             'can_create_case', 'can_edit_case', 'can_delete_case',
             'can_create_task', 'can_edit_task', 'can_delete_task',
             'can_upload_files', 'can_invite_users', 'can_manage_users',
-            'updated_at'
+            'can_manage_subscription', 'updated_at'
         ]
 
 

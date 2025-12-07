@@ -9,9 +9,23 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from crm_app.models import Company
+from crm_app.models import Company, UserPermissionSet
 
 logger = logging.getLogger(__name__)
+
+def can_manage_subscription(user):
+    """Check if user has permission to manage subscription."""
+    company = getattr(user, 'company', None)
+    if not company:
+        return False
+    # Owner always can
+    if company.owner_id == user.id:
+        return True
+    # Check permission set
+    try:
+        return user.permset.can_manage_subscription
+    except UserPermissionSet.DoesNotExist:
+        return False
 
 # Configure Stripe - log if key is missing
 _stripe_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
@@ -40,6 +54,10 @@ class CreateCheckoutSessionView(APIView):
     def post(self, request):
         user = None
         try:
+            # Check permission
+            if not can_manage_subscription(request.user):
+                return Response({'error': 'No permission to manage subscription'}, status=status.HTTP_403_FORBIDDEN)
+            
             # Check Stripe key at runtime
             if not stripe.api_key:
                 logger.error("Stripe API key is not set!")
@@ -130,6 +148,15 @@ class CreateCheckoutSessionView(APIView):
                         'company_id': company.id,
                         'plan': target_plan
                     }
+                },
+                # Ensure invoices are sent automatically to customer email
+                invoice_creation={
+                    'enabled': True,
+                    'invoice_data': {
+                        'rendering_options': {
+                            'amount_tax_display': 'include_inclusive_tax',
+                        }
+                    }
                 }
             )
             
@@ -177,6 +204,12 @@ def stripe_webhook(request):
     elif event['type'] == 'customer.subscription.deleted':
         subscription = event['data']['object']
         handle_subscription_deleted(subscription)
+    elif event['type'] == 'invoice.finalized':
+        invoice = event['data']['object']
+        handle_invoice_finalized(invoice)
+    elif event['type'] == 'invoice.payment_succeeded':
+        invoice = event['data']['object']
+        handle_invoice_payment_succeeded(invoice)
     
     return HttpResponse(status=200)
 
@@ -236,11 +269,63 @@ def handle_subscription_deleted(subscription):
     except Exception as e:
         logger.error(f"Error canceling subscription for customer {customer_id}: {e}")
 
+def handle_invoice_finalized(invoice):
+    """
+    Send invoice email to customer when invoice is finalized.
+    This ensures customers receive their invoice/receipt automatically.
+    """
+    invoice_id = invoice.get('id')
+    customer_id = invoice.get('customer')
+    invoice_status = invoice.get('status')
+    
+    logger.info(f"Invoice finalized: id={invoice_id}, customer={customer_id}, status={invoice_status}")
+    
+    try:
+        # Only send if invoice is open (not already paid or voided)
+        if invoice_status == 'open':
+            # Send the invoice email to customer
+            stripe.Invoice.send_invoice(invoice_id)
+            logger.info(f"Invoice {invoice_id} sent to customer {customer_id}")
+        else:
+            logger.info(f"Invoice {invoice_id} not sent - status is {invoice_status}")
+    except stripe.error.InvalidRequestError as e:
+        # Invoice might already be paid or cannot be sent
+        logger.warning(f"Could not send invoice {invoice_id}: {e}")
+    except Exception as e:
+        logger.error(f"Error sending invoice {invoice_id}: {e}")
+
+def handle_invoice_payment_succeeded(invoice):
+    """
+    Handle successful invoice payment - send receipt to customer.
+    """
+    invoice_id = invoice.get('id')
+    customer_id = invoice.get('customer')
+    customer_email = invoice.get('customer_email')
+    amount_paid = invoice.get('amount_paid', 0)
+    currency = invoice.get('currency', 'pln').upper()
+    
+    logger.info(f"Invoice payment succeeded: id={invoice_id}, customer={customer_id}, "
+                f"email={customer_email}, amount={amount_paid/100:.2f} {currency}")
+    
+    # The receipt is usually sent automatically by Stripe if configured,
+    # but we log it for tracking purposes
+    try:
+        company = Company.objects.filter(stripe_customer_id=customer_id).first()
+        if company:
+            logger.info(f"Payment received for company {company.name}: "
+                       f"{amount_paid/100:.2f} {currency}")
+    except Exception as e:
+        logger.error(f"Error logging payment for customer {customer_id}: {e}")
+
 class CreateCustomerPortalSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         try:
+            # Check permission
+            if not can_manage_subscription(request.user):
+                return Response({'error': 'No permission to manage subscription'}, status=status.HTTP_403_FORBIDDEN)
+            
             user = request.user
             if not user.company:
                 return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
@@ -268,6 +353,10 @@ class CancelSubscriptionView(APIView):
 
     def post(self, request):
         try:
+            # Check permission
+            if not can_manage_subscription(request.user):
+                return Response({'error': 'No permission to manage subscription'}, status=status.HTTP_403_FORBIDDEN)
+            
             user = request.user
             if not user.company:
                 return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
@@ -306,6 +395,10 @@ class CreateSetupIntentView(APIView):
 
     def post(self, request):
         try:
+            # Check permission
+            if not can_manage_subscription(request.user):
+                return Response({'error': 'No permission to manage subscription'}, status=status.HTTP_403_FORBIDDEN)
+            
             user = request.user
             if not user.company:
                 return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
@@ -336,6 +429,10 @@ class UpdateDefaultPaymentMethodView(APIView):
 
     def post(self, request):
         try:
+            # Check permission
+            if not can_manage_subscription(request.user):
+                return Response({'error': 'No permission to manage subscription'}, status=status.HTTP_403_FORBIDDEN)
+            
             user = request.user
             company = user.company
             payment_method_id = request.data.get('payment_method_id')

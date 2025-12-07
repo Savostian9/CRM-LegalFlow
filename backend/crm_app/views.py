@@ -627,6 +627,8 @@ class ProfilePermissionsView(APIView):
     def get(self, request):
         user = request.user
         role = getattr(user, 'role', None)
+        company = getattr(user, 'company', None)
+        is_owner = company and company.owner_id == user.id
         # ADMIN and LEAD have all permissions
         if role in ('ADMIN', 'LEAD'):
             perms = {
@@ -642,6 +644,7 @@ class ProfilePermissionsView(APIView):
                 'can_upload_files': True,
                 'can_invite_users': True,
                 'can_manage_users': True,
+                'can_manage_subscription': is_owner,  # Only owner by default
             }
         else:
             try:
@@ -659,6 +662,7 @@ class ProfilePermissionsView(APIView):
                     'can_upload_files': permset.can_upload_files,
                     'can_invite_users': permset.can_invite_users,
                     'can_manage_users': permset.can_manage_users,
+                    'can_manage_subscription': is_owner or permset.can_manage_subscription,
                 }
             except UserPermissionSet.DoesNotExist:
                 # Default to all permissions if no permission set exists
@@ -675,7 +679,12 @@ class ProfilePermissionsView(APIView):
                     'can_upload_files': True,
                     'can_invite_users': True,
                     'can_manage_users': True,
+                    'can_manage_subscription': is_owner,
                 }
+        # Owner always has subscription management
+        if is_owner:
+            perms['can_manage_subscription'] = True
+        perms['is_owner'] = is_owner
         return Response(perms)
 
 class ChangePasswordView(APIView):
@@ -810,7 +819,8 @@ class UserPermissionsAdminView(APIView):
         'can_create_client','can_edit_client','can_delete_client',
         'can_create_case','can_edit_case','can_delete_case',
         'can_create_task','can_edit_task','can_delete_task',
-        'can_upload_files','can_invite_users','can_manage_users'
+        'can_upload_files','can_invite_users','can_manage_users',
+        'can_manage_subscription'
     ]
 
     def _ensure_permset(self, user: User) -> UserPermissionSet:
@@ -862,8 +872,13 @@ class UserPermissionsAdminView(APIView):
     def put(self, request, pk):
         if request.user.role not in ('ADMIN','LEAD'):
             return Response({'detail': 'Доступ запрещен'}, status=status.HTTP_403_FORBIDDEN)
+        company = getattr(request.user, 'company', None)
+        if not company:
+            return Response({'detail': 'Нет компании'}, status=status.HTTP_400_BAD_REQUEST)
+        # Only owner can grant can_manage_subscription
+        is_requester_owner = (company.owner_id == request.user.id)
         try:
-            target = request.user.company.users.get(pk=pk)
+            target = company.users.get(pk=pk)
         except Exception:
             return Response({'detail': 'Пользователь не найден'}, status=status.HTTP_404_NOT_FOUND)
         # Защита владельца компании
@@ -886,6 +901,9 @@ class UserPermissionsAdminView(APIView):
             ps = self._ensure_permset(target)
             changed = False
             for k in self._flag_fields:
+                # Only owner can change can_manage_subscription
+                if k == 'can_manage_subscription' and not is_requester_owner:
+                    continue
                 if k in request.data:
                     new_val = _parse_bool(request.data.get(k))
                     if getattr(ps, k) != new_val:
