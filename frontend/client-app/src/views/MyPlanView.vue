@@ -225,8 +225,15 @@ export default {
       this.upgradeLoading = true;
       try {
         const token = localStorage.getItem('user-token');
+        
+        // Determine if we should use change-plan (existing subscription) or upgrade (new checkout)
+        const hasActiveSubscription = this.usage?.stripe_subscription_id && this.isActiveSubscription;
+        const endpoint = hasActiveSubscription ? '/api/billing/change-plan/' : '/api/billing/upgrade/';
+        
+        console.log('[MyPlanView] upgrade:', { target, hasActiveSubscription, endpoint, billingCycle: this.billingCycle });
+        
         const res = await axios.post(
-          '/api/billing/upgrade/',
+          endpoint,
           {
             target_plan: target,
             billing_cycle: this.billingCycle
@@ -234,6 +241,25 @@ export default {
           { headers:{ Authorization:`Token ${token}` }}
         );
 
+        // Handle change-plan response (no redirect needed)
+        if (res.data && res.data.success) {
+          const action = res.data.action;
+          const message = res.data.message;
+          
+          if (action === 'upgraded') {
+            // Immediate upgrade - show success and refresh
+            this.$toast && this.$toast.success(message || this.$t('billing.toast.upgraded', { plan: target }));
+          } else if (action === 'downgraded') {
+            // Downgrade scheduled - show info with date
+            this.$toast && this.$toast.info(message || this.$t('billing.toast.downgradeScheduled', { plan: target, date: res.data.effective }));
+          }
+          
+          // Refresh usage data to reflect changes
+          await loadBillingUsage(true);
+          return;
+        }
+
+        // Handle checkout redirect (new subscription)
         if (res.data && res.data.url) {
           // Redirect to Stripe Checkout
           window.location.href = res.data.url;

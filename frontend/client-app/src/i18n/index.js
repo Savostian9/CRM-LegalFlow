@@ -738,7 +738,9 @@ const messages = {
         upgradeSoon: 'Функция апгрейда скоро будет доступна.',
         upgraded: 'План обновлён до {plan}',
         upgradeFailed: 'Не удалось обновить план',
-        restricted: 'Доступ ограничен. Пожалуйста, оформите подписку.'
+        restricted: 'Доступ ограничен. Пожалуйста, оформите подписку.',
+        downgradeScheduled: 'План будет изменён на {plan} с {date}. До этого времени текущий план остаётся активным.',
+        paymentSuccess: 'Оплата прошла успешно!'
       }
     }
   },
@@ -1477,7 +1479,9 @@ const messages = {
         upgradeSoon: 'Funkcja ulepszenia wkrótce będzie dostępna.',
         upgraded: 'Plan został zaktualizowany do {plan}',
         upgradeFailed: 'Nie udało się zaktualizować planu',
-        restricted: 'Dostęp ograniczony. Proszę wykupić subskrypcję.'
+        restricted: 'Dostęp ograniczony. Proszę wykupić subskrypcję.',
+        downgradeScheduled: 'Plan zostanie zmieniony na {plan} od {date}. Do tego czasu obecny plan pozostaje aktywny.',
+        paymentSuccess: 'Płatność zakończona sukcesem!'
       }
     }
   }

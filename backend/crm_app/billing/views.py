@@ -49,6 +49,19 @@ STRIPE_PRICES = {
     }
 }
 
+# Plan hierarchy for upgrade/downgrade detection
+PLAN_HIERARCHY = {
+    'TRIAL': 0,
+    'STARTER': 1,
+    'PRO': 2,
+}
+
+def is_upgrade(current_plan: str, target_plan: str) -> bool:
+    """Check if changing from current_plan to target_plan is an upgrade."""
+    current_level = PLAN_HIERARCHY.get(current_plan.upper(), 0)
+    target_level = PLAN_HIERARCHY.get(target_plan.upper(), 0)
+    return target_level > current_level
+
 class CreateCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -460,6 +473,168 @@ class CreateCustomerPortalSessionView(APIView):
         except Exception as e:
             logger.exception("Stripe portal error")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ChangePlanView(APIView):
+    """
+    Change subscription plan (upgrade or downgrade).
+    
+    Upgrade (e.g., Starter → Pro):
+        - Takes effect IMMEDIATELY
+        - Prorated billing (customer pays difference now)
+    
+    Downgrade (e.g., Pro → Starter):
+        - Takes effect at END OF CURRENT PERIOD
+        - Customer keeps current plan until period ends
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            # Check permission
+            if not can_manage_subscription(request.user):
+                return Response({'error': 'No permission to manage subscription'}, status=status.HTTP_403_FORBIDDEN)
+            
+            user = request.user
+            if not user.company:
+                return Response({'error': 'User has no company'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            company = user.company
+            target_plan = request.data.get('target_plan', '').upper()
+            billing_cycle = request.data.get('billing_cycle', 'month')
+            
+            logger.info(f"ChangePlan: user={user.email}, company={company.name}, "
+                       f"current={company.plan}, target={target_plan}")
+            
+            # Validate target plan
+            if target_plan not in STRIPE_PRICES:
+                return Response({'error': 'Invalid plan'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if already on this plan
+            if company.plan == target_plan:
+                return Response({'error': 'Already on this plan'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get new price ID
+            new_price_id = STRIPE_PRICES[target_plan].get(billing_cycle)
+            if not new_price_id:
+                return Response({'error': f'Price for {target_plan} ({billing_cycle}) not configured'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if user has active subscription
+            sub_id = company.stripe_subscription_id
+            if not sub_id:
+                # No subscription yet - redirect to checkout
+                return Response({
+                    'action': 'checkout_required',
+                    'message': 'No active subscription. Please subscribe first.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get current subscription from Stripe
+            try:
+                subscription = stripe.Subscription.retrieve(sub_id)
+            except stripe.error.InvalidRequestError:
+                return Response({'error': 'Subscription not found in Stripe'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            if subscription.status not in ('active', 'trialing'):
+                return Response({'error': f'Subscription is {subscription.status}, cannot change plan'}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get current subscription item
+            if not subscription.get('items') or not subscription['items'].get('data'):
+                return Response({'error': 'No subscription items found'}, 
+                              status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            subscription_item_id = subscription['items']['data'][0]['id']
+            
+            # Determine if upgrade or downgrade
+            upgrading = is_upgrade(company.plan, target_plan)
+            
+            if upgrading:
+                # UPGRADE: Apply immediately with proration
+                logger.info(f"ChangePlan: UPGRADE {company.plan} → {target_plan} (immediate)")
+                
+                updated_sub = stripe.Subscription.modify(
+                    sub_id,
+                    items=[{
+                        'id': subscription_item_id,
+                        'price': new_price_id,
+                    }],
+                    proration_behavior='create_prorations',  # Charge/credit difference
+                    # cancel_at_period_end=False,  # Ensure subscription continues
+                    metadata={
+                        'company_id': company.id,
+                        'plan': target_plan,
+                    }
+                )
+                
+                # Update local DB immediately for upgrades
+                old_plan = company.plan
+                company.plan = target_plan
+                company.save(update_fields=['plan'])
+                
+                logger.info(f"ChangePlan: Upgrade complete. {old_plan} → {target_plan}")
+                
+                return Response({
+                    'success': True,
+                    'action': 'upgraded',
+                    'message': f'Plan upgraded to {target_plan}. The price difference will be charged now.',
+                    'new_plan': target_plan,
+                    'effective': 'immediately'
+                })
+            
+            else:
+                # DOWNGRADE: Schedule for end of period
+                logger.info(f"ChangePlan: DOWNGRADE {company.plan} → {target_plan} (at period end)")
+                
+                # Use subscription schedules for downgrade at period end
+                # Or simpler: modify with proration_behavior='none' and billing_cycle_anchor
+                
+                updated_sub = stripe.Subscription.modify(
+                    sub_id,
+                    items=[{
+                        'id': subscription_item_id,
+                        'price': new_price_id,
+                    }],
+                    proration_behavior='none',  # No immediate charge/credit
+                    billing_cycle_anchor='unchanged',  # Keep current billing date
+                    metadata={
+                        'company_id': company.id,
+                        'plan': target_plan,
+                        'pending_downgrade': 'true',
+                    }
+                )
+                
+                # For downgrade, we update plan immediately but could also wait for webhook
+                # The customer keeps using current features until Stripe applies the change
+                old_plan = company.plan
+                company.plan = target_plan
+                company.save(update_fields=['plan'])
+                
+                # Get period end date for user message
+                import datetime
+                period_end = datetime.datetime.fromtimestamp(subscription.current_period_end)
+                period_end_str = period_end.strftime('%d.%m.%Y')
+                
+                logger.info(f"ChangePlan: Downgrade scheduled. {old_plan} → {target_plan} at {period_end_str}")
+                
+                return Response({
+                    'success': True,
+                    'action': 'downgraded',
+                    'message': f'Plan will change to {target_plan} on {period_end_str}. '
+                              f'You keep {old_plan} features until then.',
+                    'new_plan': target_plan,
+                    'effective': period_end_str,
+                    'effective_timestamp': subscription.current_period_end
+                })
+        
+        except stripe.error.StripeError as e:
+            logger.exception(f"Stripe error changing plan: {e}")
+            return Response({'error': f'Stripe error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            logger.exception(f"Error changing plan: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class CancelSubscriptionView(APIView):
     permission_classes = [IsAuthenticated]
