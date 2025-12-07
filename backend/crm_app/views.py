@@ -1317,7 +1317,7 @@ class BillingUsageView(APIView):
             try:
                 import stripe
                 from datetime import datetime, timezone as dt_timezone
-                from .billing.plans import STRIPE_PRICES
+                from .billing.views import PRICE_TO_PLAN
                 stripe.api_key = settings.STRIPE_SECRET_KEY
                 logger = logging.getLogger(__name__)
                 
@@ -1358,12 +1358,8 @@ class BillingUsageView(APIView):
                             
                             logger.info(f"BillingUsage: next_price_id = {next_price_id}")
                             
-                            # Map price_id back to plan name
-                            next_plan = None
-                            for plan_name, prices in STRIPE_PRICES.items():
-                                if next_price_id in prices.values():
-                                    next_plan = plan_name
-                                    break
+                            # Map price_id back to plan name using PRICE_TO_PLAN reverse mapping
+                            next_plan = PRICE_TO_PLAN.get(next_price_id)
                             
                             logger.info(f"BillingUsage: next_plan = {next_plan}, current plan_code = {plan_code}")
                             
