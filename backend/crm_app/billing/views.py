@@ -750,22 +750,22 @@ class ChangePlanView(APIView):
                     # Update the schedule to change plan at period end
                     stripe.SubscriptionSchedule.modify(
                         schedule.id,
+                        end_behavior='release',  # Continue as regular subscription after phases complete
                         phases=[
                             {
                                 # Current phase - keep current plan until period end
                                 'items': [{'price': current_price_id}],
-                                'start_date': subscription.get('current_period_start'),
+                                'start_date': getattr(subscription, 'current_period_start', None) or subscription.get('current_period_start'),
                                 'end_date': current_period_end,
                             },
                             {
-                                # New phase - switch to new plan
+                                # New phase - switch to new plan (no end_date = continues indefinitely)
                                 'items': [{'price': new_price_id}],
                                 'start_date': current_period_end,
-                                'iterations': 1,  # Will continue indefinitely
                             },
                         ],
                         metadata={
-                            'company_id': company.id,
+                            'company_id': str(company.id),
                             'pending_plan': target_plan,
                         }
                     )
