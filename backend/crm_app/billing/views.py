@@ -579,7 +579,10 @@ class ChangePlanView(APIView):
             
             subscription_item_id = subscription['items']['data'][0]['id']
             current_price_id = subscription['items']['data'][0]['price']['id']
-            current_period_end = subscription.get('current_period_end')
+            # Stripe objects support both dict and attribute access
+            current_period_end = subscription.get('current_period_end') or getattr(subscription, 'current_period_end', None)
+            
+            logger.info(f"ChangePlan: subscription period_end={current_period_end}, status={subscription.status}")
             
             # Determine if upgrade or downgrade
             upgrading = is_upgrade(company.plan, target_plan)

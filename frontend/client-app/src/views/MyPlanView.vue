@@ -92,17 +92,29 @@
         </div>
         
         <div v-else class="modal-content">
-          <p>{{ $t('billing.downgradeFrom') }} <strong>{{ confirmModalData.current_plan }}</strong> {{ $t('billing.downgradeTo') }} <strong>{{ confirmModalData.target_plan }}</strong></p>
-          <div class="price-info">
-            <span class="price-label">{{ $t('billing.currentPrice') }}:</span>
-            <span class="price-value">{{ confirmModalData.current_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+          <p class="downgrade-info">{{ $t('billing.downgradeInfo', { currentPlan: confirmModalData.current_plan, newPlan: confirmModalData.target_plan }) }}</p>
+          
+          <div class="price-comparison">
+            <div class="price-info current">
+              <span class="price-label">{{ confirmModalData.current_plan }}:</span>
+              <span class="price-value">{{ confirmModalData.current_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+            </div>
+            <div class="price-arrow">→</div>
+            <div class="price-info new">
+              <span class="price-label">{{ confirmModalData.target_plan }}:</span>
+              <span class="price-value">{{ confirmModalData.new_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+            </div>
           </div>
-          <div class="price-info">
-            <span class="price-label">{{ $t('billing.newPrice') }}:</span>
-            <span class="price-value">{{ confirmModalData.new_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+          
+          <div class="effective-date-box">
+            <span class="calendar-icon">📅</span>
+            <div class="date-content">
+              <span class="date-label">{{ $t('billing.subscriptionEndsOn') }}:</span>
+              <strong class="date-value">{{ confirmModalData.effective || $t('billing.loading') }}</strong>
+            </div>
           </div>
-          <p class="effective-date">{{ $t('billing.effectiveDate') }}: <strong>{{ confirmModalData.effective }}</strong></p>
-          <p class="price-note">{{ $t('billing.keepFeaturesUntil') }}</p>
+          
+          <p class="price-note">{{ $t('billing.keepFeaturesUntilDate', { plan: confirmModalData.current_plan, date: confirmModalData.effective }) }}</p>
         </div>
         
         <div class="modal-actions">
@@ -606,7 +618,66 @@ export default {
   font-size: 13px;
   color: #64748b;
   font-style: italic;
+  margin-top: 16px;
 }
+
+/* Downgrade modal styles */
+.downgrade-info {
+  font-size: 15px;
+  color: #475569;
+  margin-bottom: 20px;
+}
+.price-comparison {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.price-comparison .price-info {
+  flex: 1;
+  margin-bottom: 0;
+}
+.price-comparison .price-info.current {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.price-comparison .price-info.new {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.price-arrow {
+  font-size: 24px;
+  color: #94a3b8;
+  font-weight: bold;
+}
+.effective-date-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border: 1px solid #93c5fd;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.calendar-icon {
+  font-size: 28px;
+}
+.date-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.date-label {
+  font-size: 13px;
+  color: #3b82f6;
+  font-weight: 500;
+}
+.date-value {
+  font-size: 18px;
+  color: #1e40af;
+}
+
 .effective-date {
   background: #eff6ff;
   border-radius: 8px;

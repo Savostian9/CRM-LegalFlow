@@ -749,18 +749,22 @@ const messages = {
       upgradeTo: 'на',
       downgradeFrom: 'Понизить с',
       downgradeTo: 'до',
+      downgradeInfo: 'После истечения текущей подписки {currentPlan}, ваш план будет изменён на {newPlan}.',
       prorationAmount: 'Сумма доплаты',
       chargeNow: 'Эта сумма будет списана сейчас.',
       currentPrice: 'Текущая цена',
       newPrice: 'Новая цена',
       month: 'мес.',
       effectiveDate: 'Дата смены плана',
+      subscriptionEndsOn: 'Подписка PRO истекает',
       keepFeaturesUntil: 'Вы сохраните текущие возможности до этой даты.',
+      keepFeaturesUntilDate: 'Вы сохраните все возможности плана {plan} до {date}.',
       confirmAndPay: 'Подтвердить и оплатить',
       confirmChange: 'Подтвердить',
       pendingDowngrade: 'Запланировано понижение до {plan} с {date}',
       cancelDowngrade: 'Отменить',
-      downgradeCanceled: 'Понижение плана отменено. Вы остаётесь на текущем плане.'
+      downgradeCanceled: 'Понижение плана отменено. Вы остаётесь на текущем плане.',
+      loading: 'загрузка...'
     }
   },
   pl: {
@@ -1509,18 +1513,22 @@ const messages = {
       upgradeTo: 'na',
       downgradeFrom: 'Obniż z',
       downgradeTo: 'do',
+      downgradeInfo: 'Po wygaśnięciu obecnej subskrypcji {currentPlan}, Twój plan zostanie zmieniony na {newPlan}.',
       prorationAmount: 'Kwota dopłaty',
       chargeNow: 'Ta kwota zostanie pobrana teraz.',
       currentPrice: 'Obecna cena',
       newPrice: 'Nowa cena',
       month: 'mies.',
       effectiveDate: 'Data zmiany planu',
+      subscriptionEndsOn: 'Subskrypcja PRO wygasa',
       keepFeaturesUntil: 'Zachowasz obecne funkcje do tej daty.',
+      keepFeaturesUntilDate: 'Zachowasz wszystkie funkcje planu {plan} do {date}.',
       confirmAndPay: 'Potwierdź i zapłać',
       confirmChange: 'Potwierdź',
       pendingDowngrade: 'Zaplanowane obniżenie do {plan} od {date}',
       cancelDowngrade: 'Anuluj',
-      downgradeCanceled: 'Obniżenie planu anulowane. Pozostajesz na obecnym planie.'
+      downgradeCanceled: 'Obniżenie planu anulowane. Pozostajesz na obecnym planie.',
+      loading: 'ładowanie...'
     }
   }
 }
