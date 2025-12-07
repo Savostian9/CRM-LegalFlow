@@ -669,14 +669,17 @@ class ChangePlanView(APIView):
                     logger.info(f"ChangePlan PREVIEW: UPGRADE {company.plan} → {target_plan}")
                     
                     # Use Stripe Invoice preview to calculate the cost
-                    upcoming_invoice = stripe.Invoice.upcoming(
+                    # Stripe SDK v14+ uses create_preview instead of upcoming
+                    upcoming_invoice = stripe.Invoice.create_preview(
                         customer=company.stripe_customer_id,
                         subscription=sub_id,
-                        subscription_items=[{
-                            'id': subscription_item_id,
-                            'price': new_price_id,
-                        }],
-                        subscription_proration_behavior='create_prorations',
+                        subscription_details={
+                            'items': [{
+                                'id': subscription_item_id,
+                                'price': new_price_id,
+                            }],
+                            'proration_behavior': 'create_prorations',
+                        },
                     )
                     
                     # Calculate proration amount (difference to pay now)
