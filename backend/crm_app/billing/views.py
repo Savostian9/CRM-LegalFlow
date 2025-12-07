@@ -578,9 +578,19 @@ class ChangePlanView(APIView):
                 return Response({'error': f'Subscription is {subscription.status}, cannot change plan'}, 
                               status=status.HTTP_400_BAD_REQUEST)
             
-            # Get period end timestamps from subscription - use bracket access for safety
-            current_period_end = subscription['current_period_end']
-            current_period_start = subscription['current_period_start']
+            # Debug: log subscription keys to understand structure
+            logger.info(f"ChangePlan: subscription keys: {list(subscription.keys())}")
+            
+            # Get period end timestamps from subscription
+            # Try multiple access methods for compatibility
+            try:
+                current_period_end = subscription.get('current_period_end') or getattr(subscription, 'current_period_end', None)
+                current_period_start = subscription.get('current_period_start') or getattr(subscription, 'current_period_start', None)
+            except Exception as e:
+                logger.warning(f"ChangePlan: Error getting period dates: {e}")
+                current_period_end = None
+                current_period_start = None
+            
             logger.info(f"ChangePlan: period_end={current_period_end}, period_start={current_period_start}")
             
             # Get current subscription item - use safe access
