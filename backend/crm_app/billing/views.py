@@ -578,33 +578,28 @@ class ChangePlanView(APIView):
                 return Response({'error': f'Subscription is {subscription.status}, cannot change plan'}, 
                               status=status.HTTP_400_BAD_REQUEST)
             
+            # Get period end timestamps from subscription - use bracket access for safety
+            current_period_end = subscription['current_period_end']
+            current_period_start = subscription['current_period_start']
+            logger.info(f"ChangePlan: period_end={current_period_end}, period_start={current_period_start}")
+            
             # Get current subscription item - use safe access
             try:
-                items_data = subscription.get('items', {})
-                if hasattr(items_data, 'data'):
-                    items_list = items_data.data
-                else:
-                    items_list = items_data.get('data', [])
+                items_data = subscription['items']
+                items_list = items_data['data'] if isinstance(items_data, dict) else items_data.data
                 
                 if not items_list:
                     return Response({'error': 'No subscription items found'}, 
                                   status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
                 first_item = items_list[0]
-                subscription_item_id = first_item.get('id') or first_item.id
+                subscription_item_id = first_item['id'] if isinstance(first_item, dict) else first_item.id
                 
                 # Get price info
-                price_obj = first_item.get('price') or first_item.price
-                if hasattr(price_obj, 'id'):
-                    current_price_id = price_obj.id
-                else:
-                    current_price_id = price_obj.get('id')
+                price_obj = first_item['price'] if isinstance(first_item, dict) else first_item.price
+                current_price_id = price_obj['id'] if isinstance(price_obj, dict) else price_obj.id
                 
-                # Get period end - Stripe SDK v14+ uses attribute access
-                current_period_end = subscription.current_period_end
-                current_period_start = subscription.current_period_start
-                
-                logger.info(f"ChangePlan: item_id={subscription_item_id}, price_id={current_price_id}, period_end={current_period_end}")
+                logger.info(f"ChangePlan: item_id={subscription_item_id}, price_id={current_price_id}")
                 
             except Exception as e:
                 logger.exception(f"ChangePlan: Error parsing subscription items: {e}")
@@ -634,8 +629,9 @@ class ChangePlanView(APIView):
                     # Calculate proration amount (difference to pay now)
                     proration_amount = 0
                     proration_items = []
-                    for line in upcoming_invoice.get('lines', {}).get('data', []):
-                        if line.get('proration'):
+                    lines_data = upcoming_invoice['lines']['data'] if 'lines' in upcoming_invoice else []
+                    for line in lines_data:
+                        if line.get('proration', False):
                             proration_amount += line.get('amount', 0)
                             proration_items.append({
                                 'description': line.get('description', ''),
@@ -648,6 +644,8 @@ class ChangePlanView(APIView):
                         period_end = datetime.datetime.fromtimestamp(current_period_end)
                         period_end_str = period_end.strftime('%d.%m.%Y')
                     
+                    invoice_currency = upcoming_invoice.get('currency', 'pln')
+                    
                     return Response({
                         'action': 'preview',
                         'type': 'upgrade',
@@ -655,7 +653,7 @@ class ChangePlanView(APIView):
                         'target_plan': target_plan,
                         'proration_amount': proration_amount / 100,  # In currency units
                         'proration_items': proration_items,
-                        'currency': upcoming_invoice.get('currency', 'pln').upper(),
+                        'currency': invoice_currency.upper() if invoice_currency else 'PLN',
                         'effective': 'immediately',
                         'message': f'Upgrade to {target_plan} will cost {proration_amount / 100:.2f} PLN now (prorated).',
                         'period_end': period_end_str,
@@ -720,9 +718,9 @@ class ChangePlanView(APIView):
                         'type': 'downgrade',
                         'current_plan': company.plan,
                         'target_plan': target_plan,
-                        'current_price': current_price.get('unit_amount', 0) / 100,
-                        'new_price': new_price.get('unit_amount', 0) / 100,
-                        'currency': new_price.get('currency', 'pln').upper(),
+                        'current_price': current_price['unit_amount'] / 100,
+                        'new_price': new_price['unit_amount'] / 100,
+                        'currency': new_price['currency'].upper(),
                         'effective': period_end_str,
                         'effective_timestamp': period_end_timestamp,
                         'message': f'Your plan will change to {target_plan} on {period_end_str}. '
