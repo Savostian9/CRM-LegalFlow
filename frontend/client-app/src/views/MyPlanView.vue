@@ -26,6 +26,14 @@
         <p v-if="subscriptionEndsAt && !isTrial" class="plan-summary__ends">
           {{ $t('billing.subscriptionEndsAt') }}: {{ formatDate(subscriptionEndsAt) }}
         </p>
+        <!-- Scheduled downgrade notice -->
+        <div v-if="pendingDowngrade" class="pending-change-notice">
+          <span class="notice-icon">⏳</span>
+          <span>{{ $t('billing.pendingDowngrade', { plan: pendingDowngrade.new_plan, date: pendingDowngrade.effective }) }}</span>
+          <button class="cancel-downgrade-btn" @click="cancelDowngrade" :disabled="cancelingDowngrade">
+            {{ cancelingDowngrade ? '...' : $t('billing.cancelDowngrade') }}
+          </button>
+        </div>
         <p class="plan-summary__hint">{{ $t('pricing.subtitle') }}</p>
       </section>
 
@@ -67,6 +75,44 @@
         </div>
       </section>
     </div>
+
+    <!-- Confirmation Modal -->
+    <div v-if="showConfirmModal" class="modal-overlay" @click.self="closeConfirmModal">
+      <div class="confirm-modal">
+        <button class="modal-close" @click="closeConfirmModal">&times;</button>
+        <h3>{{ confirmModalData.type === 'upgrade' ? $t('billing.confirmUpgrade') : $t('billing.confirmDowngrade') }}</h3>
+        
+        <div v-if="confirmModalData.type === 'upgrade'" class="modal-content">
+          <p>{{ $t('billing.upgradeFrom') }} <strong>{{ confirmModalData.current_plan }}</strong> {{ $t('billing.upgradeTo') }} <strong>{{ confirmModalData.target_plan }}</strong></p>
+          <div class="price-info">
+            <span class="price-label">{{ $t('billing.prorationAmount') }}:</span>
+            <span class="price-value">{{ confirmModalData.proration_amount?.toFixed(2) }} {{ confirmModalData.currency }}</span>
+          </div>
+          <p class="price-note">{{ $t('billing.chargeNow') }}</p>
+        </div>
+        
+        <div v-else class="modal-content">
+          <p>{{ $t('billing.downgradeFrom') }} <strong>{{ confirmModalData.current_plan }}</strong> {{ $t('billing.downgradeTo') }} <strong>{{ confirmModalData.target_plan }}</strong></p>
+          <div class="price-info">
+            <span class="price-label">{{ $t('billing.currentPrice') }}:</span>
+            <span class="price-value">{{ confirmModalData.current_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+          </div>
+          <div class="price-info">
+            <span class="price-label">{{ $t('billing.newPrice') }}:</span>
+            <span class="price-value">{{ confirmModalData.new_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+          </div>
+          <p class="effective-date">{{ $t('billing.effectiveDate') }}: <strong>{{ confirmModalData.effective }}</strong></p>
+          <p class="price-note">{{ $t('billing.keepFeaturesUntil') }}</p>
+        </div>
+        
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="closeConfirmModal">{{ $t('common.cancel') }}</button>
+          <button class="btn-confirm" :class="{ 'btn-upgrade': confirmModalData.type === 'upgrade', 'btn-downgrade': confirmModalData.type === 'downgrade' }" @click="confirmPlanChange" :disabled="confirmLoading">
+            {{ confirmLoading ? $t('common.loading') : (confirmModalData.type === 'upgrade' ? $t('billing.confirmAndPay') : $t('billing.confirmChange')) }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -80,7 +126,17 @@ export default {
   name: 'MyPlanView',
   components: { PricingPlans },
   data(){
-    return { upgradeLoading:false, upgradeTarget:null, billingCycle: 'month', portalLoading: false };
+    return { 
+      upgradeLoading: false, 
+      upgradeTarget: null, 
+      billingCycle: 'month', 
+      portalLoading: false,
+      showConfirmModal: false,
+      confirmModalData: {},
+      confirmLoading: false,
+      pendingDowngrade: null,
+      cancelingDowngrade: false,
+    };
   },
   computed:{
     loading(){ return billingUsageState.loading && !billingUsageState.loaded; },
@@ -220,6 +276,12 @@ export default {
       this.upgrade(target);
     },
     formatDate(dt){ try { return new Date(dt).toLocaleString(); } catch(e){ return dt; } },
+    
+    closeConfirmModal() {
+      this.showConfirmModal = false;
+      this.confirmModalData = {};
+    },
+    
     async upgrade(target){
       this.upgradeTarget = target;
       this.upgradeLoading = true;
@@ -228,48 +290,37 @@ export default {
         
         // Determine if we should use change-plan (existing subscription) or upgrade (new checkout)
         const hasActiveSubscription = this.usage?.stripe_subscription_id && this.isActiveSubscription;
-        const endpoint = hasActiveSubscription ? '/api/billing/change-plan/' : '/api/billing/upgrade/';
         
-        console.log('[MyPlanView] upgrade:', { target, hasActiveSubscription, endpoint, billingCycle: this.billingCycle });
+        if (!hasActiveSubscription) {
+          // No subscription - go directly to checkout
+          const res = await axios.post(
+            '/api/billing/upgrade/',
+            { target_plan: target, billing_cycle: this.billingCycle },
+            { headers: { Authorization: `Token ${token}` } }
+          );
+          if (res.data?.url) {
+            window.location.href = res.data.url;
+          }
+          return;
+        }
+        
+        // Has subscription - get preview first
+        console.log('[MyPlanView] Getting preview for:', target);
         
         const res = await axios.post(
-          endpoint,
-          {
-            target_plan: target,
-            billing_cycle: this.billingCycle
-          },
-          { headers:{ Authorization:`Token ${token}` }}
+          '/api/billing/change-plan/',
+          { target_plan: target, billing_cycle: this.billingCycle, mode: 'preview' },
+          { headers: { Authorization: `Token ${token}` } }
         );
-
-        // Handle change-plan response (no redirect needed)
-        if (res.data && res.data.success) {
-          const action = res.data.action;
-          const message = res.data.message;
-          
-          if (action === 'upgraded') {
-            // Immediate upgrade - show success and refresh
-            this.$toast && this.$toast.success(message || this.$t('billing.toast.upgraded', { plan: target }));
-          } else if (action === 'downgraded') {
-            // Downgrade scheduled - show info with date
-            this.$toast && this.$toast.info(message || this.$t('billing.toast.downgradeScheduled', { plan: target, date: res.data.effective }));
-          }
-          
-          // Refresh usage data to reflect changes
-          await loadBillingUsage(true);
-          return;
+        
+        console.log('[MyPlanView] Preview response:', res.data);
+        
+        if (res.data?.action === 'preview') {
+          // Show confirmation modal
+          this.confirmModalData = res.data;
+          this.showConfirmModal = true;
         }
-
-        // Handle checkout redirect (new subscription)
-        if (res.data && res.data.url) {
-          // Redirect to Stripe Checkout
-          window.location.href = res.data.url;
-          return;
-        }
-
-        // Safety fallback: просто обновляем usage и показываем тост
-        await loadBillingUsage(true);
-        this.$toast && this.$toast.success(this.$t('billing.toast.upgraded', { plan: target }));
-      } catch(e){
+      } catch(e) {
         console.error(e);
         const msg = e.response?.data?.error || e.response?.data?.detail || this.$t('billing.toast.upgradeFailed');
         this.$toast && this.$toast.error(msg);
@@ -278,6 +329,79 @@ export default {
         this.upgradeTarget = null;
       }
     },
+    
+    async confirmPlanChange() {
+      this.confirmLoading = true;
+      try {
+        const token = localStorage.getItem('user-token');
+        const target = this.confirmModalData.target_plan;
+        
+        const res = await axios.post(
+          '/api/billing/change-plan/',
+          { target_plan: target, billing_cycle: this.billingCycle, mode: 'confirm' },
+          { headers: { Authorization: `Token ${token}` } }
+        );
+        
+        console.log('[MyPlanView] Confirm response:', res.data);
+        
+        if (res.data?.action === 'checkout') {
+          // Redirect to Stripe checkout for upgrade
+          window.location.href = res.data.checkout_url;
+          return;
+        }
+        
+        if (res.data?.action === 'downgrade_scheduled') {
+          // Downgrade scheduled - show success and update UI
+          this.$toast && this.$toast.success(res.data.message || this.$t('billing.toast.downgradeScheduled'));
+          this.pendingDowngrade = {
+            new_plan: res.data.new_plan,
+            effective: res.data.effective,
+            schedule_id: res.data.schedule_id,
+          };
+          this.closeConfirmModal();
+          await loadBillingUsage(true);
+          return;
+        }
+        
+        // For other success cases
+        if (res.data?.success) {
+          this.$toast && this.$toast.success(res.data.message);
+          this.closeConfirmModal();
+          await loadBillingUsage(true);
+        }
+      } catch(e) {
+        console.error(e);
+        const msg = e.response?.data?.error || e.response?.data?.detail || this.$t('billing.error');
+        this.$toast && this.$toast.error(msg);
+      } finally {
+        this.confirmLoading = false;
+      }
+    },
+    
+    async cancelDowngrade() {
+      this.cancelingDowngrade = true;
+      try {
+        const token = localStorage.getItem('user-token');
+        const res = await axios.post(
+          '/api/billing/cancel-downgrade/',
+          {},
+          { headers: { Authorization: `Token ${token}` } }
+        );
+        
+        if (res.data?.success) {
+          this.$toast && this.$toast.success(res.data.message || this.$t('billing.downgradeCanceled'));
+          this.pendingDowngrade = null;
+          await loadBillingUsage(true);
+        }
+      } catch(e) {
+        console.error(e);
+        const msg = e.response?.data?.error || this.$t('billing.error');
+        this.$toast && this.$toast.error(msg);
+      } finally {
+        this.cancelingDowngrade = false;
+      }
+    },
+    
     async openPortal(){
       this.portalLoading = true;
       try {
@@ -379,5 +503,161 @@ export default {
 }
 .manage-sub-btn:hover svg {
   color: #475569;
+}
+
+/* Pending change notice */
+.pending-change-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #92400e;
+}
+.pending-change-notice .notice-icon { font-size: 18px; }
+.cancel-downgrade-btn {
+  margin-left: auto;
+  background: #fff;
+  border: 1px solid #f59e0b;
+  color: #b45309;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.cancel-downgrade-btn:hover { background: #fef3c7; }
+.cancel-downgrade-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+.confirm-modal {
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  position: relative;
+}
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #94a3b8;
+  cursor: pointer;
+  line-height: 1;
+}
+.modal-close:hover { color: #475569; }
+.confirm-modal h3 {
+  margin: 0 0 20px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.modal-content {
+  margin-bottom: 24px;
+}
+.modal-content p {
+  margin: 0 0 16px;
+  color: #475569;
+  font-size: 15px;
+}
+.price-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+}
+.price-label {
+  color: #64748b;
+  font-size: 14px;
+}
+.price-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.price-note {
+  font-size: 13px;
+  color: #64748b;
+  font-style: italic;
+}
+.effective-date {
+  background: #eff6ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  color: #1e40af;
+  font-size: 14px;
+}
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+.btn-cancel {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-cancel:hover { background: #e2e8f0; }
+.btn-confirm {
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+.btn-confirm.btn-upgrade {
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  color: #fff;
+}
+.btn-confirm.btn-upgrade:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+.btn-confirm.btn-downgrade {
+  background: #f59e0b;
+  color: #fff;
+}
+.btn-confirm.btn-downgrade:hover {
+  background: #d97706;
+}
+.btn-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 </style>

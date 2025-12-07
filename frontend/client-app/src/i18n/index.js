@@ -741,7 +741,26 @@ const messages = {
         restricted: 'Доступ ограничен. Пожалуйста, оформите подписку.',
         downgradeScheduled: 'План будет изменён на {plan} с {date}. До этого времени текущий план остаётся активным.',
         paymentSuccess: 'Оплата прошла успешно!'
-      }
+      },
+      // Change plan confirmation
+      confirmUpgrade: 'Подтвердите апгрейд',
+      confirmDowngrade: 'Подтвердите понижение плана',
+      upgradeFrom: 'Перейти с',
+      upgradeTo: 'на',
+      downgradeFrom: 'Понизить с',
+      downgradeTo: 'до',
+      prorationAmount: 'Сумма доплаты',
+      chargeNow: 'Эта сумма будет списана сейчас.',
+      currentPrice: 'Текущая цена',
+      newPrice: 'Новая цена',
+      month: 'мес.',
+      effectiveDate: 'Дата смены плана',
+      keepFeaturesUntil: 'Вы сохраните текущие возможности до этой даты.',
+      confirmAndPay: 'Подтвердить и оплатить',
+      confirmChange: 'Подтвердить',
+      pendingDowngrade: 'Запланировано понижение до {plan} с {date}',
+      cancelDowngrade: 'Отменить',
+      downgradeCanceled: 'Понижение плана отменено. Вы остаётесь на текущем плане.'
     }
   },
   pl: {
@@ -1482,7 +1501,26 @@ const messages = {
         restricted: 'Dostęp ograniczony. Proszę wykupić subskrypcję.',
         downgradeScheduled: 'Plan zostanie zmieniony na {plan} od {date}. Do tego czasu obecny plan pozostaje aktywny.',
         paymentSuccess: 'Płatność zakończona sukcesem!'
-      }
+      },
+      // Change plan confirmation
+      confirmUpgrade: 'Potwierdź ulepszenie',
+      confirmDowngrade: 'Potwierdź obniżenie planu',
+      upgradeFrom: 'Zmień z',
+      upgradeTo: 'na',
+      downgradeFrom: 'Obniż z',
+      downgradeTo: 'do',
+      prorationAmount: 'Kwota dopłaty',
+      chargeNow: 'Ta kwota zostanie pobrana teraz.',
+      currentPrice: 'Obecna cena',
+      newPrice: 'Nowa cena',
+      month: 'mies.',
+      effectiveDate: 'Data zmiany planu',
+      keepFeaturesUntil: 'Zachowasz obecne funkcje do tej daty.',
+      confirmAndPay: 'Potwierdź i zapłać',
+      confirmChange: 'Potwierdź',
+      pendingDowngrade: 'Zaplanowane obniżenie do {plan} od {date}',
+      cancelDowngrade: 'Anuluj',
+      downgradeCanceled: 'Obniżenie planu anulowane. Pozostajesz na obecnym planie.'
     }
   }
 }

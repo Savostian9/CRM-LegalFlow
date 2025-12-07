@@ -505,11 +505,16 @@ class ChangePlanView(APIView):
     """
     Change subscription plan (upgrade or downgrade).
     
+    Modes:
+        - preview: Calculate and show what will happen (costs, dates)
+        - confirm: Actually execute the change
+    
     Upgrade (e.g., Starter → Pro):
-        - Takes effect IMMEDIATELY
-        - Prorated billing (customer pays difference now)
+        - Creates Checkout Session for user to confirm payment
+        - Takes effect after payment confirmation
     
     Downgrade (e.g., Pro → Starter):
+        - Requires user confirmation
         - Takes effect at END OF CURRENT PERIOD
         - Customer keeps current plan until period ends
     """
@@ -528,9 +533,10 @@ class ChangePlanView(APIView):
             company = user.company
             target_plan = request.data.get('target_plan', '').upper()
             billing_cycle = request.data.get('billing_cycle', 'month')
+            mode = request.data.get('mode', 'preview')  # 'preview' or 'confirm'
             
             logger.info(f"ChangePlan: user={user.email}, company={company.name}, "
-                       f"current={company.plan}, target={target_plan}")
+                       f"current={company.plan}, target={target_plan}, mode={mode}")
             
             # Validate target plan
             if target_plan not in STRIPE_PRICES:
@@ -572,118 +578,240 @@ class ChangePlanView(APIView):
                               status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             subscription_item_id = subscription['items']['data'][0]['id']
+            current_price_id = subscription['items']['data'][0]['price']['id']
+            current_period_end = subscription.get('current_period_end')
             
             # Determine if upgrade or downgrade
             upgrading = is_upgrade(company.plan, target_plan)
             
             if upgrading:
-                # UPGRADE: Apply immediately with proration and charge now
-                logger.info(f"ChangePlan: UPGRADE {company.plan} → {target_plan} (immediate)")
+                # ============ UPGRADE ============
+                if mode == 'preview':
+                    # Calculate proration preview
+                    logger.info(f"ChangePlan PREVIEW: UPGRADE {company.plan} → {target_plan}")
+                    
+                    # Use Stripe Invoice preview to calculate the cost
+                    upcoming_invoice = stripe.Invoice.upcoming(
+                        customer=company.stripe_customer_id,
+                        subscription=sub_id,
+                        subscription_items=[{
+                            'id': subscription_item_id,
+                            'price': new_price_id,
+                        }],
+                        subscription_proration_behavior='create_prorations',
+                    )
+                    
+                    # Calculate proration amount (difference to pay now)
+                    proration_amount = 0
+                    proration_items = []
+                    for line in upcoming_invoice.get('lines', {}).get('data', []):
+                        if line.get('proration'):
+                            proration_amount += line.get('amount', 0)
+                            proration_items.append({
+                                'description': line.get('description', ''),
+                                'amount': line.get('amount', 0) / 100,  # Convert to currency
+                            })
+                    
+                    # Get period end date
+                    period_end_str = ''
+                    if current_period_end:
+                        period_end = datetime.datetime.fromtimestamp(current_period_end)
+                        period_end_str = period_end.strftime('%d.%m.%Y')
+                    
+                    return Response({
+                        'action': 'preview',
+                        'type': 'upgrade',
+                        'current_plan': company.plan,
+                        'target_plan': target_plan,
+                        'proration_amount': proration_amount / 100,  # In currency units
+                        'proration_items': proration_items,
+                        'currency': upcoming_invoice.get('currency', 'pln').upper(),
+                        'effective': 'immediately',
+                        'message': f'Upgrade to {target_plan} will cost {proration_amount / 100:.2f} PLN now (prorated).',
+                        'period_end': period_end_str,
+                    })
                 
-                updated_sub = stripe.Subscription.modify(
-                    sub_id,
-                    items=[{
-                        'id': subscription_item_id,
-                        'price': new_price_id,
-                    }],
-                    proration_behavior='always_invoice',  # Create invoice and charge immediately
-                    payment_behavior='error_if_incomplete',  # Fail if payment doesn't succeed
-                    metadata={
-                        'company_id': company.id,
-                        'plan': target_plan,
-                    }
-                )
-                
-                # Update local DB immediately for upgrades
-                old_plan = company.plan
-                company.plan = target_plan
-                company.save(update_fields=['plan'])
-                
-                logger.info(f"ChangePlan: Upgrade complete. {old_plan} → {target_plan}")
-                
-                return Response({
-                    'success': True,
-                    'action': 'upgraded',
-                    'message': f'Plan upgraded to {target_plan}. The price difference has been charged.',
-                    'new_plan': target_plan,
-                    'effective': 'immediately'
-                })
+                else:  # mode == 'confirm'
+                    logger.info(f"ChangePlan CONFIRM: UPGRADE {company.plan} → {target_plan}")
+                    
+                    # Create Checkout Session for upgrade payment
+                    checkout_session = stripe.checkout.Session.create(
+                        customer=company.stripe_customer_id,
+                        mode='subscription',
+                        line_items=[{
+                            'price': new_price_id,
+                            'quantity': 1,
+                        }],
+                        subscription_data={
+                            'metadata': {
+                                'company_id': company.id,
+                                'plan': target_plan,
+                                'upgrade_from': company.plan,
+                            },
+                            'proration_behavior': 'create_prorations',
+                        },
+                        success_url=f"{settings.FRONTEND_URL}/my-plan?upgrade=success&plan={target_plan}",
+                        cancel_url=f"{settings.FRONTEND_URL}/my-plan?upgrade=cancelled",
+                        metadata={
+                            'company_id': company.id,
+                            'plan': target_plan,
+                            'action': 'upgrade',
+                        },
+                    )
+                    
+                    # Cancel old subscription when new one is created (handled in webhook)
+                    # Store pending upgrade info
+                    logger.info(f"ChangePlan: Checkout session created for upgrade: {checkout_session.id}")
+                    
+                    return Response({
+                        'action': 'checkout',
+                        'checkout_url': checkout_session.url,
+                        'session_id': checkout_session.id,
+                    })
             
             else:
-                # DOWNGRADE: Schedule for end of billing period using subscription schedule
-                logger.info(f"ChangePlan: DOWNGRADE {company.plan} → {target_plan} (at period end)")
+                # ============ DOWNGRADE ============
+                if mode == 'preview':
+                    logger.info(f"ChangePlan PREVIEW: DOWNGRADE {company.plan} → {target_plan}")
+                    
+                    # Get period end date for user message
+                    period_end_str = ''
+                    period_end_timestamp = current_period_end
+                    if current_period_end:
+                        period_end = datetime.datetime.fromtimestamp(current_period_end)
+                        period_end_str = period_end.strftime('%d.%m.%Y')
+                    
+                    # Get new plan price for comparison
+                    new_price = stripe.Price.retrieve(new_price_id)
+                    current_price = stripe.Price.retrieve(current_price_id)
+                    
+                    return Response({
+                        'action': 'preview',
+                        'type': 'downgrade',
+                        'current_plan': company.plan,
+                        'target_plan': target_plan,
+                        'current_price': current_price.get('unit_amount', 0) / 100,
+                        'new_price': new_price.get('unit_amount', 0) / 100,
+                        'currency': new_price.get('currency', 'pln').upper(),
+                        'effective': period_end_str,
+                        'effective_timestamp': period_end_timestamp,
+                        'message': f'Your plan will change to {target_plan} on {period_end_str}. '
+                                  f'You will keep {company.plan} features until then.',
+                    })
                 
-                current_period_end = subscription.get('current_period_end')
-                
-                # Check if subscription already has a schedule
-                existing_schedule_id = subscription.get('schedule')
-                
-                if existing_schedule_id:
-                    # Release/cancel the existing schedule first
-                    try:
-                        stripe.SubscriptionSchedule.release(existing_schedule_id)
-                        logger.info(f"Released existing schedule {existing_schedule_id}")
-                    except stripe.error.StripeError as e:
-                        logger.warning(f"Could not release schedule: {e}")
-                
-                # Create a subscription schedule for downgrade at period end
-                schedule = stripe.SubscriptionSchedule.create(
-                    from_subscription=sub_id,
-                )
-                
-                # Update the schedule to change plan at period end
-                stripe.SubscriptionSchedule.modify(
-                    schedule.id,
-                    phases=[
-                        {
-                            # Current phase - keep current plan until period end
-                            'items': [{'price': subscription['items']['data'][0]['price']['id']}],
-                            'start_date': subscription.get('current_period_start'),
-                            'end_date': current_period_end,
-                        },
-                        {
-                            # New phase - switch to new plan
-                            'items': [{'price': new_price_id}],
-                            'start_date': current_period_end,
-                            'iterations': 1,  # Will continue indefinitely
-                        },
-                    ],
-                    metadata={
-                        'company_id': company.id,
-                        'pending_plan': target_plan,
-                    }
-                )
-                
-                # DON'T update local plan yet - wait for webhook when phase actually changes
-                # Store pending downgrade info in metadata instead
-                old_plan = company.plan
-                # company.plan stays the same until period end
-                
-                # Get period end date for user message
-                if current_period_end:
-                    period_end = datetime.datetime.fromtimestamp(current_period_end)
-                    period_end_str = period_end.strftime('%d.%m.%Y')
-                else:
-                    period_end_str = 'end of billing period'
-                
-                logger.info(f"ChangePlan: Downgrade scheduled. {old_plan} → {target_plan} at {period_end_str}")
-                
-                return Response({
-                    'success': True,
-                    'action': 'downgrade_scheduled',
-                    'message': f'Plan will change to {target_plan} on {period_end_str}. '
-                              f'You keep {old_plan} features until then.',
-                    'current_plan': old_plan,
-                    'new_plan': target_plan,
-                    'effective': period_end_str,
-                    'effective_timestamp': current_period_end
-                })
+                else:  # mode == 'confirm'
+                    logger.info(f"ChangePlan CONFIRM: DOWNGRADE {company.plan} → {target_plan}")
+                    
+                    # Check if subscription already has a schedule
+                    existing_schedule_id = subscription.get('schedule')
+                    
+                    if existing_schedule_id:
+                        # Release/cancel the existing schedule first
+                        try:
+                            stripe.SubscriptionSchedule.release(existing_schedule_id)
+                            logger.info(f"Released existing schedule {existing_schedule_id}")
+                        except stripe.error.StripeError as e:
+                            logger.warning(f"Could not release schedule: {e}")
+                    
+                    # Create a subscription schedule for downgrade at period end
+                    schedule = stripe.SubscriptionSchedule.create(
+                        from_subscription=sub_id,
+                    )
+                    
+                    # Update the schedule to change plan at period end
+                    stripe.SubscriptionSchedule.modify(
+                        schedule.id,
+                        phases=[
+                            {
+                                # Current phase - keep current plan until period end
+                                'items': [{'price': current_price_id}],
+                                'start_date': subscription.get('current_period_start'),
+                                'end_date': current_period_end,
+                            },
+                            {
+                                # New phase - switch to new plan
+                                'items': [{'price': new_price_id}],
+                                'start_date': current_period_end,
+                                'iterations': 1,  # Will continue indefinitely
+                            },
+                        ],
+                        metadata={
+                            'company_id': company.id,
+                            'pending_plan': target_plan,
+                        }
+                    )
+                    
+                    # DON'T update local plan yet - wait for webhook when phase actually changes
+                    old_plan = company.plan
+                    
+                    # Get period end date for user message
+                    period_end_str = ''
+                    if current_period_end:
+                        period_end = datetime.datetime.fromtimestamp(current_period_end)
+                        period_end_str = period_end.strftime('%d.%m.%Y')
+                    
+                    logger.info(f"ChangePlan: Downgrade scheduled. {old_plan} → {target_plan} at {period_end_str}")
+                    
+                    return Response({
+                        'success': True,
+                        'action': 'downgrade_scheduled',
+                        'message': f'Plan will change to {target_plan} on {period_end_str}. '
+                                  f'You keep {old_plan} features until then.',
+                        'current_plan': old_plan,
+                        'new_plan': target_plan,
+                        'effective': period_end_str,
+                        'effective_timestamp': current_period_end,
+                        'schedule_id': schedule.id,
+                    })
         
         except stripe.error.StripeError as e:
             logger.exception(f"Stripe error changing plan: {e}")
             return Response({'error': f'Stripe error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
             logger.exception(f"Error changing plan: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CancelScheduledDowngradeView(APIView):
+    """Cancel a scheduled downgrade and keep current plan."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            if not can_manage_subscription(request.user):
+                return Response({'error': 'No permission'}, status=status.HTTP_403_FORBIDDEN)
+            
+            user = request.user
+            company = user.company
+            if not company:
+                return Response({'error': 'No company'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            sub_id = company.stripe_subscription_id
+            if not sub_id:
+                return Response({'error': 'No subscription'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            subscription = stripe.Subscription.retrieve(sub_id)
+            schedule_id = subscription.get('schedule')
+            
+            if not schedule_id:
+                return Response({'error': 'No scheduled change found'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Release the schedule (keeps current subscription as-is)
+            stripe.SubscriptionSchedule.release(schedule_id)
+            
+            logger.info(f"Cancelled scheduled downgrade for company {company.name}")
+            
+            return Response({
+                'success': True,
+                'message': 'Scheduled plan change has been cancelled. You will stay on your current plan.',
+                'current_plan': company.plan,
+            })
+        
+        except stripe.error.StripeError as e:
+            logger.exception(f"Stripe error cancelling schedule: {e}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            logger.exception(f"Error cancelling schedule: {e}")
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 

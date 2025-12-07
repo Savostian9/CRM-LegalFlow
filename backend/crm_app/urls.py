@@ -36,6 +36,7 @@ from crm_app.billing.views import (
     CreateCustomerPortalSessionView, 
     CancelSubscriptionView,
     ChangePlanView,
+    CancelScheduledDowngradeView,
     StripeConfigView,
     CreateSetupIntentView,
     UpdateDefaultPaymentMethodView
@@ -85,6 +86,7 @@ urlpatterns = [
     path('billing/usage/', BillingUsageView.as_view(), name='billing-usage'),
     path('billing/upgrade/', CreateCheckoutSessionView.as_view(), name='billing-upgrade'),
     path('billing/change-plan/', ChangePlanView.as_view(), name='billing-change-plan'),
+    path('billing/cancel-downgrade/', CancelScheduledDowngradeView.as_view(), name='billing-cancel-downgrade'),
     path('billing/portal/', CreateCustomerPortalSessionView.as_view(), name='billing-portal'),
     path('billing/cancel/', CancelSubscriptionView.as_view(), name='billing-cancel'),
     path('billing/config/', StripeConfigView.as_view(), name='billing-config'),
