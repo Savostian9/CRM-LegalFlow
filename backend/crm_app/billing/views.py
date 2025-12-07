@@ -682,17 +682,45 @@ class ChangePlanView(APIView):
                         },
                     )
                     
+                    # Log the invoice preview for debugging
+                    logger.info(f"ChangePlan PREVIEW: invoice total={upcoming_invoice.get('total')}, subtotal={upcoming_invoice.get('subtotal')}")
+                    
                     # Calculate proration amount (difference to pay now)
+                    # In new API, we should look at the total amount of the invoice
                     proration_amount = 0
                     proration_items = []
-                    lines_data = upcoming_invoice['lines']['data'] if 'lines' in upcoming_invoice else []
-                    for line in lines_data:
-                        if line.get('proration', False):
-                            proration_amount += line.get('amount', 0)
+                    
+                    # Get lines data - handle both dict and object access
+                    lines_obj = upcoming_invoice.get('lines') or getattr(upcoming_invoice, 'lines', None)
+                    if lines_obj:
+                        lines_data = lines_obj.get('data') if isinstance(lines_obj, dict) else getattr(lines_obj, 'data', [])
+                    else:
+                        lines_data = []
+                    
+                    logger.info(f"ChangePlan PREVIEW: lines count={len(lines_data)}")
+                    
+                    for i, line in enumerate(lines_data):
+                        amount = line.get('amount', 0) if isinstance(line, dict) else getattr(line, 'amount', 0)
+                        description = line.get('description', '') if isinstance(line, dict) else getattr(line, 'description', '')
+                        is_proration = line.get('proration', False) if isinstance(line, dict) else getattr(line, 'proration', False)
+                        line_type = line.get('type', '') if isinstance(line, dict) else getattr(line, 'type', '')
+                        
+                        logger.info(f"ChangePlan PREVIEW: line[{i}] amount={amount}, proration={is_proration}, type={line_type}, desc={description[:50] if description else ''}")
+                        
+                        # Include all positive amounts (charges), not just proration items
+                        if amount > 0:
+                            proration_amount += amount
                             proration_items.append({
-                                'description': line.get('description', ''),
-                                'amount': line.get('amount', 0) / 100,  # Convert to currency
+                                'description': description,
+                                'amount': amount / 100,  # Convert to currency
                             })
+                    
+                    # If no positive amounts found, use total from invoice
+                    if proration_amount == 0:
+                        invoice_total = upcoming_invoice.get('total', 0) if isinstance(upcoming_invoice, dict) else getattr(upcoming_invoice, 'total', 0)
+                        if invoice_total > 0:
+                            proration_amount = invoice_total
+                            logger.info(f"ChangePlan PREVIEW: using invoice total={proration_amount}")
                     
                     # Get period end date
                     period_end_str = ''
