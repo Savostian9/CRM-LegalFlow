@@ -2,6 +2,7 @@ import stripe
 import logging
 import traceback
 import datetime
+from dateutil.relativedelta import relativedelta
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -561,9 +562,12 @@ class ChangePlanView(APIView):
                     'message': 'No active subscription. Please subscribe first.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Get current subscription from Stripe
+            # Get current subscription from Stripe with expanded data
             try:
-                subscription = stripe.Subscription.retrieve(sub_id)
+                subscription = stripe.Subscription.retrieve(
+                    sub_id,
+                    expand=['items.data.price', 'schedule']
+                )
                 logger.info(f"ChangePlan: Retrieved subscription {sub_id}, status={subscription.status}")
             except stripe.error.InvalidRequestError as e:
                 logger.error(f"ChangePlan: Subscription {sub_id} not found: {e}")
@@ -581,15 +585,51 @@ class ChangePlanView(APIView):
             # Debug: log subscription keys to understand structure
             logger.info(f"ChangePlan: subscription keys: {list(subscription.keys())}")
             
-            # Get period end timestamps from subscription
-            # Try multiple access methods for compatibility
+            # Get period end timestamps - try different methods
+            # Method 1: Direct access on subscription items
+            current_period_end = None
+            current_period_start = None
+            
             try:
-                current_period_end = subscription.get('current_period_end') or getattr(subscription, 'current_period_end', None)
-                current_period_start = subscription.get('current_period_start') or getattr(subscription, 'current_period_start', None)
+                # Try from subscription items first (most reliable in newer API)
+                items_data = subscription.get('items') or subscription['items']
+                if items_data:
+                    first_item = items_data['data'][0] if isinstance(items_data, dict) else items_data.data[0]
+                    # Items may have current_period_end
+                    current_period_end = first_item.get('current_period_end')
+                    current_period_start = first_item.get('current_period_start')
             except Exception as e:
-                logger.warning(f"ChangePlan: Error getting period dates: {e}")
-                current_period_end = None
-                current_period_start = None
+                logger.warning(f"ChangePlan: Error getting period from items: {e}")
+            
+            # Method 2: Calculate from billing_cycle_anchor + interval
+            if not current_period_end:
+                try:
+                    billing_anchor = subscription.get('billing_cycle_anchor')
+                    plan_data = subscription.get('plan')
+                    if billing_anchor and plan_data:
+                        interval = plan_data.get('interval', 'month')
+                        interval_count = plan_data.get('interval_count', 1)
+                        
+                        # Calculate next billing date
+                        anchor_dt = datetime.datetime.fromtimestamp(billing_anchor)
+                        now = datetime.datetime.now()
+                        
+                        # Find next billing date after now
+                        next_billing = anchor_dt
+                        while next_billing <= now:
+                            if interval == 'month':
+                                next_billing += relativedelta(months=interval_count)
+                            elif interval == 'year':
+                                next_billing += relativedelta(years=interval_count)
+                            elif interval == 'week':
+                                next_billing += relativedelta(weeks=interval_count)
+                            elif interval == 'day':
+                                next_billing += relativedelta(days=interval_count)
+                        
+                        current_period_end = int(next_billing.timestamp())
+                        logger.info(f"ChangePlan: Calculated period_end from billing_anchor: {current_period_end}")
+                except Exception as e:
+                    logger.warning(f"ChangePlan: Error calculating period from anchor: {e}")
             
             logger.info(f"ChangePlan: period_end={current_period_end}, period_start={current_period_start}")
             
