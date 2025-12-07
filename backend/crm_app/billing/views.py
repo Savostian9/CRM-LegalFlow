@@ -697,23 +697,31 @@ class ChangePlanView(APIView):
                     logger.info(f"ChangePlan PREVIEW: lines count={len(lines_data)}")
                     
                     proration_items = []
+                    proration_amount = 0
+                    
                     for i, line in enumerate(lines_data):
                         amount = line.get('amount', 0) if isinstance(line, dict) else getattr(line, 'amount', 0)
                         description = line.get('description', '') if isinstance(line, dict) else getattr(line, 'description', '')
                         is_proration = line.get('proration', False) if isinstance(line, dict) else getattr(line, 'proration', False)
                         line_type = line.get('type', '') if isinstance(line, dict) else getattr(line, 'type', '')
                         
-                        logger.info(f"ChangePlan PREVIEW: line[{i}] amount={amount}, proration={is_proration}, type={line_type}, desc={description[:50] if description else ''}")
+                        # Check if this is a regular subscription charge (not proration)
+                        # Regular charges have description like "1 × Pro (at 549.00 zł / month)"
+                        # Proration lines have description like "Unused time on..." or "Remaining time on..."
+                        is_regular_charge = ' × ' in description or description.startswith('1 ×')
+                        is_proration_line = 'time on' in description.lower() or 'proration' in description.lower()
                         
-                        # Add all items to display
-                        proration_items.append({
-                            'description': description,
-                            'amount': amount / 100,  # Convert to currency (can be negative for credits)
-                        })
+                        logger.info(f"ChangePlan PREVIEW: line[{i}] amount={amount}, proration={is_proration}, is_regular={is_regular_charge}, is_proration_line={is_proration_line}, desc={description[:60] if description else ''}")
+                        
+                        # Only add proration lines (skip regular subscription charges)
+                        if is_proration_line and not is_regular_charge:
+                            proration_items.append({
+                                'description': description,
+                                'amount': amount / 100,  # Convert to currency (can be negative for credits)
+                            })
+                            proration_amount += amount
                     
-                    # Use the invoice total as the proration amount - this accounts for credits
-                    proration_amount = invoice_total
-                    logger.info(f"ChangePlan PREVIEW: using invoice total={proration_amount} as proration amount")
+                    logger.info(f"ChangePlan PREVIEW: calculated proration_amount={proration_amount} (only proration lines)")
                     
                     # Get period end date
                     period_end_str = ''
