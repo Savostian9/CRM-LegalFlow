@@ -88,7 +88,7 @@
               <span>{{ $t('nav.settings') }}</span>
             </router-link>
           </li>
-          <li>
+          <li v-if="canManageSubscription">
             <router-link
               to="/dashboard/plan"
               :class="{ active: $route.path.startsWith('/dashboard/plan') }"
@@ -186,6 +186,7 @@ export default {
       trialDismissed: false,
       isSuperuser: false,
       showFaqPrompt: false,
+      canManageSubscription: false,
     };
   },
   computed: {
@@ -328,6 +329,7 @@ export default {
       try {
         const perms = await axios.get('/api/profile/permissions/', { headers: { Authorization: `Token ${token}` } });
         localStorage.setItem('user-permissions', JSON.stringify(perms.data));
+        this.canManageSubscription = !!perms.data.can_manage_subscription;
       } catch (e) { console.error('Error loading permissions:', e); }
       // Load company name for sidebar display
       try {

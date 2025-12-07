@@ -826,8 +826,7 @@ export default {
 </script>
 
 <style scoped>
-.page { padding: 24px; }
-.header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+.header { display:flex; align-items:center; justify-content:space-between; }
 .btn { border:1px solid var(--btn-border); background:var(--btn-bg); color:var(--btn-text); padding:10px 20px; border-radius:8px; font-weight:600; font-size:14px; transition:background .25s, color .25s, border-color .25s, box-shadow .25s, transform .25s; }
 .btn:hover { background: var(--primary-color,#4A90E2); color:#fff; border-color: var(--primary-color,#4A90E2); }
 .btn.add-clone:hover { transform:translateY(-2px); box-shadow:0 6px 14px -4px rgba(0,0,0,.16); }

@@ -35,9 +35,7 @@ const faqs = computed(() => {
 </script>
 
 <style scoped>
-.page { padding: 24px; }
 .page-header { margin-bottom: 18px; }
-.page-header h1 { font-size: 24px; margin: 0 0 6px; }
 .page-header .lead { color: #475569; margin: 0; }
 
 .faq-list { display: grid; gap: 10px; }

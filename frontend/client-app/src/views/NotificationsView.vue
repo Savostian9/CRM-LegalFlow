@@ -1,6 +1,8 @@
 <template>
   <div class="notifications-page">
-    <h1>{{ $t('notifications.title') }}</h1>
+    <header class="header">
+      <h1>{{ $t('notifications.title') }}</h1>
+    </header>
     <div class="actions">
       <button class="btn" @click="reload" :disabled="loading">{{ loading ? $t('notifications.loading') : $t('notifications.refresh') }}</button>
       <button class="btn" @click="markAll" :disabled="markingAll || items.length===0">{{ markingAll ? $t('notifications.marking') : $t('notifications.markAll') }}</button>
@@ -220,7 +222,8 @@ export default {
 </script>
 
 <style scoped>
-.notifications-page { padding: 24px 32px; font-family: 'Inter', sans-serif; }
+.notifications-page { font-family: 'Inter', sans-serif; margin-top: -4px; }
+.header { display:flex; align-items:center; justify-content:space-between; }
 .actions { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
 .btn { background:var(--btn-bg,#ffffff); border:1px solid var(--btn-border,#d0d7e2); padding:8px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; line-height:1.2; display:inline-flex; align-items:center; gap:6px; color:#1e293b !important; transition:background .25s, color .25s, border-color .25s, box-shadow .25s; text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
 .btn:not(:hover):not(:focus) { background:#ffffff; color:#1e293b !important; }

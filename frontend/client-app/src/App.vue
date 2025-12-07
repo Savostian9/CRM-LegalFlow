@@ -85,6 +85,46 @@ body {
 }
 a { color: var(--link-color); }
 
+/* === Unified Page Title Styles === */
+/* All dashboard pages should use these consistent styles */
+/* Unified dashboard page paddings */
+.content-wrapper,
+.list-view-wrapper,
+.page,
+.finance-page,
+.notifications-page,
+.calendar-page,
+.plan-page,
+.faq-page,
+.client-card-wrapper {
+  padding: 24px 32px !important;
+}
+
+/* Unified dashboard headers */
+.content-header,
+.finance-header,
+.page-header,
+.cal-header,
+.card-header,
+.header {
+  margin-bottom: 24px !important;
+}
+
+.content-header h1,
+.finance-header h1,
+.page-header h1,
+.cal-header h1,
+.cal-header h2,
+.card-header h1,
+.header h1,
+.page-title,
+.calendar-title {
+  font-size: 28px !important;
+  color: #2c3e50 !important;
+  font-weight: 700 !important;
+  margin: 0 !important;
+}
+
 /* (Form control styles centralized in styles/forms.css) */
 
 /* Toast customization */

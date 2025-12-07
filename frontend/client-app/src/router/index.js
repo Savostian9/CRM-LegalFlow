@@ -181,11 +181,30 @@ router.beforeEach(async (to, from, next) => {
       console.error('Failed to load billing usage', e)
     }
 
+    // Check subscription management permission for plan page
+    if (to.name === 'my-plan') {
+      let perms = {}
+      try {
+        perms = JSON.parse(localStorage.getItem('user-permissions') || '{}')
+      } catch (e) { /* ignore */ }
+      if (!perms.can_manage_subscription) {
+        next('/dashboard')
+        return
+      }
+    }
+
     if (billingUsageState.isRestricted) {
-      const allowedNames = ['settings', 'my-plan', 'faq']
+      let perms = {}
+      try {
+        perms = JSON.parse(localStorage.getItem('user-permissions') || '{}')
+      } catch (e) { /* ignore */ }
+      const canManageSub = !!perms.can_manage_subscription
+      const allowedNames = ['settings', 'faq']
+      if (canManageSub) allowedNames.push('my-plan')
       if (!allowedNames.includes(to.name)) {
         window.dispatchEvent(new CustomEvent('show-restricted-toast'))
-        next({ name: 'my-plan' })
+        // Redirect to plan only if user can manage subscription, otherwise to settings
+        next({ name: canManageSub ? 'my-plan' : 'settings' })
         return
       }
     }

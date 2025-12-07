@@ -7,13 +7,14 @@
           <button class="btn" :class="{ todayActive: cursorIsToday }" @click="goToday">{{ $t('calendar.actions.today') }}</button>
           <button class="btn" @click="goNext">{{ $t('calendar.actions.next') }}</button>
         </div>
-        <h2>{{ periodLabel }}</h2>
       </div>
       <div class="right cal-filters">
         <input v-model="query" type="text" :placeholder="$t('calendar.searchPH')" class="cal-filter" />
         <UiSelect v-model="status" :options="statusOptions" :aria-label="$t('calendar.statusAll')" />
       </div>
     </header>
+
+    <h2 class="calendar-title">{{ periodLabel }}</h2>
 
     <div class="calendar-surface" ref="surface">
       <div class="month-grid">
@@ -385,7 +386,9 @@ export default {
 
 <style scoped>
 .calendar-page { padding: 20px 22px 10px; display:flex; flex-direction:column; }
-.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.cal-header .left { display: flex; align-items: center; gap: 20px; }
+.calendar-title { margin: 0 0 24px 0; font-size: 28px; color: #2c3e50; font-weight: 700; }
 .btn-group { display: inline-flex; gap: 8px; }
 .btn { height: 36px; padding: 0 12px; border: 1px solid var(--btn-border); border-radius: 8px; background: var(--btn-bg); color: var(--btn-text); cursor: pointer; position:relative; overflow:hidden;
   transition: background-color .18s ease, color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease; }

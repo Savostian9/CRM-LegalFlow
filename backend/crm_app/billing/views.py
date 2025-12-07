@@ -277,15 +277,22 @@ def handle_invoice_finalized(invoice):
     invoice_id = invoice.get('id')
     customer_id = invoice.get('customer')
     invoice_status = invoice.get('status')
+    billing_reason = invoice.get('billing_reason')  # subscription_create, subscription_cycle, etc.
     
-    logger.info(f"Invoice finalized: id={invoice_id}, customer={customer_id}, status={invoice_status}")
+    logger.info(f"Invoice finalized: id={invoice_id}, customer={customer_id}, "
+                f"status={invoice_status}, billing_reason={billing_reason}")
     
     try:
-        # Only send if invoice is open (not already paid or voided)
+        # For subscription invoices, they auto-charge, so status might already be 'paid'
+        # We need to send the invoice/receipt regardless
         if invoice_status == 'open':
-            # Send the invoice email to customer
+            # Invoice is open and awaiting payment - send payment request
             stripe.Invoice.send_invoice(invoice_id)
             logger.info(f"Invoice {invoice_id} sent to customer {customer_id}")
+        elif invoice_status == 'paid':
+            # Invoice already paid (common for subscriptions) - Stripe sends receipt automatically
+            # if "Successful payments" email is enabled in Stripe Dashboard
+            logger.info(f"Invoice {invoice_id} already paid - Stripe should send receipt automatically")
         else:
             logger.info(f"Invoice {invoice_id} not sent - status is {invoice_status}")
     except stripe.error.InvalidRequestError as e:

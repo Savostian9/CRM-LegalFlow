@@ -353,9 +353,8 @@ export default {
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-.finance-page { padding: 40px; font-family: 'Inter', sans-serif; }
-.finance-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-.finance-header h1 { font-size: 28px; color: #2c3e50; font-weight: 700; }
+.finance-page { font-family: 'Inter', sans-serif; }
+.finance-header { display: flex; justify-content: space-between; align-items: center; }
 
 .filters { display: flex; gap: 10px; }
 .filters select { height: 40px; padding: 0 12px; border: 1px solid var(--form-border); border-radius: var(--form-radius,8px); font-family: 'Inter', sans-serif; transition:border-color .18s, box-shadow .18s; display:inline-flex; align-items:center; background:var(--form-bg,#fff); }

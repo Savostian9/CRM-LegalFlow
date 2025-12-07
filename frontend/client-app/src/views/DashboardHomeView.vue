@@ -886,19 +886,7 @@ async function loadUsers(){
 </script>
 
 <style scoped>
-/* Base layout styles retained */
-/* Стили только для этой конкретной страницы */
-.content-wrapper {
-  padding: 40px;
-}
-.content-header {
-  margin-bottom: 30px;
-}
-.content-header h1 {
-  font-size: 28px;
-  color: #2c3e50;
-  font-weight: 700;
-}
+/* Base layout styles retained for this page */
 .widget { margin-top: 20px; background:var(--card-bg); border:1px solid var(--card-border); border-radius:12px; }
 .widget-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #eef2f7; }
 .widget.finance { margin-top: 0; }

@@ -1,6 +1,8 @@
 <template>
   <div class="plan-page">
-    <h1 class="page-title">{{ $t('billing.title') }}</h1>
+    <header class="header">
+      <h1 class="page-title">{{ $t('billing.title') }}</h1>
+    </header>
     <div v-if="loading" class="loading">{{ $t('common.loading') }}</div>
     <div v-else-if="error" class="error">{{ $t('billing.error') }}: {{ error }}</div>
     <div v-else class="plan-content">
@@ -285,8 +287,8 @@ export default {
 </script>
 
 <style scoped>
-.plan-page { padding:24px 28px; }
-.page-title { font-size:24px; font-weight:600; margin:0 0 22px; }
+.plan-page { font-family: 'Inter', sans-serif; margin-top: -4px; }
+.header { display:flex; align-items:center; justify-content:space-between; }
 .plan-summary { background:#fff; border:1px solid #e2e8f0; border-radius:16px; padding:26px 32px; margin-bottom:32px; box-shadow:0 10px 30px rgba(15,23,42,0.06); display:flex; flex-direction:column; gap:10px; }
 .plan-summary.trial { border-color:#3b82f6; box-shadow:0 12px 32px rgba(37,99,235,0.12); }
 .plan-summary.pro { border-color:#9333ea; box-shadow:0 12px 32px rgba(147,51,234,0.12); }
