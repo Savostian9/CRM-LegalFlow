@@ -148,15 +148,6 @@ class CreateCheckoutSessionView(APIView):
                         'company_id': company.id,
                         'plan': target_plan
                     }
-                },
-                # Ensure invoices are sent automatically to customer email
-                invoice_creation={
-                    'enabled': True,
-                    'invoice_data': {
-                        'rendering_options': {
-                            'amount_tax_display': 'include_inclusive_tax',
-                        }
-                    }
                 }
             )
             
