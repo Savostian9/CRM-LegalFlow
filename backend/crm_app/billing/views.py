@@ -612,9 +612,14 @@ class ChangePlanView(APIView):
                 company.plan = target_plan
                 company.save(update_fields=['plan'])
                 
-                # Get period end date for user message
-                period_end = datetime.datetime.fromtimestamp(subscription.current_period_end)
-                period_end_str = period_end.strftime('%d.%m.%Y')
+                # Get period end date for user message (use dict access for Stripe objects)
+                period_end_timestamp = subscription.get('current_period_end') or updated_sub.get('current_period_end')
+                if period_end_timestamp:
+                    period_end = datetime.datetime.fromtimestamp(period_end_timestamp)
+                    period_end_str = period_end.strftime('%d.%m.%Y')
+                else:
+                    period_end_str = 'end of billing period'
+                    period_end_timestamp = None
                 
                 logger.info(f"ChangePlan: Downgrade scheduled. {old_plan} → {target_plan} at {period_end_str}")
                 
@@ -625,7 +630,7 @@ class ChangePlanView(APIView):
                               f'You keep {old_plan} features until then.',
                     'new_plan': target_plan,
                     'effective': period_end_str,
-                    'effective_timestamp': subscription.current_period_end
+                    'effective_timestamp': period_end_timestamp
                 })
         
         except stripe.error.StripeError as e:
