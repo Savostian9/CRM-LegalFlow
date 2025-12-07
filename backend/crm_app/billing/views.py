@@ -1,6 +1,7 @@
 import stripe
 import logging
 import traceback
+import datetime
 from django.conf import settings
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -612,7 +613,6 @@ class ChangePlanView(APIView):
                 company.save(update_fields=['plan'])
                 
                 # Get period end date for user message
-                import datetime
                 period_end = datetime.datetime.fromtimestamp(subscription.current_period_end)
                 period_end_str = period_end.strftime('%d.%m.%Y')
                 
