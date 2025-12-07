@@ -351,51 +351,60 @@ Zespół LegalFlow
 <html>
 <head>
     <meta charset="utf-8">
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
-        .content {{ background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }}
-        .amount {{ font-size: 24px; font-weight: bold; color: #059669; margin: 20px 0; }}
-        .details {{ background: white; padding: 20px; border-radius: 8px; margin: 20px 0; }}
-        .btn {{ display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 10px 5px 10px 0; }}
-        .btn-secondary {{ background: #6b7280; }}
-        .footer {{ text-align: center; padding: 20px; color: #6b7280; font-size: 14px; }}
-    </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>LegalFlow</h1>
-            <p>Potwierdzenie płatności</p>
-        </div>
-        <div class="content">
-            <p>Dzień dobry,</p>
-            <p>Dziękujemy za płatność za subskrypcję LegalFlow.</p>
-            
-            <div class="details">
-                <p><strong>Szczegóły płatności:</strong></p>
-                <p class="amount">✓ {amount_formatted}</p>
-                <p><strong>Numer faktury:</strong> {invoice_id}</p>
-                <p><strong>Firma:</strong> {company_name}</p>
-            </div>
-            
-            <p>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+        <tr>
+            <td style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 30px 20px; text-align: center;">
+                <h1 style="margin: 0; font-size: 28px; font-weight: bold;">LegalFlow</h1>
+                <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Potwierdzenie płatności</p>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 40px 30px;">
+                <p style="margin: 0 0 20px 0; font-size: 16px;">Dzień dobry,</p>
+                <p style="margin: 0 0 30px 0; font-size: 16px;">Dziękujemy za płatność za subskrypcję LegalFlow.</p>
+                
+                <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 30px;">
+                    <tr>
+                        <td style="padding: 25px;">
+                            <p style="margin: 0 0 15px 0; font-size: 14px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Szczegóły płatności:</p>
+                            <p style="margin: 0 0 20px 0; font-size: 32px; font-weight: bold; color: #059669;">✓ {amount_formatted}</p>
+                            <p style="margin: 0 0 8px 0; font-size: 14px; color: #475569;"><strong>Numer faktury:</strong> {invoice_id}</p>
+                            <p style="margin: 0; font-size: 14px; color: #475569;"><strong>Firma:</strong> {company_name}</p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <table cellpadding="0" cellspacing="0" style="margin-bottom: 30px;">
+                    <tr>
 """
                 if invoice_pdf:
-                    html_body += f'<a href="{invoice_pdf}" class="btn">📄 Pobierz fakturę PDF</a>'
+                    html_body += f'''
+                        <td style="padding-right: 12px;">
+                            <a href="{invoice_pdf}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">📄 Pobierz fakturę PDF</a>
+                        </td>
+'''
                 if hosted_invoice_url:
-                    html_body += f'<a href="{hosted_invoice_url}" class="btn btn-secondary">🔗 Zobacz fakturę online</a>'
+                    html_body += f'''
+                        <td>
+                            <a href="{hosted_invoice_url}" style="display: inline-block; background: #64748b; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">🔗 Zobacz fakturę online</a>
+                        </td>
+'''
                 
                 html_body += """
-            </p>
-            
-            <p>Jeśli masz pytania dotyczące faktury, odpowiedz na ten email.</p>
-        </div>
-        <div class="footer">
-            <p>Pozdrawiamy,<br>Zespół LegalFlow</p>
-        </div>
-    </div>
+                    </tr>
+                </table>
+                
+                <p style="margin: 0; font-size: 14px; color: #64748b;">Jeśli masz pytania dotyczące faktury, odpowiedz na ten email.</p>
+            </td>
+        </tr>
+        <tr>
+            <td style="background: #f8fafc; padding: 25px; text-align: center; border-top: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 14px; color: #64748b;">Pozdrawiamy,<br><strong>Zespół LegalFlow</strong></p>
+            </td>
+        </tr>
+    </table>
 </body>
 </html>
 """
