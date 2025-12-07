@@ -146,7 +146,6 @@ export default {
       showConfirmModal: false,
       confirmModalData: {},
       confirmLoading: false,
-      pendingDowngrade: null,
       cancelingDowngrade: false,
     };
   },
@@ -158,6 +157,8 @@ export default {
     daysLeft(){ return billingUsageState.daysLeft; },
     trialEndsAt(){ return billingUsageState.trialEndsAt; },
     subscriptionEndsAt(){ return this.usage?.subscription_ends_at; },
+    // pendingDowngrade from API (persists after page reload)
+    pendingDowngrade(){ return this.usage?.pending_downgrade || null; },
     planCode(){ return (this.usage?.plan || 'TRIAL').toUpperCase(); },
     subscriptionStatus() { return this.usage?.subscription_status; },
     isActiveSubscription() {
@@ -363,15 +364,10 @@ export default {
         }
         
         if (res.data?.action === 'downgrade_scheduled') {
-          // Downgrade scheduled - show success and update UI
+          // Downgrade scheduled - show success and reload billing data
           this.$toast && this.$toast.success(res.data.message || this.$t('billing.toast.downgradeScheduled'));
-          this.pendingDowngrade = {
-            new_plan: res.data.new_plan,
-            effective: res.data.effective,
-            schedule_id: res.data.schedule_id,
-          };
           this.closeConfirmModal();
-          await loadBillingUsage(true);
+          await loadBillingUsage(true);  // Reload to get pending_downgrade from API
           return;
         }
         
@@ -402,8 +398,7 @@ export default {
         
         if (res.data?.success) {
           this.$toast && this.$toast.success(res.data.message || this.$t('billing.downgradeCanceled'));
-          this.pendingDowngrade = null;
-          await loadBillingUsage(true);
+          await loadBillingUsage(true);  // Reload to clear pending_downgrade from API
         }
       } catch(e) {
         console.error(e);

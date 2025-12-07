@@ -1311,12 +1311,69 @@ class BillingUsageView(APIView):
                     if not stripe_error:
                         stripe_error = str(e)
 
+        # Check for pending downgrade (subscription schedule)
+        pending_downgrade = None
+        if company.stripe_subscription_id:
+            try:
+                import stripe
+                from datetime import datetime, timezone as dt_timezone
+                from .billing.plans import STRIPE_PRICES
+                stripe.api_key = settings.STRIPE_SECRET_KEY
+                
+                # Get subscription with schedule expanded
+                sub = stripe.Subscription.retrieve(
+                    company.stripe_subscription_id,
+                    expand=['schedule']
+                )
+                
+                schedule = sub.get('schedule')
+                if schedule and isinstance(schedule, str):
+                    # Schedule is ID, need to retrieve it
+                    schedule = stripe.SubscriptionSchedule.retrieve(schedule)
+                
+                if schedule and schedule.get('status') == 'active':
+                    phases = schedule.get('phases', [])
+                    if len(phases) >= 2:
+                        # There's a scheduled phase change
+                        current_phase = phases[0]
+                        next_phase = phases[1]
+                        
+                        # Get next phase price to determine plan
+                        next_price_id = None
+                        if next_phase.get('items'):
+                            next_price_id = next_phase['items'][0].get('price')
+                        
+                        # Map price_id back to plan name
+                        next_plan = None
+                        for plan_name, prices in STRIPE_PRICES.items():
+                            if next_price_id in prices.values():
+                                next_plan = plan_name
+                                break
+                        
+                        if next_plan and next_plan != plan_code:
+                            # Get effective date
+                            effective_ts = current_phase.get('end_date')
+                            effective_str = ''
+                            if effective_ts:
+                                effective_dt = datetime.fromtimestamp(effective_ts, tz=dt_timezone.utc)
+                                effective_str = effective_dt.strftime('%d.%m.%Y')
+                            
+                            pending_downgrade = {
+                                'new_plan': next_plan,
+                                'effective': effective_str,
+                                'effective_timestamp': effective_ts,
+                                'schedule_id': schedule.get('id'),
+                            }
+            except Exception as e:
+                logging.getLogger(__name__).warning(f"Error checking pending downgrade: {e}")
+
         return Response({
             'plan': plan_code,
             'stripe_customer_id': company.stripe_customer_id,
             'stripe_subscription_id': company.stripe_subscription_id,
             'subscription_status': company.subscription_status,
             'subscription_ends_at': subscription_ends_at,
+            'pending_downgrade': pending_downgrade,
             'stripe_error': stripe_error,  # для отладки, можно убрать в проде
             'limits': limits,
             'usage': formatted,
