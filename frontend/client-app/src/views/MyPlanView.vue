@@ -363,6 +363,15 @@ export default {
           return;
         }
         
+        if (res.data?.action === 'upgraded') {
+          // Upgrade completed directly - show success and reload billing data
+          const successMsg = this.$t('billing.toast.upgraded', { plan: res.data.new_plan }) || res.data.message;
+          this.$toast && this.$toast.success(successMsg);
+          this.closeConfirmModal();
+          await loadBillingUsage(true);  // Reload to get updated plan from API
+          return;
+        }
+        
         if (res.data?.action === 'downgrade_scheduled') {
           // Downgrade scheduled - show success and reload billing data
           this.$toast && this.$toast.success(res.data.message || this.$t('billing.toast.downgradeScheduled'));

@@ -739,39 +739,34 @@ class ChangePlanView(APIView):
                 else:  # mode == 'confirm'
                     logger.info(f"ChangePlan CONFIRM: UPGRADE {company.plan} → {target_plan}")
                     
-                    # Create Checkout Session for upgrade payment
-                    checkout_session = stripe.checkout.Session.create(
-                        customer=company.stripe_customer_id,
-                        mode='subscription',
-                        line_items=[{
+                    # Directly modify the subscription to upgrade
+                    # This will create a proration invoice and charge the saved card
+                    updated_subscription = stripe.Subscription.modify(
+                        sub_id,
+                        items=[{
+                            'id': subscription_item_id,
                             'price': new_price_id,
-                            'quantity': 1,
                         }],
-                        subscription_data={
-                            'metadata': {
-                                'company_id': company.id,
-                                'plan': target_plan,
-                                'upgrade_from': company.plan,
-                            },
-                            'proration_behavior': 'create_prorations',
-                        },
-                        success_url=f"{settings.FRONTEND_URL}/my-plan?upgrade=success&plan={target_plan}",
-                        cancel_url=f"{settings.FRONTEND_URL}/my-plan?upgrade=cancelled",
+                        proration_behavior='create_prorations',
                         metadata={
-                            'company_id': company.id,
+                            'company_id': str(company.id),
                             'plan': target_plan,
-                            'action': 'upgrade',
+                            'upgraded_from': company.plan,
                         },
                     )
                     
-                    # Cancel old subscription when new one is created (handled in webhook)
-                    # Store pending upgrade info
-                    logger.info(f"ChangePlan: Checkout session created for upgrade: {checkout_session.id}")
+                    logger.info(f"ChangePlan: Subscription upgraded directly: {updated_subscription.id}")
+                    
+                    # Update company plan immediately
+                    company.plan = target_plan
+                    company.save(update_fields=['plan'])
+                    
+                    logger.info(f"ChangePlan: Company {company.id} plan updated to {target_plan}")
                     
                     return Response({
-                        'action': 'checkout',
-                        'checkout_url': checkout_session.url,
-                        'session_id': checkout_session.id,
+                        'action': 'upgraded',
+                        'new_plan': target_plan,
+                        'message': f'Successfully upgraded to {target_plan}!',
                     })
             
             else:
