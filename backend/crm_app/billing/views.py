@@ -600,8 +600,9 @@ class ChangePlanView(APIView):
                 else:
                     current_price_id = price_obj.get('id')
                 
-                # Get period end - Stripe objects use attribute access
-                current_period_end = getattr(subscription, 'current_period_end', None) or subscription.get('current_period_end')
+                # Get period end - Stripe SDK v14+ uses attribute access
+                current_period_end = subscription.current_period_end
+                current_period_start = subscription.current_period_start
                 
                 logger.info(f"ChangePlan: item_id={subscription_item_id}, price_id={current_price_id}, period_end={current_period_end}")
                 
@@ -732,7 +733,7 @@ class ChangePlanView(APIView):
                     logger.info(f"ChangePlan CONFIRM: DOWNGRADE {company.plan} → {target_plan}")
                     
                     # Check if subscription already has a schedule
-                    existing_schedule_id = subscription.get('schedule')
+                    existing_schedule_id = getattr(subscription, 'schedule', None)
                     
                     if existing_schedule_id:
                         # Release/cancel the existing schedule first
@@ -742,26 +743,28 @@ class ChangePlanView(APIView):
                         except stripe.error.StripeError as e:
                             logger.warning(f"Could not release schedule: {e}")
                     
-                    # Create a subscription schedule for downgrade at period end
+                    # Simpler approach: Create schedule from subscription, it inherits current phase
                     schedule = stripe.SubscriptionSchedule.create(
                         from_subscription=sub_id,
                     )
                     
-                    # Update the schedule to change plan at period end
+                    # Get schedule details to find current phase
+                    schedule = stripe.SubscriptionSchedule.retrieve(schedule.id)
+                    
+                    # Modify schedule: keep current phase, add new phase for downgrade
+                    # The first phase is automatically created from current subscription
                     stripe.SubscriptionSchedule.modify(
                         schedule.id,
-                        end_behavior='release',  # Continue as regular subscription after phases complete
+                        end_behavior='release',  # After last phase, become regular subscription
                         phases=[
                             {
-                                # Current phase - keep current plan until period end
-                                'items': [{'price': current_price_id}],
-                                'start_date': getattr(subscription, 'current_period_start', None) or subscription.get('current_period_start'),
+                                # Phase 1: Current plan until period end
+                                'items': [{'price': current_price_id, 'quantity': 1}],
                                 'end_date': current_period_end,
                             },
                             {
-                                # New phase - switch to new plan (no end_date = continues indefinitely)
-                                'items': [{'price': new_price_id}],
-                                'start_date': current_period_end,
+                                # Phase 2: New (downgraded) plan - no end_date means it continues
+                                'items': [{'price': new_price_id, 'quantity': 1}],
                             },
                         ],
                         metadata={
