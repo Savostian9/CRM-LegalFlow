@@ -1,0 +1,16 @@
+{
+  "name": "tradingview-scalp-bots",
+  "version": "1.0.0",
+  "description": "TradingView Scalp & Fakeout Bots",
+  "main": "START_ALL_BOTS.js",
+  "scripts": {
+    "start": "node START_ALL_BOTS.js"
+  },
+  "dependencies": {
+    "axios": "^1.5.0",
+    "ws": "^7.4.3",
+    "https-proxy-agent": "^7.0.0",
+    "@mathieuc/console": "^1.0.1",
+    "dotenv": "^16.6.1"
+  }
+}

@@ -53,6 +53,19 @@ services:
       - backend
     restart: unless-stopped
 
+  trading-bots:
+    build:
+      context: ./SERVER_PACK
+    container_name: crm-legalflow_bots
+    restart: always
+    # Храним исходники на хосте, а node_modules — внутри контейнера
+    volumes:
+      - ./SERVER_PACK:/app
+      - /app/node_modules
+    # Команда по умолчанию определяется в Dockerfile (START_ALL_BOTS.js)
+    depends_on:
+      - backend
+
 volumes:
   static:
   media:
