@@ -21,8 +21,8 @@ function startBot(scriptName, args = [], label) {
 }
 
 // 1. Запускаем Scalp Bot (Стратегия 1)
-// Передаем аргумент "--ema-filter=true" чтобы включить EMA фильтр по умолчанию (безопасный режим)
-startBot('Live_Scalp_Monitor.js', ['--ema-filter=true'], 'SCALP_STRATEGY');
+// Отключаем EMA фильтр по требованию: передаем "--ema-filter=false"
+startBot('Live_Scalp_Monitor.js', ['--ema-filter=false'], 'SCALP_STRATEGY');
 
 // 2. Запускаем Fakeout Bot (Стратегия 2)
 startBot('Live_Fakeout_Monitor.js', [], 'FAKEOUT_STRATEGY');
