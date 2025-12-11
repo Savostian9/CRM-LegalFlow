@@ -30,8 +30,8 @@ const CONFIG = {
     END_HOUR: 16,          // Optimized: 16:00 End (Avoids Close Volatility)
 
     // EMA Distance Filter
-    // If argument provided, use it. Otherwise default to true.
-    USE_EMA_FILTER: useEmaFilterOverride !== null ? useEmaFilterOverride : true,  
+    // If argument provided, use it. Otherwise default to OFF.
+    USE_EMA_FILTER: useEmaFilterOverride !== null ? useEmaFilterOverride : false,  
     EMA_FILTER_DIST: 40,   // Max distance from 5m EMA 20
 };
 
