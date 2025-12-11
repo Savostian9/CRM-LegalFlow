@@ -4,7 +4,8 @@
   "description": "TradingView Scalp & Fakeout Bots",
   "main": "START_ALL_BOTS.js",
   "scripts": {
-    "start": "node START_ALL_BOTS.js"
+    "start": "node START_ALL_BOTS.js",
+    "test:telegram": "node tools/test_telegram.js"
   },
   "dependencies": {
     "axios": "^1.5.0",
