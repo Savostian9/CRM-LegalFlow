@@ -9,6 +9,7 @@ const CONFIG = {
     // TELEGRAM SETTINGS
     TELEGRAM_TOKEN: TG_CONFIG.TELEGRAM_TOKEN, 
     TELEGRAM_CHAT_ID: TG_CONFIG.TELEGRAM_CHAT_ID,
+    TELEGRAM_CHAT_IDS: Array.isArray(TG_CONFIG.TELEGRAM_CHAT_IDS) ? TG_CONFIG.TELEGRAM_CHAT_IDS : [],
 
     SYMBOL: 'VANTAGE:GER40',
     TIMEFRAME: '5',        // 5 minutes
@@ -252,7 +253,7 @@ function isPivotLow(data, i, length) {
 }
 
 function sendTelegramAlert(signal) {
-    if (CONFIG.TELEGRAM_TOKEN === 'YOUR_BOT_TOKEN_HERE') return;
+    if (!CONFIG.TELEGRAM_TOKEN || CONFIG.TELEGRAM_TOKEN === 'YOUR_BOT_TOKEN_HERE') return;
     
     const emoji = signal.type === 'LONG' ? '🟢' : '🔴';
     const message = `
@@ -266,13 +267,15 @@ ${emoji} <b>FAKEOUT SIGNAL: ${signal.type}</b> ${emoji}
 `;
 
     const url = `https://api.telegram.org/bot${CONFIG.TELEGRAM_TOKEN}/sendMessage`;
-    axios.post(url, {
-        chat_id: CONFIG.TELEGRAM_CHAT_ID,
-        text: message,
-        parse_mode: 'HTML'
-    }).catch(err => {
-        console.error('Telegram Error:', err.message);
-    });
+    const recipients = (CONFIG.TELEGRAM_CHAT_IDS && CONFIG.TELEGRAM_CHAT_IDS.length)
+        ? CONFIG.TELEGRAM_CHAT_IDS
+        : [CONFIG.TELEGRAM_CHAT_ID];
+    Promise.all(recipients
+        .filter(Boolean)
+        .map((chatId) => axios.post(url, { chat_id: chatId, text: message, parse_mode: 'HTML' })))
+        .catch(err => {
+            console.error('Telegram Error:', err.message);
+        });
 }
 
 function buildHTFCandles(ltfCandles, timeframeMinutes) {

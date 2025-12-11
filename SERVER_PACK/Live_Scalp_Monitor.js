@@ -14,6 +14,7 @@ const CONFIG = {
     // TELEGRAM SETTINGS
     TELEGRAM_TOKEN: TG_CONFIG.TELEGRAM_TOKEN, 
     TELEGRAM_CHAT_ID: TG_CONFIG.TELEGRAM_CHAT_ID,
+    TELEGRAM_CHAT_IDS: Array.isArray(TG_CONFIG.TELEGRAM_CHAT_IDS) ? TG_CONFIG.TELEGRAM_CHAT_IDS : [],
 
     SYMBOL: 'VANTAGE:GER40',
     TIMEFRAME: '5',        // 5 minutes
@@ -416,15 +417,15 @@ async function sendTelegramAlert(signal) {
                     `<b>SL:</b> ${signal.sl}\n` +
                     `<b>TP:</b> ${signal.tp.toFixed(2)}\n\n` +
                     `<i>${signal.reason}</i>`;
-                    
+    const url = `https://api.telegram.org/bot${CONFIG.TELEGRAM_TOKEN}/sendMessage`;
+    const recipients = (CONFIG.TELEGRAM_CHAT_IDS && CONFIG.TELEGRAM_CHAT_IDS.length)
+        ? CONFIG.TELEGRAM_CHAT_IDS
+        : [CONFIG.TELEGRAM_CHAT_ID];
     try {
-        const url = `https://api.telegram.org/bot${CONFIG.TELEGRAM_TOKEN}/sendMessage`;
-        await axios.post(url, {
-            chat_id: CONFIG.TELEGRAM_CHAT_ID,
-            text: message,
-            parse_mode: 'HTML'
-        });
-        console.log('✅ Telegram alert sent!');
+        await Promise.all(recipients
+            .filter(Boolean)
+            .map((chatId) => axios.post(url, { chat_id: chatId, text: message, parse_mode: 'HTML' })));
+        console.log(`✅ Telegram alert sent to ${recipients.length} chat(s).`);
     } catch (error) {
         console.error('❌ Failed to send Telegram alert:', error.message);
     }

@@ -7,5 +7,8 @@ module.exports = {
     // 1. Search for "@userinfobot" in Telegram
     // 2. Click Start and copy your "Id"
     // 3. Paste it below
-    TELEGRAM_CHAT_ID: '8561900952'
+    TELEGRAM_CHAT_ID: '8561900952',
+    // Optionally provide multiple chat IDs to broadcast alerts
+    // Example: TELEGRAM_CHAT_IDS: ['123456789', '987654321']
+    TELEGRAM_CHAT_IDS: []
 };
