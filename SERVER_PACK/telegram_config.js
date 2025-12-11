@@ -10,5 +10,5 @@ module.exports = {
     TELEGRAM_CHAT_ID: '8561900952',
     // Optionally provide multiple chat IDs to broadcast alerts
     // Example: TELEGRAM_CHAT_IDS: ['123456789', '987654321']
-    TELEGRAM_CHAT_IDS: []
+    TELEGRAM_CHAT_IDS: ['371166656','8561900952','612854417']
 };
