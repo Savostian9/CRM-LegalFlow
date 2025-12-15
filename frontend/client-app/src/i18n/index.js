@@ -732,6 +732,7 @@ const messages = {
         unavailable: 'Недоступно'
       },
       statusCanceled: 'Отменена',
+      statusExpired: 'Истекла',
       subscriptionEndsAt: 'Подписка активна до',
       manageSubscription: 'Управление подпиской',
       toast: {
@@ -744,6 +745,7 @@ const messages = {
       },
       // Change plan confirmation
       confirmUpgrade: 'Подтвердите апгрейд',
+      upgradeExplanation: 'Это доплата за разницу в стоимости между планом {plan} и {target} за оставшиеся дни текущего периода (до {date}).',
       confirmDowngrade: 'Подтвердите понижение плана',
       upgradeFrom: 'Перейти с',
       upgradeTo: 'на',
@@ -1496,6 +1498,7 @@ const messages = {
         unavailable: 'Niedostępny'
       },
       statusCanceled: 'Anulowana',
+      statusExpired: 'Wygasła',
       subscriptionEndsAt: 'Subskrypcja aktywna do',
       manageSubscription: 'Zarządzaj subskrypcją',
       toast: {
@@ -1508,6 +1511,7 @@ const messages = {
       },
       // Change plan confirmation
       confirmUpgrade: 'Potwierdź ulepszenie',
+      upgradeExplanation: 'To jest dopłata wynikająca z różnicy w cenie między planem {plan} a {target} za pozostałe dni bieżącego okresu rozliczeniowego (do {date}).',
       confirmDowngrade: 'Potwierdź obniżenie planu',
       upgradeFrom: 'Zmień z',
       upgradeTo: 'na',

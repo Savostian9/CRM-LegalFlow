@@ -9,7 +9,9 @@
       <section class="plan-summary" :class="{ trial: isTrial, pro: isPro }">
         <div class="plan-summary__header">
           <div style="display:flex; align-items:center; gap:12px;">
-            <span class="plan-summary__label">{{ $t('billing.plan.active') }}</span>
+            <span class="plan-summary__label" :class="{ 'status-inactive': !isAccessValid }">
+              {{ isAccessValid ? $t('billing.plan.active') : $t('billing.statusExpired') }}
+            </span>
             <h2>{{ planLabel }}</h2>
           </div>
           <button v-if="hasStripeCustomer" class="manage-sub-btn" @click="openPortal" :disabled="portalLoading">
@@ -84,6 +86,17 @@
         
         <div v-if="confirmModalData.type === 'upgrade'" class="modal-content">
           <p>{{ $t('billing.upgradeFrom') }} <strong>{{ confirmModalData.current_plan }}</strong> {{ $t('billing.upgradeTo') }} <strong>{{ confirmModalData.target_plan }}</strong></p>
+          
+          <div class="upgrade-explanation" style="margin: 15px 0; font-size: 0.9em; color: #475569; background: #f1f5f9; padding: 12px; border-radius: 8px; line-height: 1.5;">
+             <p style="margin: 0;">
+               {{ $t('billing.upgradeExplanation', { 
+                 plan: confirmModalData.current_plan, 
+                 target: confirmModalData.target_plan,
+                 date: confirmModalData.period_end 
+               }) }}
+             </p>
+          </div>
+
           <div class="price-info">
             <span class="price-label">{{ $t('billing.prorationAmount') }}:</span>
             <span class="price-value">{{ confirmModalData.proration_amount?.toFixed(2) }} {{ confirmModalData.currency }}</span>
@@ -95,14 +108,16 @@
           <p class="downgrade-info">{{ $t('billing.downgradeInfo', { currentPlan: confirmModalData.current_plan, newPlan: confirmModalData.target_plan }) }}</p>
           
           <div class="price-comparison">
-            <div class="price-info current">
-              <span class="price-label">{{ confirmModalData.current_plan }}:</span>
-              <span class="price-value">{{ confirmModalData.current_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+            <div class="price-card current">
+              <span class="plan-name">{{ confirmModalData.current_plan }}</span>
+              <span class="plan-price">{{ confirmModalData.current_price?.toFixed(2) }} {{ confirmModalData.currency }}<small>/{{ $t('billing.month') }}</small></span>
             </div>
-            <div class="price-arrow">→</div>
-            <div class="price-info new">
-              <span class="price-label">{{ confirmModalData.target_plan }}:</span>
-              <span class="price-value">{{ confirmModalData.new_price?.toFixed(2) }} {{ confirmModalData.currency }}/{{ $t('billing.month') }}</span>
+            <div class="price-arrow">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div class="price-card new">
+              <span class="plan-name">{{ confirmModalData.target_plan }}</span>
+              <span class="plan-price">{{ confirmModalData.new_price?.toFixed(2) }} {{ confirmModalData.currency }}<small>/{{ $t('billing.month') }}</small></span>
             </div>
           </div>
           
@@ -167,23 +182,41 @@ export default {
       // For paid plans, check status
       return this.subscriptionStatus === 'active' || this.subscriptionStatus === 'trialing';
     },
+    isAccessValid() {
+      // If Stripe says active/trialing, it's valid.
+      if (this.isActiveSubscription) return true;
+      
+      // If canceled but period not ended (future date)
+      if (this.subscriptionEndsAt) {
+        return new Date(this.subscriptionEndsAt) > new Date();
+      }
+      
+      return false;
+    },
     effectivePlanCode() {
-      return this.isActiveSubscription ? this.planCode : 'TRIAL';
+      return this.isAccessValid ? this.planCode : 'TRIAL';
     },
     planMeta(){
       return PLAN_CATALOG[this.planCode] || null;
     },
     planLabel(){
-      if (!this.isActiveSubscription && this.planCode !== 'TRIAL') {
-        const name = this.planCode === 'PRO' ? 'Pro' : 'Starter';
-        return `${name} (${this.$t('billing.statusCanceled') || 'Canceled'})`;
+      if (this.planCode === 'TRIAL') return 'Trial';
+      
+      const name = this.planCode === 'PRO' ? 'Pro' : 'Starter';
+      
+      if (this.isActiveSubscription) return name; // Active/Trialing
+      
+      // Not active (Canceled/Unpaid/etc)
+      if (this.isAccessValid) {
+         // Canceled but still valid (period not ended)
+         return `${name} (${this.$t('billing.statusCanceled')})`;
+      } else {
+         // Canceled and expired
+         return name;
       }
-      if (this.planCode === 'PRO') return 'Pro';
-      if (this.planCode === 'STARTER') return 'Starter';
-      return 'Trial';
     },
-    isStarter(){ return this.planCode === 'STARTER' && this.isActiveSubscription; },
-    isPro(){ return this.planCode === 'PRO' && this.isActiveSubscription; },
+    isStarter(){ return this.planCode === 'STARTER' && this.isAccessValid; },
+    isPro(){ return this.planCode === 'PRO' && this.isAccessValid; },
     isCanceledSubscription(){
       // True if user had a paid plan but subscription is now canceled
       return this.planCode !== 'TRIAL' && !this.isActiveSubscription;
@@ -460,6 +493,7 @@ export default {
 .plan-summary.pro { border-color:#9333ea; box-shadow:0 12px 32px rgba(147,51,234,0.12); }
 .plan-summary__header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 .plan-summary__label { font-size:12px; letter-spacing:0.08em; text-transform:uppercase; background:rgba(37,99,235,0.12); color:#1d4ed8; padding:6px 12px; border-radius:999px; font-weight:700; }
+.plan-summary__label.status-inactive { background:rgba(239,68,68,0.12); color:#b91c1c; }
 .plan-summary h2 { margin:0; font-size:28px; font-weight:700; color:#0f172a; }
 .plan-summary p { margin:0; color:#475569; font-size:15px; }
 .plan-summary__hint { margin-top:12px; font-size:14px; color:#64748b; }
@@ -629,30 +663,62 @@ export default {
 .downgrade-info {
   font-size: 15px;
   color: #475569;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  line-height: 1.5;
 }
 .price-comparison {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 24px;
 }
-.price-comparison .price-info {
+.price-card {
   flex: 1;
-  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+  transition: transform 0.2s;
 }
-.price-comparison .price-info.current {
-  background: #fef2f2;
-  border-color: #fecaca;
+.price-card.current {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #9f1239;
 }
-.price-comparison .price-info.new {
+.price-card.new {
   background: #f0fdf4;
   border-color: #bbf7d0;
+  color: #166534;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+.plan-name {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+.plan-price {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.plan-price small {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.8;
+  margin-left: 2px;
 }
 .price-arrow {
-  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #94a3b8;
-  font-weight: bold;
 }
 .effective-date-box {
   display: flex;
